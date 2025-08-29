@@ -1,10 +1,25 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Text, checkTextWords, createWord, getVaults } from "@/actions/actions";
+import {
+  Text,
+  checkTextWords,
+  createWord,
+  getVaults,
+  updateText,
+} from "@/actions/actions";
 import { Vault, Word } from "@/actions/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, Target, Info, ChevronDown, Plus } from "lucide-react";
+import {
+  BookOpen,
+  Target,
+  Info,
+  ChevronDown,
+  Plus,
+  Edit2,
+  Save,
+  X,
+} from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -12,10 +27,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 
 interface TextViewerProps {
   text: Text;
+  onTextUpdated?: () => void;
 }
 
 interface FoundWord {
@@ -23,13 +42,17 @@ interface FoundWord {
   vaultInfo: Vault[];
 }
 
-export function TextViewer({ text }: TextViewerProps) {
+export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
   const [foundWords, setFoundWords] = useState<FoundWord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [userVaults, setUserVaults] = useState<Vault[]>([]);
   const [isAddingWord, setIsAddingWord] = useState(false);
   const [wordInfoMap, setWordInfoMap] = useState<Record<string, any>>({});
   const [loadingWords, setLoadingWords] = useState<Set<string>>(new Set());
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(text.title);
+  const [editContent, setEditContent] = useState(text.content);
+  const [isSaving, setIsSaving] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -56,6 +79,53 @@ export function TextViewer({ text }: TextViewerProps) {
 
     loadData();
   }, [text.content]);
+
+  // Função para salvar edições do texto
+  const handleSaveEdit = async () => {
+    try {
+      setIsSaving(true);
+
+      await updateText(text.id, editTitle, editContent);
+
+      toast({
+        title: "Texto atualizado!",
+        description: "As alterações foram salvas com sucesso.",
+      });
+
+      setIsEditing(false);
+
+      // Atualizar o texto local
+      text.title = editTitle;
+      text.content = editContent;
+
+      // Recarregar dados para atualizar as palavras encontradas
+      // TODO: Pegar userId do contexto de autenticação
+      const userId = 1; // Temporário
+      const words = await checkTextWords(editContent, userId);
+      setFoundWords(words);
+
+      // Chamar callback de atualização se fornecido
+      if (onTextUpdated) {
+        onTextUpdated();
+      }
+    } catch (error) {
+      console.error("Erro ao salvar texto:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível salvar as alterações",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Função para cancelar edição
+  const handleCancelEdit = () => {
+    setEditTitle(text.title);
+    setEditContent(text.content);
+    setIsEditing(false);
+  };
 
   // Função para buscar informações da palavra na API de dicionário
   const fetchWordInfo = async (word: string) => {
@@ -98,7 +168,7 @@ export function TextViewer({ text }: TextViewerProps) {
     });
   };
 
-  // Função para adicionar palavra ao vault
+  // Função para adicionar palavra ao vault com informações da API
   const handleAddWordToVault = async (word: string, vaultId: number) => {
     try {
       setIsAddingWord(true);
@@ -119,19 +189,55 @@ export function TextViewer({ text }: TextViewerProps) {
         return;
       }
 
-      // Criar nova palavra
-      await createWord({
+      // Buscar informações da palavra se ainda não foram buscadas
+      let wordInfo = wordInfoMap[word];
+      if (!wordInfo) {
+        wordInfo = await fetchWordInfo(word);
+        if (wordInfo) {
+          setWordInfoMap((prev) => ({
+            ...prev,
+            [word]: wordInfo,
+          }));
+        }
+      }
+
+      // Preparar dados da palavra com informações da API
+      let wordData: any = {
         name: word,
         grammaticalClass: "substantivo", // Padrão
-        category: undefined, // Opcional
-        translations: [], // Vazio por padrão
-        confidence: 1, // Nível 1 por padrão
+        category: undefined,
+        translations: [],
+        confidence: 1,
         vaultId: vaultId,
-      });
+      };
+
+      // Se temos informações da API, usar para preencher dados
+      if (wordInfo) {
+        // Determinar classe gramatical
+        if (wordInfo.meanings && wordInfo.meanings.length > 0) {
+          const primaryMeaning = wordInfo.meanings[0];
+          wordData.grammaticalClass =
+            primaryMeaning.partOfSpeech || "substantivo";
+
+          // Extrair definições como traduções
+          if (
+            primaryMeaning.definitions &&
+            primaryMeaning.definitions.length > 0
+          ) {
+            wordData.translations = primaryMeaning.definitions
+              .slice(0, 3) // Máximo 3 definições
+              .map((def: any) => def.definition)
+              .filter((def: string) => def && def.length > 0);
+          }
+        }
+      }
+
+      // Criar nova palavra
+      await createWord(wordData);
 
       toast({
         title: "Palavra adicionada!",
-        description: `"${word}" foi adicionada ao vault "${vault?.name}"`,
+        description: `"${word}" foi adicionada ao vault "${vault?.name}" com informações da API`,
       });
 
       // Recarregar dados para atualizar a lista
@@ -285,6 +391,29 @@ export function TextViewer({ text }: TextViewerProps) {
                       </div>
                     )}
                 </div>
+
+                {/* Informações que serão salvas */}
+                <div className="mt-3 pt-3 border-t border-blue-200 dark:border-blue-700">
+                  <div className="text-xs text-blue-600 dark:text-blue-400 font-medium mb-2">
+                    Será salvo com:
+                  </div>
+                  <div className="text-xs space-y-1">
+                    <div>
+                      <span className="font-medium">Classe:</span>{" "}
+                      {wordInfo.meanings?.[0]?.partOfSpeech || "substantivo"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Traduções:</span>{" "}
+                      {wordInfo.meanings?.[0]?.definitions
+                        ?.slice(0, 2)
+                        ?.map((def: any) => def.definition)
+                        ?.join(", ") || "Nenhuma"}
+                    </div>
+                    <div>
+                      <span className="font-medium">Nível:</span> 1 (iniciante)
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -325,7 +454,7 @@ export function TextViewer({ text }: TextViewerProps) {
 
   // Função para renderizar o texto com highlights interativos e palavras clicáveis
   const renderInteractiveText = () => {
-    let content = text.content;
+    let content = editContent;
 
     // Primeiro, marcar palavras já encontradas
     foundWords.forEach(({ word, vaultInfo }) => {
@@ -380,42 +509,89 @@ export function TextViewer({ text }: TextViewerProps) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 max-h-[calc(90vh-120px)] overflow-y-auto pr-2">
+      {/* Cabeçalho com Título e Botão de Edição */}
+      <div className="flex items-center justify-between sticky top-0 bg-white dark:bg-gray-950 pt-2 pb-4 z-10">
+        <div className="flex-1">
+          {isEditing ? (
+            <Input
+              value={editTitle}
+              onChange={(e) => setEditTitle(e.target.value)}
+              className="text-2xl font-bold border-2 border-blue-300 focus:border-blue-500"
+              placeholder="Título do texto"
+            />
+          ) : (
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              {text.title}
+            </h1>
+          )}
+        </div>
+
+        <div className="flex items-center gap-2">
+          {isEditing ? (
+            <>
+              <Button
+                onClick={handleSaveEdit}
+                disabled={isSaving}
+                size="sm"
+                className="bg-green-600 hover:bg-green-700"
+              >
+                {isSaving ? (
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                ) : (
+                  <Save className="w-4 h-4" />
+                )}
+                Salvar
+              </Button>
+              <Button
+                onClick={handleCancelEdit}
+                disabled={isSaving}
+                size="sm"
+                variant="outline"
+              >
+                <X className="w-4 h-4" />
+                Cancelar
+              </Button>
+            </>
+          ) : (
+            <Button
+              onClick={() => setIsEditing(true)}
+              size="sm"
+              variant="outline"
+            >
+              <Edit2 className="w-4 h-4" />
+              Editar
+            </Button>
+          )}
+        </div>
+      </div>
+
       {/* Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-              Total de Palavras
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+      <div className="grid grid-cols-1 md:grgid-cols-3 gap-3">
+        <Card className="p-3">
+          <div className="text-center">
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
-              {text.content.split(" ").length}
+              {editContent.split(" ").length}
             </div>
-          </CardContent>
+            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Total de Palavras
+            </div>
+          </div>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-              Palavras nos Vaults
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        <Card className="p-3">
+          <div className="text-center">
             <div className="text-2xl font-bold text-green-600">
               {foundWords.length}
             </div>
-          </CardContent>
+            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Palavras nos Vaults
+            </div>
+          </div>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-gray-600 dark:text-gray-400">
-              Vaults Encontrados
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
+        <Card className="p-3">
+          <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">
               {
                 new Set(
@@ -423,28 +599,55 @@ export function TextViewer({ text }: TextViewerProps) {
                 ).size
               }
             </div>
-          </CardContent>
+            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+              Vaults Encontrados
+            </div>
+          </div>
         </Card>
       </div>
 
       {/* Texto com Highlights Interativos e Palavras Clicáveis */}
       <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
             <Target className="w-5 h-5 text-yellow-600" />
             Texto Interativo
           </CardTitle>
           <p className="text-sm text-gray-600 dark:text-gray-400 font-normal">
-            Clique nas palavras destacadas para ver detalhes ou nas outras
-            palavras para adicioná-las aos vaults
+            {isEditing
+              ? "Edite o texto abaixo. As palavras continuarão sendo destacadas e clicáveis."
+              : "Clique nas palavras destacadas para ver detalhes ou nas outras palavras para adicioná-las aos vaults"}
           </p>
         </CardHeader>
-        <CardContent>
-          <div className="prose prose-sm max-w-none dark:prose-invert">
-            <div className="leading-relaxed text-gray-900 dark:text-gray-100">
-              {renderInteractiveText()}
+        <CardContent className="max-h-[400px] overflow-y-auto">
+          {isEditing ? (
+            <div className="space-y-4">
+              <Textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                className="min-h-64 text-sm leading-relaxed resize-none"
+                placeholder="Digite ou cole o texto aqui..."
+              />
+
+              {/* Preview do texto com highlights */}
+              <div className="border-t pt-4">
+                <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+                  Preview com Highlights:
+                </h4>
+                <div className="prose prose-sm max-w-none dark:prose-invert">
+                  <div className="leading-relaxed text-gray-900 dark:text-gray-100">
+                    {renderInteractiveText()}
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="prose prose-sm max-w-none dark:prose-invert">
+              <div className="leading-relaxed text-gray-900 dark:text-gray-100">
+                {renderInteractiveText()}
+              </div>
+            </div>
+          )}
 
           {foundWords.length === 0 && (
             <div className="text-center py-8 text-gray-500 dark:text-gray-400">
@@ -461,20 +664,20 @@ export function TextViewer({ text }: TextViewerProps) {
       {/* Lista de Palavras Encontradas */}
       {foundWords.length > 0 && (
         <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
               <BookOpen className="w-5 h-5 text-green-600" />
               Palavras Encontradas nos Vaults
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
+            <div className="max-h-[250px] overflow-y-auto space-y-3 pr-2">
               {foundWords.map(({ word, vaultInfo }) => (
                 <div
                   key={word}
-                  className="border-b border-gray-200 dark:border-gray-700 pb-4 last:border-b-0"
+                  className="border-b border-gray-200 dark:border-gray-700 pb-3 last:border-b-0"
                 >
-                  <div className="flex items-center gap-3 mb-3">
+                  <div className="flex items-center gap-3 mb-2">
                     <Badge variant="outline" className="text-lg px-3 py-1">
                       {word}
                     </Badge>
@@ -484,13 +687,13 @@ export function TextViewer({ text }: TextViewerProps) {
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                     {vaultInfo.map((vault) => (
                       <div
                         key={vault.id}
-                        className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg"
+                        className="bg-gray-50 dark:bg-gray-800 p-2 rounded-lg"
                       >
-                        <div className="font-medium text-sm text-gray-900 dark:text-white mb-2">
+                        <div className="font-medium text-sm text-gray-900 dark:text-white mb-1">
                           {vault.name}
                         </div>
                         {vault.words.map((vaultWord) => (
@@ -498,11 +701,17 @@ export function TextViewer({ text }: TextViewerProps) {
                             <div className="text-gray-600 dark:text-gray-400">
                               {vaultWord.translations.join(", ")}
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline" className="text-xs">
+                            <div className="flex items-center gap-1">
+                              <Badge
+                                variant="outline"
+                                className="text-xs px-1 py-0"
+                              >
                                 {vaultWord.grammaticalClass}
                               </Badge>
-                              <Badge variant="secondary" className="text-xs">
+                              <Badge
+                                variant="secondary"
+                                className="text-xs px-1 py-0"
+                              >
                                 Nível {vaultWord.confidence}
                               </Badge>
                             </div>
