@@ -6,6 +6,7 @@ import {
   deleteWord,
   getVaults,
   type Vault,
+  getRelatedWords,
 } from "@/actions/actions";
 import { XCircle, Plus, ArrowRight, Trash } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
@@ -19,8 +20,9 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { EditWordDialog } from "./edit-word-dialog";
+import { LinkWordsDialog } from "./link-words-dialog";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { PencilSimple } from "@phosphor-icons/react/dist/ssr";
 
 // Componente para a célula da coluna "Salva"
@@ -181,6 +183,66 @@ function SavedCell({ word }: { word: Word }) {
   );
 }
 
+// Componente para a célula da coluna "Palavras Relacionadas"
+function RelatedWordsCell({ word }: { word: Word }) {
+  const [relatedWords, setRelatedWords] = useState<Word[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+
+  useEffect(() => {
+    const fetchRelatedWords = async () => {
+      try {
+        setIsLoading(true);
+        const related = await getRelatedWords(word.id);
+        setRelatedWords(related);
+      } catch (error) {
+        console.error("Erro ao buscar palavras relacionadas:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchRelatedWords();
+  }, [word.id]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center gap-2">
+        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+        <span className="text-sm text-gray-500">Carregando...</span>
+      </div>
+    );
+  }
+
+  if (relatedWords.length === 0) {
+    return (
+      <div className="text-sm text-gray-500 dark:text-gray-400">
+        Nenhuma palavra relacionada
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-1">
+      {relatedWords.slice(0, 3).map((relatedWord) => (
+        <div key={relatedWord.id} className="flex items-center gap-2 text-sm">
+          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
+          <span className="font-medium text-gray-900 dark:text-white">
+            {relatedWord.name}
+          </span>
+          <span className="text-gray-500 dark:text-gray-400">
+            ({relatedWord.translations[0]})
+          </span>
+        </div>
+      ))}
+      {relatedWords.length > 3 && (
+        <div className="text-xs text-gray-500 dark:text-gray-400">
+          +{relatedWords.length - 3} mais...
+        </div>
+      )}
+    </div>
+  );
+}
+
 export const columns: ColumnDef<Word>[] = [
   {
     accessorKey: "name",
@@ -269,6 +331,13 @@ export const columns: ColumnDef<Word>[] = [
     },
   },
   {
+    accessorKey: "relatedWords",
+    header: "Palavras Relacionadas",
+    cell: ({ row }) => {
+      return <RelatedWordsCell word={row.original} />;
+    },
+  },
+  {
     id: "actions",
     header: "Ações",
     cell: ({ row }) => {
@@ -277,6 +346,13 @@ export const columns: ColumnDef<Word>[] = [
           <EditWordDialog
             word={row.original}
             onWordUpdated={() => {
+              // Recarregar a página para mostrar as mudanças
+              window.location.reload();
+            }}
+          />
+          <LinkWordsDialog
+            word={row.original}
+            onWordsLinked={() => {
               // Recarregar a página para mostrar as mudanças
               window.location.reload();
             }}

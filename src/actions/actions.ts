@@ -545,7 +545,7 @@ export async function updateWord(
 
     // Preparar dados para atualização
     const updateData: any = {};
-    
+
     if (data.name !== undefined) {
       updateData.name = data.name.trim();
     }
@@ -590,6 +590,228 @@ export async function updateWord(
     console.error("Erro completo:", error);
     throw new Error(
       `Erro ao editar palavra: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}
+
+// Linkar duas palavras
+export async function linkWords(
+  wordId1: number,
+  wordId2: number
+): Promise<void> {
+  try {
+    console.log("=== INÍCIO linkWords ===");
+    console.log("Linkando palavras:", wordId1, "e", wordId2);
+
+    // Verificar se as palavras existem
+    const word1 = await prisma.word.findUnique({
+      where: { id: wordId1 },
+    });
+
+    const word2 = await prisma.word.findUnique({
+      where: { id: wordId2 },
+    });
+
+    if (!word1 || !word2) {
+      throw new Error("Uma ou ambas as palavras não foram encontradas");
+    }
+
+    // Verificar se já existe um relacionamento
+    const existingLink = await prisma.word.findFirst({
+      where: {
+        OR: [
+          {
+            id: wordId1,
+            Word_A: { some: { id: wordId2 } },
+          },
+          {
+            id: wordId2,
+            Word_A: { some: { id: wordId1 } },
+          },
+        ],
+      },
+    });
+
+    if (existingLink) {
+      throw new Error("As palavras já estão linkadas");
+    }
+
+    // Criar o relacionamento bidirecional
+    await prisma.word.update({
+      where: { id: wordId1 },
+      data: {
+        Word_A: {
+          connect: { id: wordId2 },
+        },
+      },
+    });
+
+    console.log("Palavras linkadas com sucesso");
+    console.log("=== FIM linkWords - SUCESSO ===");
+
+    // Revalidar as páginas
+    revalidatePath("/home");
+    revalidatePath("/home/vault");
+  } catch (error) {
+    console.error("=== ERRO em linkWords ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao linkar palavras: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}
+
+// Deslinkar duas palavras
+export async function unlinkWords(
+  wordId1: number,
+  wordId2: number
+): Promise<void> {
+  try {
+    console.log("=== INÍCIO unlinkWords ===");
+    console.log("Deslinkando palavras:", wordId1, "e", wordId2);
+
+    // Remover o relacionamento bidirecional
+    await prisma.word.update({
+      where: { id: wordId1 },
+      data: {
+        Word_A: {
+          disconnect: { id: wordId2 },
+        },
+      },
+    });
+
+    console.log("Palavras deslinkadas com sucesso");
+    console.log("=== FIM unlinkWords - SUCESSO ===");
+
+    // Revalidar as páginas
+    revalidatePath("/home");
+    revalidatePath("/home/vault");
+  } catch (error) {
+    console.error("=== ERRO em unlinkWords ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao deslinkar palavras: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}
+
+// Buscar palavras relacionadas
+export async function getRelatedWords(wordId: number): Promise<Word[]> {
+  try {
+    console.log("=== INÍCIO getRelatedWords ===");
+    console.log("Buscando palavras relacionadas para:", wordId);
+
+    const word = await prisma.word.findUnique({
+      where: { id: wordId },
+      include: {
+        Word_A: {
+          select: {
+            id: true,
+            name: true,
+            grammaticalClass: true,
+            category: true,
+            translations: true,
+            confidence: true,
+            isSaved: true,
+            vaultId: true,
+          },
+        },
+        Word_B: {
+          select: {
+            id: true,
+            name: true,
+            grammaticalClass: true,
+            category: true,
+            translations: true,
+            confidence: true,
+            isSaved: true,
+            vaultId: true,
+          },
+        },
+      },
+    });
+
+    if (!word) {
+      throw new Error("Palavra não encontrada");
+    }
+
+    // Combinar palavras relacionadas de ambas as direções
+    const relatedWords = [...word.Word_A, ...word.Word_B];
+
+    console.log("Palavras relacionadas encontradas:", relatedWords.length);
+    console.log("=== FIM getRelatedWords - SUCESSO ===");
+
+    return relatedWords;
+  } catch (error) {
+    console.error("=== ERRO em getRelatedWords ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao buscar palavras relacionadas: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}
+
+// Buscar palavras para linkar (excluindo a atual e já relacionadas)
+export async function getLinkableWords(wordId: number): Promise<Word[]> {
+  try {
+    console.log("=== INÍCIO getLinkableWords ===");
+    console.log("Buscando palavras linkáveis para:", wordId);
+
+    // Buscar a palavra atual com suas relações
+    const currentWord = await prisma.word.findUnique({
+      where: { id: wordId },
+      include: {
+        Word_A: { select: { id: true } },
+        Word_B: { select: { id: true } },
+      },
+    });
+
+    if (!currentWord) {
+      throw new Error("Palavra não encontrada");
+    }
+
+    // IDs de palavras já relacionadas
+    const relatedIds = new Set([
+      ...currentWord.Word_A.map((w) => w.id),
+      ...currentWord.Word_B.map((w) => w.id),
+      wordId, // Excluir a própria palavra
+    ]);
+
+    // Buscar todas as outras palavras
+    const allWords = await prisma.word.findMany({
+      where: {
+        id: { notIn: Array.from(relatedIds) },
+      },
+      select: {
+        id: true,
+        name: true,
+        grammaticalClass: true,
+        category: true,
+        translations: true,
+        confidence: true,
+        isSaved: true,
+        vaultId: true,
+      },
+      orderBy: { name: "asc" },
+    });
+
+    console.log("Palavras linkáveis encontradas:", allWords.length);
+    console.log("=== FIM getLinkableWords - SUCESSO ===");
+
+    return allWords;
+  } catch (error) {
+    console.error("=== ERRO em getLinkableWords ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao buscar palavras linkáveis: ${
         error instanceof Error ? error.message : "Erro desconhecido"
       }`
     );
