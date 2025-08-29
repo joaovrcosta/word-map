@@ -3,11 +3,11 @@
 import {
   Word,
   moveWordToVault,
-  unsaveWord,
+  deleteWord,
   getVaults,
   type Vault,
 } from "@/actions/actions";
-import { CheckCircle, XCircle, Plus, ArrowRight, Trash } from "lucide-react";
+import { XCircle, Plus, ArrowRight, Trash } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
@@ -19,6 +19,7 @@ import {
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 
 // Componente para a célula da coluna "Salva"
 function SavedCell({ word }: { word: Word }) {
@@ -66,20 +67,20 @@ function SavedCell({ word }: { word: Word }) {
     }
   };
 
-  const handleUnsave = async () => {
+  const handleDelete = async () => {
     setIsLoading(true);
     try {
-      await unsaveWord(word.id);
+      await deleteWord(word.id);
 
       toast({
         title: "Palavra removida!",
-        description: `"${word.name}" foi removida do vault atual`,
+        description: `"${word.name}" foi removida do vault`,
       });
 
       // Recarregar a página para atualizar a tabela
       window.location.reload();
     } catch (error) {
-      console.error("Erro ao fazer unsave da palavra:", error);
+      console.error("Erro ao remover palavra:", error);
       toast({
         title: "Erro ao remover palavra",
         description:
@@ -97,7 +98,6 @@ function SavedCell({ word }: { word: Word }) {
   if (word.isSaved) {
     return (
       <div className="flex items-center gap-2">
-        <CheckCircle className="text-green-500 w-5 h-5" />
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button
@@ -106,7 +106,12 @@ function SavedCell({ word }: { word: Word }) {
               className="h-6 w-6 p-0 hover:bg-gray-100 dark:hover:bg-gray-700"
               disabled={isLoading}
             >
-              <Plus className="h-3 w-3 text-gray-600 dark:text-gray-400" />
+              <CheckCircleIcon
+                weight={word.isSaved ? "fill" : "regular"}
+                className={`!h-5 !w-5 ${
+                  word.isSaved ? "text-green-500" : "text-gray-600"
+                }`}
+              />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent className="w-48 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 shadow-lg">
@@ -122,7 +127,7 @@ function SavedCell({ word }: { word: Word }) {
             {/* Opção de unsave */}
             <DropdownMenuItem
               className="px-3 py-2 hover:bg-red-50 dark:hover:bg-red-900/20 cursor-pointer text-red-600 dark:text-red-400"
-              onClick={handleUnsave}
+              onClick={handleDelete}
               disabled={isLoading}
             >
               <Trash className="h-4 w-4 mr-2" />

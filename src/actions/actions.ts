@@ -426,3 +426,95 @@ export async function unsaveWord(wordId: number): Promise<Word> {
     );
   }
 }
+
+// Deletar palavra completamente do banco
+export async function deleteWord(wordId: number): Promise<void> {
+  try {
+    console.log("=== INÍCIO deleteWord ===");
+    console.log("Deletando palavra:", wordId);
+
+    // Verificar se a palavra existe
+    const existingWord = await prisma.word.findUnique({
+      where: { id: wordId },
+    });
+
+    if (!existingWord) {
+      throw new Error("Palavra não encontrada");
+    }
+
+    // Deletar a palavra
+    await prisma.word.delete({
+      where: { id: wordId },
+    });
+
+    console.log("Palavra deletada com sucesso");
+    console.log("=== FIM deleteWord - SUCESSO ===");
+
+    // Revalidar as páginas
+    revalidatePath("/home");
+    revalidatePath("/home/vault");
+  } catch (error) {
+    console.error("=== ERRO em deleteWord ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao deletar palavra: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}
+
+// Remover palavra de um vault específico
+export async function removeWordFromVault(
+  wordName: string,
+  vaultId: number
+): Promise<void> {
+  try {
+    console.log("=== INÍCIO removeWordFromVault ===");
+    console.log("Removendo palavra:", wordName, "do vault:", vaultId);
+
+    // Verificar se o vault existe
+    const existingVault = await prisma.vault.findUnique({
+      where: { id: vaultId },
+    });
+
+    if (!existingVault) {
+      throw new Error("Vault não encontrado");
+    }
+
+    // Buscar a palavra no vault
+    const existingWord = await prisma.word.findFirst({
+      where: {
+        name: {
+          equals: wordName,
+          mode: "insensitive",
+        },
+        vaultId: vaultId,
+      },
+    });
+
+    if (!existingWord) {
+      throw new Error("Palavra não encontrada no vault");
+    }
+
+    // Deletar a palavra do vault
+    await prisma.word.delete({
+      where: { id: existingWord.id },
+    });
+
+    console.log("Palavra removida do vault com sucesso");
+    console.log("=== FIM removeWordFromVault - SUCESSO ===");
+
+    // Revalidar as páginas
+    revalidatePath("/home");
+    revalidatePath("/home/vault");
+  } catch (error) {
+    console.error("=== ERRO em removeWordFromVault ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao remover palavra do vault: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}

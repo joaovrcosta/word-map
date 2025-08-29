@@ -19,6 +19,7 @@ import {
   type Vault,
   createWord,
   wordExistsInVault,
+  removeWordFromVault,
 } from "@/actions/actions";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +30,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import { CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 
 interface SearchWordProps {
   onWordSelect?: (result: SearchResult) => void;
@@ -309,6 +311,41 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
     }
   };
 
+  const handleRemoveFromVault = async (wordName: string, vaultId: number) => {
+    setIsAddingToVault(true);
+    try {
+      await removeWordFromVault(wordName, vaultId);
+
+      toast({
+        title: "Palavra removida!",
+        description: `"${wordName}" foi removida do vault`,
+      });
+
+      // Atualizar o mapa de palavras existentes
+      const wordNameLower = wordName.toLowerCase();
+      if (wordExistsMap.has(wordNameLower)) {
+        wordExistsMap.get(wordNameLower)!.delete(vaultId);
+        if (wordExistsMap.get(wordNameLower)!.size === 0) {
+          wordExistsMap.delete(wordNameLower);
+        }
+        setWordExistsMap(new Map(wordExistsMap));
+      }
+
+      // Recarregar os dados para mostrar a mudança
+      window.location.reload();
+    } catch (error) {
+      console.error("Erro ao remover palavra do vault:", error);
+      toast({
+        title: "Erro ao remover palavra",
+        description:
+          error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAddingToVault(false);
+    }
+  };
+
   // Verificar se uma palavra já existe em um vault específico
   const isWordInVault = (wordName: string, vaultId: number): boolean => {
     const wordNameLower = wordName.toLowerCase();
@@ -485,10 +522,19 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                                       <DropdownMenuItem
                                         key={vault.id}
                                         className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                                        onClick={() =>
-                                          !isInVault && handleAddToVault(vault)
-                                        }
-                                        disabled={isAddingToVault || isInVault}
+                                        onClick={() => {
+                                          if (isInVault) {
+                                            // Se já está no vault, remove
+                                            handleRemoveFromVault(
+                                              result.word.name,
+                                              vault.id
+                                            );
+                                          } else {
+                                            // Se não está no vault, adiciona
+                                            handleAddToVault(vault);
+                                          }
+                                        }}
+                                        disabled={isAddingToVault}
                                       >
                                         <div className="flex items-center w-full">
                                           <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center mr-3">
@@ -498,11 +544,14 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                                             {vault.name}
                                           </span>
                                           {isInVault ? (
-                                            <Check className="h-4 w-4 text-green-500" />
+                                            <CheckCircleIcon
+                                              weight="fill"
+                                              className="!h-5 !w-5 text-green-600 cursor-pointer hover:text-green-600 transition-colors"
+                                            />
                                           ) : isAddingToVault ? (
-                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
                                           ) : (
-                                            <div className="w-4 h-4 border border-gray-300 dark:border-gray-600 rounded-full"></div>
+                                            <div className="w-5 h-5 border border-gray-300 dark:border-gray-600 rounded-full"></div>
                                           )}
                                         </div>
                                       </DropdownMenuItem>
@@ -631,7 +680,7 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                               <DropdownMenuItem className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700">
                                 <Plus className="h-4 w-4 mr-2 text-gray-600 dark:text-gray-400" />
                                 <span className="text-sm text-gray-900 dark:text-white">
-                                  + Novo vault
+                                  Novo vault
                                 </span>
                               </DropdownMenuItem>
 
@@ -649,10 +698,19 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                                       <DropdownMenuItem
                                         key={vault.id}
                                         className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                                        onClick={() =>
-                                          !isInVault && handleAddToVault(vault)
-                                        }
-                                        disabled={isAddingToVault || isInVault}
+                                        onClick={() => {
+                                          if (isInVault) {
+                                            // Se já está no vault, remove
+                                            handleRemoveFromVault(
+                                              apiResult.word,
+                                              vault.id
+                                            );
+                                          } else {
+                                            // Se não está no vault, adiciona
+                                            handleAddToVault(vault);
+                                          }
+                                        }}
+                                        disabled={isAddingToVault}
                                       >
                                         <div className="flex items-center w-full">
                                           <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center mr-3">
@@ -662,7 +720,7 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                                             {vault.name}
                                           </span>
                                           {isInVault ? (
-                                            <Check className="h-4 w-4 text-green-500" />
+                                            <Check className="h-4 w-4 text-green-500 cursor-pointer hover:text-green-600 transition-colors" />
                                           ) : isAddingToVault ? (
                                             <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
                                           ) : (
