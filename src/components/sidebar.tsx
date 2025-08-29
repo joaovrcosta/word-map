@@ -13,6 +13,7 @@ import {
   Brain,
   FilePen,
   BookOpen,
+  Network,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
@@ -36,6 +37,7 @@ const links: SidebarLink[] = [
   { name: "Homepage", path: "/home", icon: AlignBottomIcon },
   { name: "Vault", path: "/home/vault", icon: VaultIcon },
   { name: "Texts", path: "/home/texts", icon: BookOpen },
+  { name: "Connections", path: "/home/connections", icon: Network },
 ];
 
 interface SidebarItemProps {

@@ -818,6 +818,92 @@ export async function getLinkableWords(wordId: number): Promise<Word[]> {
   }
 }
 
+// Buscar todas as relações entre palavras
+export async function getAllWordRelations(): Promise<Array<{ wordA: Word; wordB: Word }>> {
+  try {
+    console.log("=== INÍCIO getAllWordRelations ===");
+
+    // Buscar todas as palavras que têm relacionamentos
+    const wordsWithRelations = await prisma.word.findMany({
+      where: {
+        OR: [
+          { Word_A: { some: {} } },
+          { Word_B: { some: {} } }
+        ]
+      },
+      include: {
+        Word_A: {
+          select: {
+            id: true,
+            name: true,
+            grammaticalClass: true,
+            category: true,
+            translations: true,
+            confidence: true,
+            isSaved: true,
+            vaultId: true,
+          },
+        },
+        Word_B: {
+          select: {
+            id: true,
+            name: true,
+            grammaticalClass: true,
+            category: true,
+            translations: true,
+            confidence: true,
+            isSaved: true,
+            vaultId: true,
+          },
+        },
+      },
+    });
+
+    // Processar as relações
+    const relations: Array<{ wordA: Word; wordB: Word }> = [];
+    
+    wordsWithRelations.forEach((word) => {
+      // Adicionar relações Word_A
+      word.Word_A.forEach((relatedWord) => {
+        relations.push({
+          wordA: word,
+          wordB: relatedWord,
+        });
+      });
+      
+      // Adicionar relações Word_B
+      word.Word_B.forEach((relatedWord) => {
+        relations.push({
+          wordA: relatedWord,
+          wordB: word,
+        });
+      });
+    });
+
+    // Remover duplicatas (mesma relação em ambas as direções)
+    const uniqueRelations = relations.filter((relation, index, self) => {
+      const key = `${Math.min(relation.wordA.id, relation.wordB.id)}-${Math.max(relation.wordA.id, relation.wordB.id)}`;
+      return index === self.findIndex(r => {
+        const rKey = `${Math.min(r.wordA.id, r.wordB.id)}-${Math.max(r.wordA.id, r.wordB.id)}`;
+        return rKey === key;
+      });
+    });
+
+    console.log("Relações encontradas:", uniqueRelations.length);
+    console.log("=== FIM getAllWordRelations - SUCESSO ===");
+
+    return uniqueRelations;
+  } catch (error) {
+    console.error("=== ERRO em getAllWordRelations ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao buscar relações entre palavras: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}
+
 // Interface para Texto
 export interface Text {
   id: number;
