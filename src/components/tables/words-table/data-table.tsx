@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import {
   ColumnDef,
   flexRender,
@@ -29,6 +29,20 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
 }
 
+// Interface estendida para incluir campos de data
+interface WordWithDates {
+  id: number;
+  name: string;
+  grammaticalClass: string;
+  category: string | null;
+  translations: string[];
+  confidence: number;
+  isSaved: boolean;
+  vaultId: number;
+  createdAt?: Date;
+  updatedAt?: Date;
+}
+
 export function DataTable<TData, TValue>({
   columns,
   data,
@@ -36,8 +50,22 @@ export function DataTable<TData, TValue>({
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
 
+  // Ordenar dados por createdAt (mais recentes primeiro)
+  const sortedData = useMemo(() => {
+    return [...data].sort((a: any, b: any) => {
+      // Se não tiver createdAt, usar ID como fallback (IDs maiores são mais recentes)
+      if (!a.createdAt || !b.createdAt) {
+        return b.id - a.id;
+      }
+
+      const dateA = new Date(a.createdAt);
+      const dateB = new Date(b.createdAt);
+      return dateB.getTime() - dateA.getTime();
+    });
+  }, [data]);
+
   const table = useReactTable({
-    data,
+    data: sortedData,
     columns,
     getCoreRowModel: getCoreRowModel(),
     getFilteredRowModel: getFilteredRowModel(),

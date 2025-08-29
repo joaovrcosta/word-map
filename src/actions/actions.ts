@@ -65,6 +65,9 @@ export async function getVaults(): Promise<Vault[]> {
             createdAt: true,
             updatedAt: true,
           },
+          orderBy: {
+            createdAt: "desc", // Mais recentes primeiro
+          },
         },
       },
       orderBy: {

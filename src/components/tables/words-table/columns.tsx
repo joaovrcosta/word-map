@@ -259,7 +259,7 @@ export const columns: ColumnDef<Word>[] = [
         <div className="flex items-center justify-center">
           <button
             onClick={handlePlayAudio}
-            className="p-2 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 hover:text-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            className="p-2 rounded-full bg-blue-100 hover:bg-blue-200 text-[#1cb0f6] hover:text-[#1c8df6] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
             title={`Ouvir pronúncia de "${wordName}"`}
           >
             <svg
