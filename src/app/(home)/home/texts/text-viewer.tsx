@@ -1,10 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Text, checkTextWords } from "@/actions/actions";
+import { Text, checkTextWords, createWord, getVaults } from "@/actions/actions";
 import { Vault, Word } from "@/actions/actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, Target, Info, ChevronDown } from "lucide-react";
+import { BookOpen, Target, Info, ChevronDown, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
@@ -12,6 +12,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useToast } from "@/hooks/use-toast";
 
 interface TextViewerProps {
   text: Text;
@@ -25,40 +26,89 @@ interface FoundWord {
 export function TextViewer({ text }: TextViewerProps) {
   const [foundWords, setFoundWords] = useState<FoundWord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [userVaults, setUserVaults] = useState<Vault[]>([]);
+  const [isAddingWord, setIsAddingWord] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
-    const analyzeText = async () => {
+    const loadData = async () => {
       try {
         setIsLoading(true);
         // TODO: Pegar userId do contexto de autenticação
         const userId = 1; // Temporário
-        const words = await checkTextWords(text.content, userId);
+
+        // Carregar palavras encontradas e vaults do usuário
+        const [words, vaults] = await Promise.all([
+          checkTextWords(text.content, userId),
+          getVaults(),
+        ]);
+
         setFoundWords(words);
+        setUserVaults(vaults);
       } catch (error) {
-        console.error("Erro ao analisar texto:", error);
+        console.error("Erro ao carregar dados:", error);
       } finally {
         setIsLoading(false);
       }
     };
 
-    analyzeText();
+    loadData();
   }, [text.content]);
 
-  // Função para renderizar o texto com highlights interativos
-  const renderHighlightedText = () => {
-    let highlightedContent = text.content;
+  // Função para adicionar palavra ao vault
+  const handleAddWordToVault = async (word: string, vaultId: number) => {
+    try {
+      setIsAddingWord(true);
 
-    foundWords.forEach(({ word, vaultInfo }) => {
-      const regex = new RegExp(`\\b${word}\\b`, "gi");
-      highlightedContent = highlightedContent.replace(
-        regex,
-        `<span class="highlighted-word bg-yellow-200 dark:bg-yellow-800 px-1 rounded cursor-pointer hover:bg-yellow-300 dark:hover:bg-yellow-700 transition-colors" data-word="${word}" data-vaults="${JSON.stringify(
-          vaultInfo
-        )}">${word}</span>`
-      );
-    });
+      // TODO: Pegar userId do contexto de autenticação
+      const userId = 1; // Temporário
 
-    return highlightedContent;
+      // Verificar se a palavra já existe no vault
+      const vault = userVaults.find((v) => v.id === vaultId);
+      if (
+        vault?.words.some((w) => w.name.toLowerCase() === word.toLowerCase())
+      ) {
+        toast({
+          title: "Palavra já existe",
+          description: `"${word}" já está salva no vault "${vault.name}"`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      // Criar nova palavra
+      await createWord({
+        name: word,
+        grammaticalClass: "substantivo", // Padrão
+        category: undefined, // Opcional
+        translations: [], // Vazio por padrão
+        confidence: 1, // Nível 1 por padrão
+        vaultId: vaultId,
+      });
+
+      toast({
+        title: "Palavra adicionada!",
+        description: `"${word}" foi adicionada ao vault "${vault?.name}"`,
+      });
+
+      // Recarregar dados para atualizar a lista
+      const [words, vaults] = await Promise.all([
+        checkTextWords(text.content, userId),
+        getVaults(),
+      ]);
+
+      setFoundWords(words);
+      setUserVaults(vaults);
+    } catch (error) {
+      console.error("Erro ao adicionar palavra:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível adicionar a palavra ao vault",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAddingWord(false);
+    }
   };
 
   // Função para renderizar dropdown de detalhes da palavra
@@ -109,20 +159,64 @@ export function TextViewer({ text }: TextViewerProps) {
     </DropdownMenu>
   );
 
-  // Função para renderizar o texto com highlights interativos
+  // Função para renderizar dropdown de adicionar palavra
+  const renderAddWordDropdown = (word: string) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <span className="word-clickable text-gray-900 dark:text-gray-100 px-1 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+          {word}
+        </span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-64">
+        <div className="p-3">
+          <div className="font-medium text-sm mb-3 text-center text-gray-600 dark:text-gray-400">
+            Adicionar "{word}" ao vault:
+          </div>
+          <div className="space-y-2">
+            {userVaults.map((vault) => (
+              <DropdownMenuItem
+                key={vault.id}
+                onClick={() => handleAddWordToVault(word, vault.id)}
+                disabled={isAddingWord}
+                className="flex items-center gap-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+              >
+                <BookOpen className="w-4 h-4 text-blue-600" />
+                <span>{vault.name}</span>
+                {isAddingWord && (
+                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 ml-auto"></div>
+                )}
+              </DropdownMenuItem>
+            ))}
+          </div>
+          {userVaults.length === 0 && (
+            <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+              <p className="text-sm">Nenhum vault encontrado</p>
+              <p className="text-xs">
+                Crie um vault primeiro para adicionar palavras
+              </p>
+            </div>
+          )}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  // Função para renderizar o texto com highlights interativos e palavras clicáveis
   const renderInteractiveText = () => {
     let content = text.content;
 
+    // Primeiro, marcar palavras já encontradas
     foundWords.forEach(({ word, vaultInfo }) => {
       const regex = new RegExp(`\\b${word}\\b`, "gi");
       content = content.replace(regex, `__HIGHLIGHT_${word}__`);
     });
 
-    // Dividir o texto em partes e renderizar cada highlight como dropdown
+    // Dividir o texto em partes
     const parts = content.split(/(__HIGHLIGHT_\w+__)/);
 
     return parts.map((part, index) => {
       if (part.startsWith("__HIGHLIGHT_") && part.endsWith("__")) {
+        // Palavra já encontrada - mostrar dropdown de detalhes
         const word = part.replace(/__HIGHLIGHT_|__/g, "");
         const wordData = foundWords.find(
           (fw) => fw.word.toLowerCase() === word.toLowerCase()
@@ -135,6 +229,20 @@ export function TextViewer({ text }: TextViewerProps) {
             </span>
           );
         }
+      } else if (part.trim() && part.length > 0) {
+        // Texto normal - dividir em palavras individuais
+        const words = part.split(/(\s+)/);
+        return words.map((word, wordIndex) => {
+          if (word.trim() && word.length > 2) {
+            // Palavras com mais de 2 caracteres
+            return (
+              <span key={`${index}-${wordIndex}`}>
+                {renderAddWordDropdown(word)}
+              </span>
+            );
+          }
+          return word;
+        });
       }
       return part;
     });
@@ -197,13 +305,17 @@ export function TextViewer({ text }: TextViewerProps) {
         </Card>
       </div>
 
-      {/* Texto com Highlights Interativos */}
+      {/* Texto com Highlights Interativos e Palavras Clicáveis */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Target className="w-5 h-5 text-yellow-600" />
-            Texto Analisado
+            Texto Interativo
           </CardTitle>
+          <p className="text-sm text-gray-600 dark:text-gray-400 font-normal">
+            Clique nas palavras destacadas para ver detalhes ou nas outras
+            palavras para adicioná-las aos vaults
+          </p>
         </CardHeader>
         <CardContent>
           <div className="prose prose-sm max-w-none dark:prose-invert">
@@ -217,7 +329,7 @@ export function TextViewer({ text }: TextViewerProps) {
               <Info className="w-8 h-8 mx-auto mb-2" />
               <p>Nenhuma palavra dos seus vaults foi encontrada neste texto.</p>
               <p className="text-sm">
-                Adicione mais palavras aos seus vaults para ver highlights aqui.
+                Clique em qualquer palavra para adicioná-la aos seus vaults!
               </p>
             </div>
           )}
