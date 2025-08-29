@@ -15,6 +15,7 @@ import { getVaults, getAllWordRelations } from "@/actions/actions";
 import { Vault, Word } from "@/actions/actions";
 import { Network, Link, Filter, RefreshCw } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import MindMapView from "@/components/MindMapView";
 
 interface ConnectedWord {
   id: number;
@@ -40,7 +41,9 @@ export default function ConnectionsPage() {
   const [connectedWords, setConnectedWords] = useState<ConnectedWord[]>([]);
   const [wordConnections, setWordConnections] = useState<WordConnection[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<"list" | "network">("list");
+  const [viewMode, setViewMode] = useState<"list" | "network" | "mindmap">(
+    "list"
+  );
   const { toast } = useToast();
 
   useEffect(() => {
@@ -228,9 +231,17 @@ export default function ConnectionsPage() {
                   variant={viewMode === "network" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("network")}
-                  className="rounded-l-none"
+                  className="rounded-l-none rounded-r-none"
                 >
                   Rede
+                </Button>
+                <Button
+                  variant={viewMode === "mindmap" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("mindmap")}
+                  className="rounded-l-none"
+                >
+                  Mapa Mental
                 </Button>
               </div>
             </div>
@@ -436,6 +447,38 @@ export default function ConnectionsPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Visualização de Mapa Mental */}
+      {viewMode === "mindmap" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Network className="w-5 h-5 text-purple-600" />
+              Mapa Mental das Conexões
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {wordConnections.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Network className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <p className="text-lg font-medium mb-2">
+                  Nenhuma conexão encontrada
+                </p>
+                <p className="text-sm">
+                  Conecte palavras nos seus vaults para visualizar o mapa mental
+                </p>
+              </div>
+            ) : (
+              <div className="relative min-h-[600px] overflow-auto">
+                <MindMapView
+                  connections={wordConnections}
+                  selectedVault={selectedVault}
+                />
               </div>
             )}
           </CardContent>
