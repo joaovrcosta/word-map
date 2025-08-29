@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createWord } from "@/actions/actions";
+import { SearchWord } from "@/components/search-word";
 
 export default function HomePage() {
   const [vaults, setVaults] = useState<Vault[]>([]);
@@ -35,7 +36,7 @@ export default function HomePage() {
     grammaticalClass: "",
     category: "",
     translations: "",
-    confidence: 0,
+    confidence: 1, // Mudando para 1 como padrão
   });
   const [isCreatingWord, setIsCreatingWord] = useState(false);
 
@@ -81,12 +82,7 @@ export default function HomePage() {
   };
 
   const handleCreateWord = async () => {
-    if (
-      !currentVault ||
-      !newWord.name.trim() ||
-      !newWord.grammaticalClass ||
-      !newWord.category
-    ) {
+    if (!currentVault || !newWord.name.trim() || !newWord.grammaticalClass) {
       return;
     }
 
@@ -95,7 +91,7 @@ export default function HomePage() {
       const wordData = {
         name: newWord.name.trim(),
         grammaticalClass: newWord.grammaticalClass,
-        category: newWord.category,
+        category: newWord.category.trim() || undefined, // Opcional
         translations: newWord.translations
           .split(",")
           .map((t) => t.trim())
@@ -290,7 +286,7 @@ export default function HomePage() {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Categoria
+                    Categoria (opcional)
                   </label>
                   <Input
                     placeholder="Ex: saudação, tecnologia, comida"
@@ -302,6 +298,31 @@ export default function HomePage() {
                       }))
                     }
                   />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Nível de Confiança
+                  </label>
+                  <Select
+                    value={newWord.confidence.toString()}
+                    onValueChange={(value) =>
+                      setNewWord((prev) => ({
+                        ...prev,
+                        confidence: parseInt(value),
+                      }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o nível" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 - Iniciante</SelectItem>
+                      <SelectItem value="2">2 - Básico</SelectItem>
+                      <SelectItem value="3">3 - Intermediário</SelectItem>
+                      <SelectItem value="4">4 - Avançado</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div>
@@ -320,25 +341,6 @@ export default function HomePage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Confiança Inicial (%)
-                  </label>
-                  <Input
-                    type="number"
-                    min="0"
-                    max="100"
-                    placeholder="0"
-                    value={newWord.confidence}
-                    onChange={(e) =>
-                      setNewWord((prev) => ({
-                        ...prev,
-                        confidence: parseInt(e.target.value) || 0,
-                      }))
-                    }
-                  />
-                </div>
-
                 <div className="flex justify-end gap-3 pt-4">
                   <Button
                     variant="outline"
@@ -352,8 +354,7 @@ export default function HomePage() {
                     disabled={
                       isCreatingWord ||
                       !newWord.name.trim() ||
-                      !newWord.grammaticalClass ||
-                      !newWord.category
+                      !newWord.grammaticalClass
                     }
                   >
                     {isCreatingWord ? "Criando..." : "Criar Palavra"}
@@ -363,6 +364,19 @@ export default function HomePage() {
             </DialogContent>
           </Dialog>
         </div>
+      </div>
+
+      {/* Barra de Pesquisa */}
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+            Pesquisar Palavras
+          </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400">
+            Encontre palavras em todos os seus vaults
+          </p>
+        </div>
+        <SearchWord />
       </div>
 
       {/* Estatísticas */}

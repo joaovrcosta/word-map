@@ -16,19 +16,30 @@ export interface Word {
   id: number;
   name: string;
   grammaticalClass: string;
-  category: string;
+  category: string | null; // Pode ser null no banco
   translations: string[];
-  confidence: number;
+  confidence: number; // 1-4
   isSaved: boolean;
 }
 
 export interface CreateWordData {
   name: string;
   grammaticalClass: string;
-  category: string;
+  category?: string; // Opcional
   translations: string[];
-  confidence: number;
+  confidence: number; // 1-4
   vaultId: number;
+}
+
+export interface SearchResult {
+  word: Word;
+  vault: {
+    id: number;
+    name: string;
+    createdAt: Date;
+    updatedAt: Date;
+    userId: number;
+  };
 }
 
 // Buscar todos os vaults
@@ -123,13 +134,8 @@ export async function deleteVault(vaultId: number): Promise<void> {
 // Criar nova palavra
 export async function createWord(data: CreateWordData): Promise<Word> {
   try {
-    if (
-      !data.name ||
-      !data.grammaticalClass ||
-      !data.category ||
-      !data.vaultId
-    ) {
-      throw new Error("Todos os campos obrigatórios devem ser preenchidos");
+    if (!data.name || !data.grammaticalClass || !data.vaultId) {
+      throw new Error("Nome da palavra e classe gramatical são obrigatórios");
     }
 
     if (data.name.trim().length === 0) {
@@ -150,13 +156,13 @@ export async function createWord(data: CreateWordData): Promise<Word> {
       data: {
         name: data.name.trim(),
         grammaticalClass: data.grammaticalClass,
-        category: data.category,
+        category: data.category || null,
         translations: data.translations,
         confidence: data.confidence,
         vaultId: data.vaultId,
         status: true,
         isSaved: false,
-      },
+      } as any, // Type assertion para resolver problema de tipo
     });
 
     // Revalidar as páginas
@@ -175,5 +181,73 @@ export async function createWord(data: CreateWordData): Promise<Word> {
   } catch (error) {
     console.error("Erro ao criar palavra:", error);
     throw new Error("Erro ao criar palavra");
+  }
+}
+
+// Buscar palavra em todos os vaults
+export async function searchWordInVaults(
+  searchTerm: string
+): Promise<SearchResult[]> {
+  try {
+    if (!searchTerm || searchTerm.trim().length === 0) {
+      return [];
+    }
+
+    const trimmedSearch = searchTerm.trim().toLowerCase();
+
+    // Buscar palavras que contenham o termo de pesquisa
+    const words = await prisma.word.findMany({
+      where: {
+        OR: [
+          {
+            name: {
+              contains: trimmedSearch,
+              mode: "insensitive",
+            },
+          },
+          {
+            translations: {
+              hasSome: [trimmedSearch],
+            },
+          },
+          {
+            category: {
+              contains: trimmedSearch,
+              mode: "insensitive",
+            },
+          },
+        ],
+      },
+      include: {
+        vault: {
+          select: {
+            id: true,
+            name: true,
+            createdAt: true,
+            updatedAt: true,
+            userId: true,
+          },
+        },
+      },
+    });
+
+    // Formatar resultado
+    const results: SearchResult[] = words.map((word) => ({
+      word: {
+        id: word.id,
+        name: word.name,
+        grammaticalClass: word.grammaticalClass,
+        category: word.category,
+        translations: word.translations,
+        confidence: word.confidence,
+        isSaved: word.isSaved,
+      },
+      vault: word.vault,
+    }));
+
+    return results;
+  } catch (error) {
+    console.error("Erro ao buscar palavra:", error);
+    throw new Error("Erro ao buscar palavra");
   }
 }

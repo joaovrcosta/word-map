@@ -39,10 +39,10 @@ model Word {
   status           Boolean   @default(true)
   name             String
   grammaticalClass String
-  category         String
+  category         String?   // Tornando opcional
   translations     String[]
   lastPractice     DateTime?
-  confidence       Int       @default(0)
+  confidence       Int       @default(1) // Mudando para 1-4
   isSaved          Boolean   @default(false)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt

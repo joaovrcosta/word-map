@@ -38,26 +38,48 @@ export const columns: ColumnDef<Word>[] = [
   },
   {
     accessorKey: "confidence",
-    header: "Grau de confiança",
+    header: "Nível de Confiança",
     cell: ({ row }) => {
       const confidence = row.getValue("confidence") as number;
 
-      console.log(confidence);
-      const maxBlocks = 4;
-      const level = Math.round((confidence / 100) * maxBlocks);
+      const getConfidenceText = (level: number) => {
+        switch (level) {
+          case 1:
+            return "Iniciante";
+          case 2:
+            return "Básico";
+          case 3:
+            return "Intermediário";
+          case 4:
+            return "Avançado";
+          default:
+            return "Desconhecido";
+        }
+      };
+
+      const getConfidenceColor = (level: number) => {
+        switch (level) {
+          case 1:
+            return "text-red-500";
+          case 2:
+            return "text-yellow-500";
+          case 3:
+            return "text-blue-500";
+          case 4:
+            return "text-green-500";
+          default:
+            return "text-gray-500";
+        }
+      };
 
       return (
         <div className="flex items-center gap-2">
-          <div className="flex gap-1">
-            {Array.from({ length: maxBlocks }).map((_, i) => (
-              <div
-                key={i}
-                className={`h-4 w-2 rounded-sm transition-colors ${
-                  i < level ? "bg-yellow-500" : "bg-gray-300"
-                }`}
-              />
-            ))}
-          </div>
+          <span className={`font-medium ${getConfidenceColor(confidence)}`}>
+            {confidence}
+          </span>
+          <span className="text-sm text-gray-600 dark:text-gray-400">
+            - {getConfidenceText(confidence)}
+          </span>
         </div>
       );
     },
