@@ -260,6 +260,37 @@ export const columns: ColumnDef<Word>[] = [
     },
   },
   {
+    id: "actions",
+    header: "Ações",
+    cell: ({ row }) => {
+      return (
+        <div className="flex items-center gap-2">
+          <EditWordDialog
+            word={row.original}
+            onWordUpdated={() => {
+              // Recarregar a página para mostrar as mudanças
+              window.location.reload();
+            }}
+          />
+          <LinkWordsDialog
+            word={row.original}
+            onWordsLinked={() => {
+              // Recarregar a página para mostrar as mudanças
+              window.location.reload();
+            }}
+          />
+        </div>
+      );
+    },
+  },
+  {
+    accessorKey: "isSaved",
+    header: "Salva",
+    cell: ({ row }) => {
+      return <SavedCell word={row.original} />;
+    },
+  },
+  {
     accessorKey: "grammaticalClass",
     header: "Categoria gramatical",
     cell: ({ row }) => {
@@ -324,41 +355,10 @@ export const columns: ColumnDef<Word>[] = [
     },
   },
   {
-    accessorKey: "isSaved",
-    header: "Salva",
-    cell: ({ row }) => {
-      return <SavedCell word={row.original} />;
-    },
-  },
-  {
     accessorKey: "relatedWords",
     header: "Palavras Relacionadas",
     cell: ({ row }) => {
       return <RelatedWordsCell word={row.original} />;
-    },
-  },
-  {
-    id: "actions",
-    header: "Ações",
-    cell: ({ row }) => {
-      return (
-        <div className="flex items-center gap-2">
-          <EditWordDialog
-            word={row.original}
-            onWordUpdated={() => {
-              // Recarregar a página para mostrar as mudanças
-              window.location.reload();
-            }}
-          />
-          <LinkWordsDialog
-            word={row.original}
-            onWordsLinked={() => {
-              // Recarregar a página para mostrar as mudanças
-              window.location.reload();
-            }}
-          />
-        </div>
-      );
     },
   },
 ];
