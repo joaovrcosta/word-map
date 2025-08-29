@@ -817,3 +817,239 @@ export async function getLinkableWords(wordId: number): Promise<Word[]> {
     );
   }
 }
+
+// Interface para Texto
+export interface Text {
+  id: number;
+  title: string;
+  content: string;
+  userId: number;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+// Criar novo texto
+export async function createText(
+  title: string,
+  content: string,
+  userId: number
+): Promise<Text> {
+  try {
+    console.log("=== INÍCIO createText ===");
+    console.log("Criando texto:", title);
+
+    const newText = await prisma.text.create({
+      data: {
+        title: title.trim(),
+        content: content.trim(),
+        userId: userId,
+      },
+    });
+
+    console.log("Texto criado com sucesso:", newText);
+    console.log("=== FIM createText - SUCESSO ===");
+
+    // Revalidar as páginas
+    revalidatePath("/home");
+    revalidatePath("/home/texts");
+
+    return {
+      id: newText.id,
+      title: newText.title,
+      content: newText.content,
+      userId: newText.userId,
+      createdAt: newText.createdAt,
+      updatedAt: newText.updatedAt,
+    };
+  } catch (error) {
+    console.error("=== ERRO em createText ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao criar texto: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}
+
+// Buscar textos do usuário
+export async function getUserTexts(userId: number): Promise<Text[]> {
+  try {
+    console.log("=== INÍCIO getUserTexts ===");
+    console.log("Buscando textos para usuário:", userId);
+
+    const texts = await prisma.text.findMany({
+      where: { userId: userId },
+      orderBy: { updatedAt: "desc" },
+    });
+
+    console.log("Textos encontrados:", texts.length);
+    console.log("=== FIM getUserTexts - SUCESSO ===");
+
+    return texts.map((text) => ({
+      id: text.id,
+      title: text.title,
+      content: text.content,
+      userId: text.userId,
+      createdAt: text.createdAt,
+      updatedAt: text.updatedAt,
+    }));
+  } catch (error) {
+    console.error("=== ERRO em getUserTexts ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao buscar textos: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}
+
+// Atualizar texto
+export async function updateText(
+  textId: number,
+  title: string,
+  content: string
+): Promise<Text> {
+  try {
+    console.log("=== INÍCIO updateText ===");
+    console.log("Atualizando texto:", textId);
+
+    const updatedText = await prisma.text.update({
+      where: { id: textId },
+      data: {
+        title: title.trim(),
+        content: content.trim(),
+        updatedAt: new Date(),
+      },
+    });
+
+    console.log("Texto atualizado com sucesso:", updatedText);
+    console.log("=== FIM updateText - SUCESSO ===");
+
+    // Revalidar as páginas
+    revalidatePath("/home");
+    revalidatePath("/home/texts");
+
+    return {
+      id: updatedText.id,
+      title: updatedText.title,
+      content: updatedText.content,
+      userId: updatedText.userId,
+      createdAt: updatedText.createdAt,
+      updatedAt: updatedText.updatedAt,
+    };
+  } catch (error) {
+    console.error("=== ERRO em updateText ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao atualizar texto: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}
+
+// Deletar texto
+export async function deleteText(textId: number): Promise<void> {
+  try {
+    console.log("=== INÍCIO deleteText ===");
+    console.log("Deletando texto:", textId);
+
+    await prisma.text.delete({
+      where: { id: textId },
+    });
+
+    console.log("Texto deletado com sucesso");
+    console.log("=== FIM deleteText - SUCESSO ===");
+
+    // Revalidar as páginas
+    revalidatePath("/home");
+    revalidatePath("/home/texts");
+  } catch (error) {
+    console.error("=== ERRO em deleteText ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao deletar texto: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}
+
+// Verificar palavras do texto que estão nos vaults
+export async function checkTextWords(
+  content: string,
+  userId: number
+): Promise<Array<{ word: string; vaultInfo: Vault[] }>> {
+  try {
+    console.log("=== INÍCIO checkTextWords ===");
+    console.log("Verificando palavras do texto para usuário:", userId);
+
+    // Extrair palavras únicas do texto (apenas palavras em inglês)
+    const words = content.toLowerCase().match(/\b[a-z]+\b/g) || [];
+
+    const uniqueWords = [...new Set(words)];
+
+    // Buscar todas as palavras dos vaults do usuário
+    const userVaults = await prisma.vault.findMany({
+      where: { userId: userId },
+      include: {
+        words: {
+          select: {
+            id: true,
+            name: true,
+            grammaticalClass: true,
+            category: true,
+            translations: true,
+            confidence: true,
+            isSaved: true,
+            vaultId: true,
+          },
+        },
+      },
+    });
+
+    // Mapear palavras encontradas com seus vaults
+    const foundWords = uniqueWords
+      .map((word) => {
+        const matchingVaults = userVaults.filter((vault) =>
+          vault.words.some(
+            (vaultWord) => vaultWord.name.toLowerCase() === word.toLowerCase()
+          )
+        );
+
+        if (matchingVaults.length > 0) {
+          return {
+            word,
+            vaultInfo: matchingVaults.map((vault) => ({
+              id: vault.id,
+              name: vault.name,
+              words: vault.words.filter(
+                (vaultWord) =>
+                  vaultWord.name.toLowerCase() === word.toLowerCase()
+              ),
+            })),
+          };
+        }
+        return null;
+      })
+      .filter((item) => item !== null) as Array<{
+      word: string;
+      vaultInfo: Vault[];
+    }>;
+
+    console.log("Palavras encontradas nos vaults:", foundWords.length);
+    console.log("=== FIM checkTextWords - SUCESSO ===");
+
+    return foundWords;
+  } catch (error) {
+    console.error("=== ERRO em checkTextWords ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao verificar palavras do texto: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}

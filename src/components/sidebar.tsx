@@ -12,10 +12,8 @@ import {
   CircleX,
   Brain,
   FilePen,
+  BookOpen,
 } from "lucide-react";
-import Image from "next/image";
-import magmaLogo from "@/public/logo-extended.png";
-import tinyLogo from "@/public/tiny-logo.png";
 import { useEffect, useState } from "react";
 import {
   AlignBottomIcon,
@@ -37,7 +35,7 @@ type SidebarLink = {
 const links: SidebarLink[] = [
   { name: "Homepage", path: "/home", icon: AlignBottomIcon },
   { name: "Vault", path: "/home/vault", icon: VaultIcon },
-  { name: "Bluesky", path: "/dashboard/bluesky", icon: Cloud },
+  { name: "Texts", path: "/home/texts", icon: BookOpen },
 ];
 
 interface SidebarItemProps {
