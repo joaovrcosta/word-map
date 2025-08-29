@@ -24,30 +24,21 @@ import { EditWordDialog } from "./edit-word-dialog";
 import { LinkWordsDialog } from "./link-words-dialog";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { PencilSimple } from "@phosphor-icons/react/dist/ssr";
+import {
+  useUpdateWord,
+  useInvalidateWords,
+  useVaults,
+} from "@/hooks/use-words";
 
 // Componente para a célula da coluna "Salva"
 function SavedCell({ word }: { word: Word }) {
-  const [vaults, setVaults] = useState<Vault[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const { data: vaults = [], isLoading } = useVaults();
   const { toast } = useToast();
-
-  // Buscar vaults disponíveis
-  useEffect(() => {
-    const fetchVaults = async () => {
-      try {
-        const vaultsData = await getVaults();
-        setVaults(vaultsData);
-      } catch (error) {
-        console.error("Erro ao buscar vaults:", error);
-      }
-    };
-    fetchVaults();
-  }, []);
+  const invalidateWords = useInvalidateWords();
 
   const handleMoveToVault = async (vault: Vault) => {
     if (vault.id === word.vaultId) return; // Não mover para o mesmo vault
 
-    setIsLoading(true);
     try {
       await moveWordToVault(word.id, vault.id);
 
@@ -56,8 +47,8 @@ function SavedCell({ word }: { word: Word }) {
         description: `"${word.name}" foi movida para o vault "${vault.name}"`,
       });
 
-      // Recarregar a página para atualizar a tabela
-      window.location.reload();
+      // Invalidar queries para atualizar a tabela
+      invalidateWords();
     } catch (error) {
       console.error("Erro ao mover palavra:", error);
       toast({
@@ -66,13 +57,10 @@ function SavedCell({ word }: { word: Word }) {
           error instanceof Error ? error.message : "Erro desconhecido",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
   const handleDelete = async () => {
-    setIsLoading(true);
     try {
       await deleteWord(word.id);
 
@@ -81,8 +69,8 @@ function SavedCell({ word }: { word: Word }) {
         description: `"${word.name}" foi removida do vault`,
       });
 
-      // Recarregar a página para atualizar a tabela
-      window.location.reload();
+      // Invalidar queries para atualizar a tabela
+      invalidateWords();
     } catch (error) {
       console.error("Erro ao remover palavra:", error);
       toast({
@@ -91,8 +79,6 @@ function SavedCell({ word }: { word: Word }) {
           error instanceof Error ? error.message : "Erro desconhecido",
         variant: "destructive",
       });
-    } finally {
-      setIsLoading(false);
     }
   };
 
@@ -265,20 +251,22 @@ export const columns: ColumnDef<Word>[] = [
     id: "actions",
     header: "Ações",
     cell: ({ row }) => {
+      const invalidateWords = useInvalidateWords();
+
       return (
         <div className="flex items-center gap-2">
           <EditWordDialog
             word={row.original}
             onWordUpdated={() => {
-              // Recarregar a página para mostrar as mudanças
-              window.location.reload();
+              // Invalidar queries para atualizar a tabela
+              invalidateWords();
             }}
           />
           <LinkWordsDialog
             word={row.original}
             onWordsLinked={() => {
-              // Recarregar a página para mostrar as mudanças
-              window.location.reload();
+              // Invalidar queries para atualizar a tabela
+              invalidateWords();
             }}
           />
         </div>
@@ -312,7 +300,10 @@ export const columns: ColumnDef<Word>[] = [
     accessorKey: "confidence",
     header: "Grau de confiança",
     cell: ({ row }) => {
-      const confidence = row.getValue("confidence") as number;
+      const [localConfidence, setLocalConfidence] = useState(
+        row.original.confidence
+      );
+      const updateWordMutation = useUpdateWord();
 
       const getConfidenceText = (level: number) => {
         switch (level) {
@@ -344,26 +335,56 @@ export const columns: ColumnDef<Word>[] = [
         }
       };
 
+      const handleConfidenceChange = async (newLevel: number) => {
+        if (newLevel === localConfidence || updateWordMutation.isPending)
+          return;
+
+        // Atualização otimista - mudança visual imediata
+        setLocalConfidence(newLevel);
+
+        try {
+          await updateWordMutation.mutateAsync({
+            wordId: row.original.id,
+            data: { confidence: newLevel },
+          });
+          // A confiança já foi atualizada visualmente, não precisa fazer nada aqui
+        } catch (error) {
+          console.error("Erro ao atualizar confiança:", error);
+          // Em caso de erro, reverter para o valor anterior
+          setLocalConfidence(row.original.confidence);
+        }
+      };
+
       return (
         <div className="flex flex-col gap-1">
-          <div className="flex items-center gap-2">
-            {/* <span className={`font-medium ${getConfidenceColor(confidence)}`}>
-              {confidence}
-            </span>
-            <span className="text-sm text-gray-600 dark:text-gray-400">
-              - {getConfidenceText(confidence)}
-            </span> */}
-          </div>
+          <div className="flex items-center gap-2"></div>
           <div className="flex gap-1 px-1">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <div
-                key={i}
-                className={`h-3 w-2 rounded-sm ${
-                  i < confidence ? "bg-yellow-500" : "bg-gray-300"
-                }`}
-              />
-            ))}
+            {Array.from({ length: 4 }).map((_, i) => {
+              const level = i + 1;
+              return (
+                <button
+                  key={i}
+                  onClick={() => handleConfidenceChange(level)}
+                  disabled={updateWordMutation.isPending}
+                  className={`h-3 w-2 rounded-sm transition-all duration-200 hover:scale-110 cursor-pointer ${
+                    i < localConfidence
+                      ? "bg-yellow-500 hover:bg-yellow-600"
+                      : "bg-gray-300 hover:bg-gray-400"
+                  } ${
+                    updateWordMutation.isPending
+                      ? "opacity-50 cursor-not-allowed"
+                      : ""
+                  }`}
+                  title={`Clique para definir como ${getConfidenceText(level)}`}
+                />
+              );
+            })}
           </div>
+          {updateWordMutation.isPending && (
+            <div className="text-xs text-gray-500 text-center">
+              Atualizando...
+            </div>
+          )}
         </div>
       );
     },
