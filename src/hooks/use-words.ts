@@ -72,7 +72,6 @@ export function useVaults() {
   });
 }
 
-// Hook para invalidar queries de palavras
 export function useInvalidateWords() {
   const queryClient = useQueryClient();
 

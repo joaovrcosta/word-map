@@ -231,6 +231,55 @@ function RelatedWordsCell({ word }: { word: Word }) {
 
 export const columns: ColumnDef<Word>[] = [
   {
+    id: "audio",
+    header: "Áudio",
+    cell: ({ row }) => {
+      const wordName = row.original.name;
+
+      const handlePlayAudio = () => {
+        // Usar a API de síntese de fala do navegador
+        if ("speechSynthesis" in window) {
+          // Cancelar qualquer fala em andamento
+          window.speechSynthesis.cancel();
+
+          // Criar uma nova fala
+          const utterance = new SpeechSynthesisUtterance(wordName);
+          utterance.lang = "en-US"; // Inglês
+          utterance.rate = 0.8; // Velocidade um pouco mais lenta
+          utterance.pitch = 1; // Tom normal
+
+          // Reproduzir o áudio
+          window.speechSynthesis.speak(utterance);
+        } else {
+          console.log("Síntese de fala não suportada neste navegador");
+        }
+      };
+
+      return (
+        <div className="flex items-center justify-center">
+          <button
+            onClick={handlePlayAudio}
+            className="p-2 rounded-full bg-blue-100 hover:bg-blue-200 text-blue-600 hover:text-blue-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            title={`Ouvir pronúncia de "${wordName}"`}
+          >
+            <svg
+              className="w-4 h-4"
+              fill="currentColor"
+              viewBox="0 0 20 20"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              <path
+                fillRule="evenodd"
+                d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z"
+                clipRule="evenodd"
+              />
+            </svg>
+          </button>
+        </div>
+      );
+    },
+  },
+  {
     accessorKey: "name",
     header: "Palavra",
     cell: ({ row }) => {
