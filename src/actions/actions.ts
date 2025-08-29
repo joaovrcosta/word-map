@@ -1230,3 +1230,76 @@ export async function checkTextWords(
     );
   }
 }
+
+// Editar nome do vault
+export async function updateVaultName(
+  vaultId: number,
+  newName: string
+): Promise<Vault> {
+  try {
+    console.log("=== INÍCIO updateVaultName ===");
+    console.log("Editando vault:", vaultId, "com novo nome:", newName);
+
+    if (
+      !newName ||
+      typeof newName !== "string" ||
+      newName.trim().length === 0
+    ) {
+      throw new Error("Nome do vault é obrigatório");
+    }
+
+    // Verificar se o vault existe
+    const existingVault = await prisma.vault.findUnique({
+      where: { id: vaultId },
+    });
+
+    if (!existingVault) {
+      throw new Error("Vault não encontrado");
+    }
+
+    // Atualizar o nome do vault
+    const updatedVault = await prisma.vault.update({
+      where: { id: vaultId },
+      data: {
+        name: newName.trim(),
+        updatedAt: new Date(),
+      },
+      include: {
+        words: {
+          select: {
+            id: true,
+            name: true,
+            grammaticalClass: true,
+            category: true,
+            translations: true,
+            confidence: true,
+            isSaved: true,
+            vaultId: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
+      },
+    });
+
+    console.log("Vault atualizado com sucesso:", updatedVault);
+    console.log("=== FIM updateVaultName - SUCESSO ===");
+
+    // Revalidar as páginas
+    revalidatePath("/home");
+    revalidatePath("/home/vault");
+
+    return updatedVault;
+  } catch (error) {
+    console.error("=== ERRO em updateVaultName ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao editar vault: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}

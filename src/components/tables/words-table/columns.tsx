@@ -24,17 +24,15 @@ import { EditWordDialog } from "./edit-word-dialog";
 import { LinkWordsDialog } from "./link-words-dialog";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
 import { PencilSimple } from "@phosphor-icons/react/dist/ssr";
-import {
-  useUpdateWord,
-  useInvalidateWords,
-  useVaults,
-} from "@/hooks/use-words";
+import { useUpdateWord, useVaults } from "@/hooks/use-words";
+import { useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 
 // Componente para a célula da coluna "Salva"
 function SavedCell({ word }: { word: Word }) {
   const { data: vaults = [], isLoading } = useVaults();
   const { toast } = useToast();
-  const invalidateWords = useInvalidateWords();
+  const queryClient = useQueryClient();
 
   const handleMoveToVault = async (vault: Vault) => {
     if (vault.id === word.vaultId) return; // Não mover para o mesmo vault
@@ -47,8 +45,10 @@ function SavedCell({ word }: { word: Word }) {
         description: `"${word.name}" foi movida para o vault "${vault.name}"`,
       });
 
-      // Invalidar queries para atualizar a tabela
-      invalidateWords();
+      // Invalidar o cache do React Query para atualizar a tabela imediatamente
+      // Usar uma abordagem mais agressiva para garantir atualização
+      queryClient.invalidateQueries({ queryKey: ["vaults"] });
+      queryClient.refetchQueries({ queryKey: ["vaults"] });
     } catch (error) {
       console.error("Erro ao mover palavra:", error);
       toast({
@@ -69,8 +69,10 @@ function SavedCell({ word }: { word: Word }) {
         description: `"${word.name}" foi removida do vault`,
       });
 
-      // Invalidar queries para atualizar a tabela
-      invalidateWords();
+      // Invalidar o cache do React Query para atualizar a tabela imediatamente
+      // Usar uma abordagem mais agressiva para garantir atualização
+      queryClient.invalidateQueries({ queryKey: ["vaults"] });
+      queryClient.refetchQueries({ queryKey: ["vaults"] });
     } catch (error) {
       console.error("Erro ao remover palavra:", error);
       toast({
@@ -171,24 +173,12 @@ function SavedCell({ word }: { word: Word }) {
 
 // Componente para a célula da coluna "Palavras Relacionadas"
 function RelatedWordsCell({ word }: { word: Word }) {
-  const [relatedWords, setRelatedWords] = useState<Word[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
-
-  useEffect(() => {
-    const fetchRelatedWords = async () => {
-      try {
-        setIsLoading(true);
-        const related = await getRelatedWords(word.id);
-        setRelatedWords(related);
-      } catch (error) {
-        console.error("Erro ao buscar palavras relacionadas:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    fetchRelatedWords();
-  }, [word.id]);
+  const { data: relatedWords = [], isLoading } = useQuery({
+    queryKey: ["relatedWords", word.id],
+    queryFn: () => getRelatedWords(word.id),
+    staleTime: 0, // Sempre considerar stale para permitir atualizações imediatas
+    refetchOnMount: true,
+  });
 
   if (isLoading) {
     return (
@@ -300,22 +290,18 @@ export const columns: ColumnDef<Word>[] = [
     id: "actions",
     header: "Ações",
     cell: ({ row }) => {
-      const invalidateWords = useInvalidateWords();
-
       return (
         <div className="flex items-center gap-2">
           <EditWordDialog
             word={row.original}
             onWordUpdated={() => {
-              // Invalidar queries para atualizar a tabela
-              invalidateWords();
+              // O cache será atualizado automaticamente pelo React Query
             }}
           />
           <LinkWordsDialog
             word={row.original}
             onWordsLinked={() => {
-              // Invalidar queries para atualizar a tabela
-              invalidateWords();
+              // O cache será atualizado automaticamente pelo React Query
             }}
           />
         </div>

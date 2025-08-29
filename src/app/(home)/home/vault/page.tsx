@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Plus, FolderOpen, Trash } from "@phosphor-icons/react";
+import { useState, useCallback } from "react";
+import { Plus, FolderOpen, Trash, Pencil, Eye } from "@phosphor-icons/react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,124 +17,100 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { useRouter } from "next/navigation";
 import {
-  getVaults,
   deleteVault,
+  updateVaultName,
   type Vault,
-  type Word,
 } from "../../../../actions/actions";
 import { CreateVaultForm } from "./create-vault-form";
+import { useVaults } from "@/hooks/use-words";
 
 export default function VaultPage() {
-  const [vaults, setVaults] = useState<Vault[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isLoadingVaults, setIsLoadingVaults] = useState(true);
+  const [editingVault, setEditingVault] = useState<{
+    id: number;
+    name: string;
+  } | null>(null);
+  const [isEditing, setIsEditing] = useState(false);
+  const router = useRouter();
 
-  // Buscar vaults usando Server Action
-  const fetchVaults = async () => {
-    try {
-      setIsLoadingVaults(true);
-      const vaultsData = await getVaults();
-      setVaults(vaultsData);
-    } catch (error) {
-      console.error("Erro ao buscar vaults:", error);
-      // Em caso de erro, manter os dados mockados como fallback
-      const mockVaults: Vault[] = [
-        {
-          id: 1,
-          name: "Vocabulário Básico",
-          createdAt: new Date("2024-01-15"),
-          updatedAt: new Date("2024-01-20"),
-          userId: 1,
-          words: [
-            {
-              id: 1,
-              name: "Hello",
-              grammaticalClass: "interjeição",
-              category: "saudação",
-              translations: ["olá", "oi"],
-              confidence: 1,
-              isSaved: true,
-              vaultId: 1,
-            },
-            {
-              id: 2,
-              name: "Beautiful",
-              grammaticalClass: "adjetivo",
-              category: "aparência",
-              translations: ["bonito", "lindo"],
-              confidence: 2,
-              isSaved: true,
-              vaultId: 1,
-            },
-          ],
-        },
-      ];
-      setVaults(mockVaults);
-    } finally {
-      setIsLoadingVaults(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchVaults();
-  }, []);
+  // Usar hook otimizado com cache
+  const { data: vaults, isLoading: isLoadingVaults, refetch } = useVaults();
 
   // Deletar vault usando Server Action
-  const handleDeleteVault = async (vaultId: number) => {
-    if (!confirm("Tem certeza que deseja excluir este vault? Esta ação não pode ser desfeita e todas as palavras e conexões serão perdidas.")) return;
+  const handleDeleteVault = useCallback(
+    async (vaultId: number) => {
+      if (
+        !confirm(
+          "Tem certeza que deseja excluir este vault? Esta ação não pode ser desfeita e todas as palavras e conexões serão perdidas."
+        )
+      )
+        return;
+
+      try {
+        await deleteVault(vaultId);
+
+        // Recarregar dados do cache
+        refetch();
+      } catch (error) {
+        console.error("Erro ao deletar vault:", error);
+        alert("Erro ao deletar vault. Tente novamente.");
+      }
+    },
+    [refetch]
+  );
+
+  // Editar nome do vault
+  const handleEditVault = useCallback((vault: Vault) => {
+    setEditingVault({ id: vault.id, name: vault.name });
+  }, []);
+
+  const handleSaveEdit = useCallback(async () => {
+    if (!editingVault || !editingVault.name.trim()) return;
 
     try {
-      // Mostrar loading
-      const vaultToDelete = vaults.find(v => v.id === vaultId);
-      if (vaultToDelete) {
-        setVaults((prev) => prev.map(v => 
-          v.id === vaultId 
-            ? { ...v, isDeleting: true }
-            : v
-        ));
-      }
+      setIsEditing(true);
+      await updateVaultName(editingVault.id, editingVault.name);
 
-      await deleteVault(vaultId);
-
-      // Remover o vault da lista local
-      setVaults((prev) => prev.filter((vault) => vault.id !== vaultId));
-      
-      // Mostrar mensagem de sucesso
-      alert("Vault excluído com sucesso!");
+      // Recarregar dados do cache
+      refetch();
+      setEditingVault(null);
     } catch (error) {
-      console.error("Erro ao excluir vault:", error);
-      
-      // Reverter o estado de loading
-      if (vaultToDelete) {
-        setVaults((prev) => prev.map(v => 
-          v.id === vaultId 
-            ? { ...v, isDeleting: false }
-            : v
-        ));
-      }
-      
-      alert(
-        `Erro ao deletar vault: ${
-          error instanceof Error ? error.message : "Erro desconhecido"
-        }`
-      );
+      console.error("Erro ao editar vault:", error);
+      alert("Erro ao editar vault. Tente novamente.");
+    } finally {
+      setIsEditing(false);
     }
-  };
+  }, [editingVault, refetch]);
+
+  const handleCancelEdit = useCallback(() => {
+    setEditingVault(null);
+  }, []);
+
+  // Visualizar vault (navegar para home com vault selecionado)
+  const handleViewVault = useCallback(
+    (vault: Vault) => {
+      // Navegar para a página home com o vault selecionado
+      router.push(`/home?vaultId=${vault.id}`);
+    },
+    [router]
+  );
 
   // Recarregar vaults após criação
-  const handleVaultCreated = async () => {
+  const handleVaultCreated = useCallback(async () => {
     setIsCreateDialogOpen(false);
-    await fetchVaults();
-  };
+    refetch();
+  }, [refetch]);
 
-  const formatDate = (date: Date) => {
+  const formatDate = useCallback((date: Date) => {
     return new Intl.DateTimeFormat("pt-BR", {
       day: "2-digit",
       month: "2-digit",
       year: "numeric",
     }).format(new Date(date));
-  };
+  }, []);
 
   if (isLoadingVaults) {
     return (
@@ -180,7 +156,7 @@ export default function VaultPage() {
       </div>
 
       {/* Lista de Vaults */}
-      {vaults.length === 0 ? (
+      {!vaults || vaults.length === 0 ? (
         <div className="text-center py-12">
           <FolderOpen size={64} className="mx-auto text-gray-400 mb-4" />
           <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
@@ -196,13 +172,35 @@ export default function VaultPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {vaults.map((vault) => (
+          {vaults?.map((vault) => (
             <Card key={vault.id} className="hover:shadow-lg transition-shadow">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
                     <CardTitle className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {vault.name}
+                      {editingVault?.id === vault.id && isEditing ? (
+                        <Input
+                          value={editingVault.name}
+                          onChange={(e) =>
+                            setEditingVault({
+                              ...editingVault,
+                              name: e.target.value,
+                            })
+                          }
+                          onBlur={handleSaveEdit}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") {
+                              handleSaveEdit();
+                            } else if (e.key === "Escape") {
+                              handleCancelEdit();
+                            }
+                          }}
+                          autoFocus
+                          className="w-full"
+                        />
+                      ) : (
+                        vault.name
+                      )}
                     </CardTitle>
                     <CardDescription className="text-sm text-gray-600 dark:text-gray-400">
                       {vault.words.length} palavra
@@ -215,13 +213,25 @@ export default function VaultPage() {
                       size="sm"
                       className="h-8 w-8 p-0"
                       onClick={() => handleDeleteVault(vault.id)}
-                      disabled={vault.isDeleting}
                     >
-                      {vault.isDeleting ? (
-                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
-                      ) : (
-                        <Trash size={16} className="text-red-500" />
-                      )}
+                      <Trash size={16} className="text-red-500" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => handleEditVault(vault)}
+                      disabled={isEditing}
+                    >
+                      <Pencil size={16} className="text-blue-500" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => handleViewVault(vault)}
+                    >
+                      <Eye size={16} className="text-green-500" />
                     </Button>
                   </div>
                 </div>

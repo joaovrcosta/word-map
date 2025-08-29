@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { Plus, BookOpen, Target, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/tables/words-table/data-table";
 import { columns } from "@/components/tables/words-table/columns";
-import { getVaults, type Vault, type Word } from "@/actions/actions";
+import { type Vault, type Word } from "@/actions/actions";
 import { getCurrentUser } from "@/actions/auth";
 import {
   Dialog,
@@ -24,65 +24,61 @@ import {
 } from "@/components/ui/select";
 import { createWord } from "@/actions/actions";
 import { SearchWord } from "@/components/search-word";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useWords, useVaults } from "@/hooks/use-words";
+import { useQueryClient } from "@tanstack/react-query";
 
 export default function HomePage() {
-  const [vaults, setVaults] = useState<Vault[]>([]);
-  const [currentVault, setCurrentVault] = useState<Vault | null>(null);
-  const [words, setWords] = useState<Word[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newWord, setNewWord] = useState({
     name: "",
     grammaticalClass: "",
     category: "",
     translations: "",
-    confidence: 1, // Mudando para 1 como padrão
+    confidence: 1,
   });
   const [isCreatingWord, setIsCreatingWord] = useState(false);
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const queryClient = useQueryClient();
 
-  // Buscar vaults e usuário atual
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        setIsLoading(true);
-        const [vaultsData, currentUser] = await Promise.all([
-          getVaults(),
-          getCurrentUser(),
-        ]);
+  // Usar hooks otimizados com cache
+  const { vaults, currentVault, words, isLoading } = useWords();
 
-        setVaults(vaultsData);
+  // Obter vaultId da URL de forma otimizada
+  const vaultIdFromUrl = useMemo(() => {
+    return searchParams.get("vaultId");
+  }, [searchParams]);
 
-        // Se não há vault selecionado, usar o primeiro disponível
-        if (vaultsData.length > 0 && !currentVault) {
-          setCurrentVault(vaultsData[0]);
-          setWords(vaultsData[0].words);
-        }
-      } catch (error) {
-        console.error("Erro ao buscar dados:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
+  // Selecionar vault baseado na URL ou primeiro disponível
+  const selectedVault = useMemo(() => {
+    if (!vaults) return null;
 
-    fetchData();
-  }, [currentVault]);
-
-  // Atualizar palavras quando o vault mudar
-  useEffect(() => {
-    if (currentVault) {
-      setWords(currentVault.words);
+    if (vaultIdFromUrl) {
+      const vault = vaults.find((v) => v.id === parseInt(vaultIdFromUrl));
+      if (vault) return vault;
     }
-  }, [currentVault]);
 
-  const handleVaultChange = (vaultId: string) => {
-    const selectedVault = vaults.find((v) => v.id === parseInt(vaultId));
-    if (selectedVault) {
-      setCurrentVault(selectedVault);
-    }
-  };
+    return vaults[0] || null;
+  }, [vaults, vaultIdFromUrl]);
 
-  const handleCreateWord = async () => {
-    if (!currentVault || !newWord.name.trim() || !newWord.grammaticalClass) {
+  // Atualizar palavras quando o vault selecionado mudar
+  const currentWords = useMemo(() => {
+    return selectedVault?.words || [];
+  }, [selectedVault]);
+
+  // Handler para mudança de vault otimizado
+  const handleVaultChange = useCallback(
+    (vaultId: string) => {
+      // Navegar para a URL com o novo vaultId selecionado
+      router.push(`/home?vaultId=${vaultId}`);
+    },
+    [router]
+  );
+
+  // Handler para criar palavra otimizado
+  const handleCreateWord = useCallback(async () => {
+    if (!selectedVault || !newWord.name.trim() || !newWord.grammaticalClass) {
       return;
     }
 
@@ -91,38 +87,31 @@ export default function HomePage() {
       const wordData = {
         name: newWord.name.trim(),
         grammaticalClass: newWord.grammaticalClass,
-        category: newWord.category.trim() || undefined, // Opcional
+        category: newWord.category.trim() || undefined,
         translations: newWord.translations
           .split(",")
           .map((t) => t.trim())
           .filter((t) => t),
         confidence: newWord.confidence,
-        vaultId: currentVault.id,
+        vaultId: selectedVault.id,
       };
 
-      const createdWord = await createWord(wordData);
+      await createWord(wordData);
 
-      // Adicionar nova palavra à lista
-      setWords((prev) => [...prev, createdWord]);
+      // Invalidar o cache do React Query para atualizar a tabela imediatamente
+      queryClient.invalidateQueries({ queryKey: ["vaults"] });
+      queryClient.refetchQueries({ queryKey: ["vaults"] });
 
-      // Atualizar o vault atual
-      setCurrentVault((prev) =>
-        prev
-          ? {
-              ...prev,
-              words: [...prev.words, createdWord],
-            }
-          : null
-      );
-
-      // Limpar formulário e fechar modal
+      // Limpar formulário
       setNewWord({
         name: "",
         grammaticalClass: "",
         category: "",
         translations: "",
-        confidence: 0,
+        confidence: 1,
       });
+
+      // Fechar dialog
       setIsCreateDialogOpen(false);
     } catch (error) {
       console.error("Erro ao criar palavra:", error);
@@ -130,38 +119,56 @@ export default function HomePage() {
     } finally {
       setIsCreatingWord(false);
     }
-  };
+  }, [selectedVault, newWord, queryClient]);
 
-  const stats = [
-    {
-      title: "Total de Palavras",
-      value: words.length,
-      icon: BookOpen,
-      color: "text-blue-600",
-      bgColor: "bg-blue-100",
-    },
-    {
-      title: "Palavras Salvas",
-      value: words.filter((w) => w.isSaved).length,
-      icon: Target,
-      color: "text-green-600",
-      bgColor: "bg-green-100",
-    },
-    {
-      title: "Confiança Média",
-      value:
-        words.length > 0
-          ? Math.round(
-              words.reduce((acc, w) => acc + w.confidence, 0) / words.length
-            )
-          : 0,
-      icon: Trophy,
-      color: "text-yellow-600",
-      bgColor: "bg-yellow-100",
-      suffix: "%",
-    },
-  ];
+  // Resetar formulário quando dialog fechar
+  const handleDialogClose = useCallback(() => {
+    setIsCreateDialogOpen(false);
+    setNewWord({
+      name: "",
+      grammaticalClass: "",
+      category: "",
+      translations: "",
+      confidence: 1,
+    });
+  }, []);
 
+  // Estatísticas calculadas de forma otimizada
+  const stats = useMemo(
+    () => [
+      {
+        title: "Total de Palavras",
+        value: currentWords.length,
+        icon: BookOpen,
+        color: "text-blue-600",
+        bgColor: "bg-blue-100",
+      },
+      {
+        title: "Palavras Salvas",
+        value: currentWords.filter((w) => w.isSaved).length,
+        icon: Target,
+        color: "text-green-600",
+        bgColor: "bg-green-100",
+      },
+      {
+        title: "Confiança Média",
+        value:
+          currentWords.length > 0
+            ? Math.round(
+                currentWords.reduce((acc, w) => acc + w.confidence, 0) /
+                  currentWords.length
+              )
+            : 0,
+        icon: Trophy,
+        color: "text-yellow-600",
+        bgColor: "bg-yellow-100",
+        suffix: "%",
+      },
+    ],
+    [currentWords]
+  );
+
+  // Loading state otimizado
   if (isLoading) {
     return (
       <div className="container mx-auto p-6">
@@ -173,7 +180,7 @@ export default function HomePage() {
     );
   }
 
-  if (vaults.length === 0) {
+  if (!vaults || vaults.length === 0) {
     return (
       <div className="container mx-auto p-6">
         <div className="text-center py-12">
@@ -201,7 +208,7 @@ export default function HomePage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            {currentVault ? currentVault.name : "Selecione um Vault"}
+            {selectedVault ? selectedVault.name : "Selecione um Vault"}
           </h1>
           <p className="text-gray-600 dark:text-gray-400 mt-2">
             Gerencie suas palavras e acompanhe seu progresso
@@ -211,7 +218,7 @@ export default function HomePage() {
         <div className="flex items-center gap-4">
           {/* Seletor de Vault */}
           <Select
-            value={currentVault?.id.toString()}
+            value={selectedVault?.id.toString()}
             onValueChange={handleVaultChange}
           >
             <SelectTrigger className="w-48">
@@ -344,7 +351,7 @@ export default function HomePage() {
                 <div className="flex justify-end gap-3 pt-4">
                   <Button
                     variant="outline"
-                    onClick={() => setIsCreateDialogOpen(false)}
+                    onClick={handleDialogClose}
                     disabled={isCreatingWord}
                   >
                     Cancelar
@@ -411,13 +418,14 @@ export default function HomePage() {
             Palavras do Vault
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {words.length} palavra{words.length !== 1 ? "s" : ""} encontrada
-            {words.length !== 1 ? "s" : ""}
+            {currentWords.length} palavra{currentWords.length !== 1 ? "s" : ""}{" "}
+            encontrada
+            {currentWords.length !== 1 ? "s" : ""}
           </p>
         </div>
         <div className="p-6">
-          {words.length > 0 ? (
-            <DataTable columns={columns} data={words} />
+          {currentWords.length > 0 ? (
+            <DataTable columns={columns} data={currentWords} />
           ) : (
             <div className="text-center py-12">
               <BookOpen className="mx-auto h-12 w-12 text-gray-400" />

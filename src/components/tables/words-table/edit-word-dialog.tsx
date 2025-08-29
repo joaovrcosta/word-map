@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/select";
 import { Edit2, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface EditWordDialogProps {
   word: Word;
@@ -37,13 +38,14 @@ export function EditWordDialog({ word, onWordUpdated }: EditWordDialogProps) {
     confidence: word.confidence,
   });
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
-      await updateWord(word.id, {
+      const updatedWord = await updateWord(word.id, {
         name: formData.name,
         grammaticalClass: formData.grammaticalClass,
         category: formData.category || null,
@@ -56,7 +58,21 @@ export function EditWordDialog({ word, onWordUpdated }: EditWordDialogProps) {
         description: `"${formData.name}" foi editada com sucesso`,
       });
 
+      // Fechar o dialog primeiro
       setIsOpen(false);
+
+      // Invalidar o cache do React Query para atualizar a tabela imediatamente
+      // Usar uma abordagem mais agressiva para garantir atualização
+      queryClient.invalidateQueries({ queryKey: ["vaults"] });
+      queryClient.invalidateQueries({ queryKey: ["relatedWords"] });
+
+      // Forçar um refetch imediato
+      await Promise.all([
+        queryClient.refetchQueries({ queryKey: ["vaults"] }),
+        queryClient.refetchQueries({ queryKey: ["relatedWords"] }),
+      ]);
+
+      // Chamar callback se fornecido
       onWordUpdated();
     } catch (error) {
       console.error("Erro ao editar palavra:", error);

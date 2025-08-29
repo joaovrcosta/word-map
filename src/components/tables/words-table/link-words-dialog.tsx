@@ -19,6 +19,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Link, Unlink, Search } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface LinkWordsDialogProps {
   word: Word;
@@ -32,6 +33,7 @@ export function LinkWordsDialog({ word, onWordsLinked }: LinkWordsDialogProps) {
   const [linkableWords, setLinkableWords] = useState<Word[]>([]);
   const [searchTerm, setSearchTerm] = useState("");
   const { toast } = useToast();
+  const queryClient = useQueryClient();
 
   // Buscar palavras relacionadas e linkáveis quando o modal abre
   useEffect(() => {
@@ -69,9 +71,18 @@ export function LinkWordsDialog({ word, onWordsLinked }: LinkWordsDialogProps) {
         description: "As palavras foram conectadas com sucesso",
       });
 
-      // Atualizar as listas
+      // Atualizar as listas locais
       await fetchRelatedWords();
       await fetchLinkableWords();
+
+      // Invalidar o cache do React Query para atualizar a tabela imediatamente
+      // Usar uma abordagem mais agressiva para garantir atualização
+      queryClient.invalidateQueries({ queryKey: ["vaults"] });
+      queryClient.invalidateQueries({ queryKey: ["relatedWords"] });
+      queryClient.refetchQueries({ queryKey: ["vaults"] });
+      queryClient.refetchQueries({ queryKey: ["relatedWords"] });
+
+      // Chamar callback se fornecido
       onWordsLinked();
     } catch (error) {
       console.error("Erro ao linkar palavras:", error);
@@ -96,9 +107,18 @@ export function LinkWordsDialog({ word, onWordsLinked }: LinkWordsDialogProps) {
         description: "As palavras foram desconectadas",
       });
 
-      // Atualizar as listas
+      // Atualizar as listas locais
       await fetchRelatedWords();
       await fetchLinkableWords();
+
+      // Invalidar o cache do React Query para atualizar a tabela imediatamente
+      // Usar uma abordagem mais agressiva para garantir atualização
+      queryClient.invalidateQueries({ queryKey: ["vaults"] });
+      queryClient.invalidateQueries({ queryKey: ["relatedWords"] });
+      queryClient.refetchQueries({ queryKey: ["vaults"] });
+      queryClient.refetchQueries({ queryKey: ["relatedWords"] });
+
+      // Chamar callback se fornecido
       onWordsLinked();
     } catch (error) {
       console.error("Erro ao deslinkar palavras:", error);

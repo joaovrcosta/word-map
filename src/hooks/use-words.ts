@@ -6,20 +6,44 @@ import {
   getVaults,
 } from "@/actions/actions";
 
-// Hook para buscar palavras de um vault
-export function useWords(vaultId: number) {
+// Cache keys para evitar queries duplicadas
+const CACHE_KEYS = {
+  vaults: ["vaults"],
+  words: (vaultId?: number) => ["words", vaultId],
+  currentVault: (vaultId?: number) => ["currentVault", vaultId],
+} as const;
+
+// Hook para buscar vaults com cache inteligente
+export function useVaults() {
   return useQuery({
-    queryKey: ["words", vaultId],
-    queryFn: async () => {
-      const vaults = await getVaults();
-      const targetVault = vaults.find((vault) => vault.id === vaultId);
-      return targetVault?.words || [];
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutos
+    queryKey: CACHE_KEYS.vaults,
+    queryFn: getVaults,
+    staleTime: 0, // Sempre considerar stale para permitir atualizações imediatas
+    gcTime: 5 * 60 * 1000, // 5 minutos
+    refetchOnWindowFocus: false,
+    refetchOnMount: true, // Sempre buscar ao montar
   });
 }
 
-// Hook para atualizar palavra
+// Hook para buscar palavras de um vault específico
+export function useWords(vaultId?: number) {
+  const { data: vaults, isLoading, error } = useVaults();
+
+  const currentVault = vaultId
+    ? vaults?.find((v) => v.id === vaultId)
+    : vaults?.[0];
+  const words = currentVault?.words || [];
+
+  return {
+    vaults,
+    currentVault,
+    words,
+    isLoading,
+    error,
+  };
+}
+
+// Hook para atualizar palavra com cache otimizado
 export function useUpdateWord() {
   const queryClient = useQueryClient();
 
@@ -34,28 +58,33 @@ export function useUpdateWord() {
       return await updateWord(wordId, data);
     },
     onSuccess: (updatedWord) => {
-      // Atualizar o cache diretamente para mudança imediata
-      queryClient.setQueryData(["words"], (oldData: Word[] | undefined) => {
-        if (!oldData) return oldData;
-        return oldData.map((word) =>
-          word.id === updatedWord.id ? updatedWord : word
-        );
-      });
+      // Atualizar o cache de vaults de forma otimizada
+      queryClient.setQueryData(
+        CACHE_KEYS.vaults,
+        (oldData: Vault[] | undefined) => {
+          if (!oldData) return oldData;
 
-      // Atualizar o cache dos vaults também
-      queryClient.setQueryData(["vaults"], (oldData: Vault[] | undefined) => {
-        if (!oldData) return oldData;
-        return oldData.map((vault) => ({
-          ...vault,
-          words: vault.words.map((word: Word) =>
-            word.id === updatedWord.id ? updatedWord : word
-          ),
-        }));
-      });
+          return oldData.map((vault) => {
+            if (vault.words.some((word) => word.id === updatedWord.id)) {
+              return {
+                ...vault,
+                words: vault.words.map((word) =>
+                  word.id === updatedWord.id ? updatedWord : word
+                ),
+              };
+            }
+            return vault;
+          });
+        }
+      );
 
-      // Invalidar queries para garantir sincronização
-      queryClient.invalidateQueries({ queryKey: ["words"] });
-      queryClient.invalidateQueries({ queryKey: ["vaults"] });
+      // Invalidar queries relacionadas para sincronização
+      queryClient.invalidateQueries({ queryKey: CACHE_KEYS.vaults });
+      queryClient.invalidateQueries({ queryKey: ["relatedWords"] });
+
+      // Forçar refetch imediato
+      queryClient.refetchQueries({ queryKey: CACHE_KEYS.vaults });
+      queryClient.refetchQueries({ queryKey: ["relatedWords"] });
     },
     onError: (error) => {
       console.error("Erro ao atualizar palavra:", error);
@@ -63,20 +92,8 @@ export function useUpdateWord() {
   });
 }
 
-// Hook para buscar vaults
-export function useVaults() {
-  return useQuery({
-    queryKey: ["vaults"],
-    queryFn: getVaults,
-    staleTime: 5 * 60 * 1000, // 5 minutos
-  });
-}
-
-export function useInvalidateWords() {
-  const queryClient = useQueryClient();
-
-  return () => {
-    queryClient.invalidateQueries({ queryKey: ["words"] });
-    queryClient.invalidateQueries({ queryKey: ["vaults"] });
-  };
+// Hook para buscar vault específico com cache
+export function useVault(vaultId: number) {
+  const { data: vaults } = useVaults();
+  return vaults?.find((v) => v.id === vaultId);
 }
