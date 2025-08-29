@@ -20,6 +20,8 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircleIcon } from "@phosphor-icons/react/dist/ssr";
+import { EditWordDialog } from "./edit-word-dialog";
+import { PencilSimple } from "@phosphor-icons/react/dist/ssr";
 
 // Componente para a célula da coluna "Salva"
 function SavedCell({ word }: { word: Word }) {
@@ -264,6 +266,23 @@ export const columns: ColumnDef<Word>[] = [
     header: "Salva",
     cell: ({ row }) => {
       return <SavedCell word={row.original} />;
+    },
+  },
+  {
+    id: "actions",
+    header: "Ações",
+    cell: ({ row }) => {
+      return (
+        <div className="flex items-center gap-2">
+          <EditWordDialog
+            word={row.original}
+            onWordUpdated={() => {
+              // Recarregar a página para mostrar as mudanças
+              window.location.reload();
+            }}
+          />
+        </div>
+      );
     },
   },
 ];

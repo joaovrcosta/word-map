@@ -518,3 +518,80 @@ export async function removeWordFromVault(
     );
   }
 }
+
+// Editar palavra existente
+export async function updateWord(
+  wordId: number,
+  data: {
+    name?: string;
+    grammaticalClass?: string;
+    category?: string | null;
+    translations?: string[];
+    confidence?: number;
+  }
+): Promise<Word> {
+  try {
+    console.log("=== INÍCIO updateWord ===");
+    console.log("Editando palavra:", wordId, "com dados:", data);
+
+    // Verificar se a palavra existe
+    const existingWord = await prisma.word.findUnique({
+      where: { id: wordId },
+    });
+
+    if (!existingWord) {
+      throw new Error("Palavra não encontrada");
+    }
+
+    // Preparar dados para atualização
+    const updateData: any = {};
+    
+    if (data.name !== undefined) {
+      updateData.name = data.name.trim();
+    }
+    if (data.grammaticalClass !== undefined) {
+      updateData.grammaticalClass = data.grammaticalClass;
+    }
+    if (data.category !== undefined) {
+      updateData.category = data.category;
+    }
+    if (data.translations !== undefined) {
+      updateData.translations = data.translations;
+    }
+    if (data.confidence !== undefined) {
+      updateData.confidence = data.confidence;
+    }
+
+    // Atualizar a palavra
+    const updatedWord = await prisma.word.update({
+      where: { id: wordId },
+      data: updateData,
+    });
+
+    console.log("Palavra atualizada com sucesso:", updatedWord);
+    console.log("=== FIM updateWord - SUCESSO ===");
+
+    // Revalidar as páginas
+    revalidatePath("/home");
+    revalidatePath("/home/vault");
+
+    return {
+      id: updatedWord.id,
+      name: updatedWord.name,
+      grammaticalClass: updatedWord.grammaticalClass,
+      category: updatedWord.category,
+      translations: updatedWord.translations,
+      confidence: updatedWord.confidence,
+      isSaved: updatedWord.isSaved,
+      vaultId: updatedWord.vaultId,
+    };
+  } catch (error) {
+    console.error("=== ERRO em updateWord ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao editar palavra: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}
