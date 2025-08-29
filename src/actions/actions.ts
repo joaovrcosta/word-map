@@ -32,6 +32,8 @@ export interface CreateWordData {
   confidence: number; // 1-4
   vaultId: number;
   isSaved?: boolean; // Opcional, padrão true
+  createdAt?: Date; // Opcional, será definido automaticamente
+  updatedAt?: Date; // Opcional, será definido automaticamente
 }
 
 export interface SearchResult {
@@ -60,6 +62,8 @@ export async function getVaults(): Promise<Vault[]> {
             confidence: true,
             isSaved: true,
             vaultId: true,
+            createdAt: true,
+            updatedAt: true,
           },
         },
       },
@@ -280,7 +284,7 @@ export async function createWord(data: CreateWordData): Promise<Word> {
       translations: newWord.translations,
       confidence: newWord.confidence,
       isSaved: newWord.isSaved,
-      vaultId: newWord.vaultId, // Adicionar vaultId ao retorno
+      vaultId: newWord.vaultId,
     };
   } catch (error) {
     console.error("=== ERRO em createWord ===");
