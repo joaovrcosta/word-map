@@ -203,7 +203,7 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
 
       // Preparar dados da palavra com informações da API
       let wordData: any = {
-        name: word,
+        name: word, // Usar a palavra limpa
         grammaticalClass: "substantivo", // Padrão
         category: undefined,
         translations: [],
@@ -309,27 +309,27 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
   );
 
   // Função para renderizar dropdown de adicionar palavra com informações da API
-  const renderAddWordDropdown = (word: string) => {
-    const wordInfo = wordInfoMap[word];
-    const isLoadingInfo = loadingWords.has(word);
+  const renderAddWordDropdown = (originalWord: string, cleanWord: string) => {
+    const wordInfo = wordInfoMap[cleanWord];
+    const isLoadingInfo = loadingWords.has(cleanWord);
 
     return (
       <DropdownMenu
         onOpenChange={(open) => {
           if (open) {
-            handleFetchWordInfo(word);
+            handleFetchWordInfo(cleanWord);
           }
         }}
       >
         <DropdownMenuTrigger asChild>
           <span className="word-clickable text-gray-900 dark:text-gray-100 px-1 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-            {word}
+            {originalWord}
           </span>
         </DropdownMenuTrigger>
         <DropdownMenuContent className="w-80 max-h-96 overflow-y-auto">
           <div className="p-3">
             <div className="font-medium text-lg mb-3 text-center border-b pb-2">
-              Adicionar "{word}" ao vault
+              Adicionar "{originalWord}" ao vault
             </div>
 
             {/* Informações da palavra da API */}
@@ -425,7 +425,7 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
               {userVaults.map((vault) => (
                 <DropdownMenuItem
                   key={vault.id}
-                  onClick={() => handleAddWordToVault(word, vault.id)}
+                  onClick={() => handleAddWordToVault(cleanWord, vault.id)}
                   disabled={isAddingWord}
                   className="flex items-center gap-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
                 >
@@ -450,6 +450,14 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
         </DropdownMenuContent>
       </DropdownMenu>
     );
+  };
+
+  // Função para limpar palavra removendo caracteres especiais e pontuação
+  const cleanWord = (word: string): string => {
+    return word
+      .replace(/[^\w\s]/g, "") // Remove tudo exceto letras, números e espaços
+      .trim()
+      .toLowerCase();
   };
 
   // Função para renderizar o texto com highlights interativos e palavras clicáveis
@@ -485,12 +493,17 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
         const words = part.split(/(\s+)/);
         return words.map((word, wordIndex) => {
           if (word.trim() && word.length > 2) {
-            // Palavras com mais de 2 caracteres
-            return (
-              <span key={`${index}-${wordIndex}`}>
-                {renderAddWordDropdown(word)}
-              </span>
-            );
+            // Limpar a palavra para verificar se é válida
+            const cleanWordText = cleanWord(word);
+
+            // Só processar se a palavra limpa tiver pelo menos 3 caracteres
+            if (cleanWordText.length >= 3) {
+              return (
+                <span key={`${index}-${wordIndex}`}>
+                  {renderAddWordDropdown(word, cleanWordText)}
+                </span>
+              );
+            }
           }
           return word;
         });
@@ -600,7 +613,7 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
               }
             </div>
             <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
-              Vaults Encontrados
+              Vaults diferentes encontrados
             </div>
           </div>
         </Card>
