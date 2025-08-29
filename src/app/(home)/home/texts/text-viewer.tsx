@@ -3,10 +3,15 @@
 import { useState, useEffect } from "react";
 import { Text, checkTextWords } from "@/actions/actions";
 import { Vault, Word } from "@/actions/actions";
-
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { BookOpen, Target, Info } from "lucide-react";
+import { BookOpen, Target, Info, ChevronDown } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface TextViewerProps {
   text: Text;
@@ -39,7 +44,7 @@ export function TextViewer({ text }: TextViewerProps) {
     analyzeText();
   }, [text.content]);
 
-  // Função para renderizar o texto com highlights
+  // Função para renderizar o texto com highlights interativos
   const renderHighlightedText = () => {
     let highlightedContent = text.content;
 
@@ -47,11 +52,92 @@ export function TextViewer({ text }: TextViewerProps) {
       const regex = new RegExp(`\\b${word}\\b`, "gi");
       highlightedContent = highlightedContent.replace(
         regex,
-        `<span class="highlighted-word bg-yellow-200 dark:bg-yellow-800 px-1 rounded cursor-pointer" data-word="${word}">${word}</span>`
+        `<span class="highlighted-word bg-yellow-200 dark:bg-yellow-800 px-1 rounded cursor-pointer hover:bg-yellow-300 dark:hover:bg-yellow-700 transition-colors" data-word="${word}" data-vaults="${JSON.stringify(
+          vaultInfo
+        )}">${word}</span>`
       );
     });
 
     return highlightedContent;
+  };
+
+  // Função para renderizar dropdown de detalhes da palavra
+  const renderWordDropdown = (word: string, vaultInfo: Vault[]) => (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <span className="highlighted-word bg-yellow-200 dark:bg-yellow-800 px-1 rounded cursor-pointer hover:bg-yellow-300 dark:hover:bg-yellow-700 transition-colors inline-flex items-center gap-1">
+          {word}
+          <ChevronDown className="w-3 h-3" />
+        </span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-80 max-h-96 overflow-y-auto">
+        <div className="p-3">
+          <div className="font-medium text-lg mb-3 text-center border-b pb-2">
+            {word}
+          </div>
+          <div className="space-y-3">
+            {vaultInfo.map((vault) => (
+              <div
+                key={vault.id}
+                className="bg-gray-50 dark:bg-gray-800 p-3 rounded-lg"
+              >
+                <div className="font-medium text-sm text-gray-900 dark:text-white mb-2 flex items-center gap-2">
+                  <BookOpen className="w-4 h-4 text-blue-600" />
+                  {vault.name}
+                </div>
+                {vault.words.map((vaultWord) => (
+                  <div key={vaultWord.id} className="text-sm space-y-2">
+                    <div className="text-gray-600 dark:text-gray-400">
+                      <strong>Traduções:</strong>{" "}
+                      {vaultWord.translations.join(", ")}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className="text-xs">
+                        {vaultWord.grammaticalClass}
+                      </Badge>
+                      <Badge variant="secondary" className="text-xs">
+                        Nível {vaultWord.confidence}
+                      </Badge>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+
+  // Função para renderizar o texto com highlights interativos
+  const renderInteractiveText = () => {
+    let content = text.content;
+
+    foundWords.forEach(({ word, vaultInfo }) => {
+      const regex = new RegExp(`\\b${word}\\b`, "gi");
+      content = content.replace(regex, `__HIGHLIGHT_${word}__`);
+    });
+
+    // Dividir o texto em partes e renderizar cada highlight como dropdown
+    const parts = content.split(/(__HIGHLIGHT_\w+__)/);
+
+    return parts.map((part, index) => {
+      if (part.startsWith("__HIGHLIGHT_") && part.endsWith("__")) {
+        const word = part.replace(/__HIGHLIGHT_|__/g, "");
+        const wordData = foundWords.find(
+          (fw) => fw.word.toLowerCase() === word.toLowerCase()
+        );
+
+        if (wordData) {
+          return (
+            <span key={index}>
+              {renderWordDropdown(wordData.word, wordData.vaultInfo)}
+            </span>
+          );
+        }
+      }
+      return part;
+    });
   };
 
   if (isLoading) {
@@ -111,7 +197,7 @@ export function TextViewer({ text }: TextViewerProps) {
         </Card>
       </div>
 
-      {/* Texto com Highlights */}
+      {/* Texto com Highlights Interativos */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
@@ -121,10 +207,9 @@ export function TextViewer({ text }: TextViewerProps) {
         </CardHeader>
         <CardContent>
           <div className="prose prose-sm max-w-none dark:prose-invert">
-            <div
-              className="leading-relaxed text-gray-900 dark:text-gray-100"
-              dangerouslySetInnerHTML={{ __html: renderHighlightedText() }}
-            />
+            <div className="leading-relaxed text-gray-900 dark:text-gray-100">
+              {renderInteractiveText()}
+            </div>
           </div>
 
           {foundWords.length === 0 && (
