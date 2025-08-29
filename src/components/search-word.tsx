@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Search, BookOpen, X, Plus, PlusCircle, Globe } from "lucide-react";
+import {
+  Search,
+  BookOpen,
+  X,
+  Plus,
+  PlusCircle,
+  Globe,
+  Check,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,8 +18,10 @@ import {
   getVaults,
   type Vault,
   createWord,
+  wordExistsInVault,
 } from "@/actions/actions";
 import { useDebounce } from "@/hooks/use-debounce";
+import { useToast } from "@/hooks/use-toast";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -49,8 +59,13 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
   >(null);
   const [isAddingToVault, setIsAddingToVault] = useState(false);
   const [vaultSearchTerm, setVaultSearchTerm] = useState("");
+  const [openDropdownId, setOpenDropdownId] = useState<string | null>(null);
+  const [wordExistsMap, setWordExistsMap] = useState<Map<string, Set<number>>>(
+    new Map()
+  );
 
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
+  const { toast } = useToast();
 
   // Buscar vaults disponíveis
   useEffect(() => {
@@ -64,6 +79,51 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
     };
     fetchVaults();
   }, []);
+
+  // Verificar se palavras já existem nos vaults
+  useEffect(() => {
+    const checkWordsInVaults = async () => {
+      if (results.length === 0 && apiResults.length === 0) return;
+
+      const newWordExistsMap = new Map<string, Set<number>>();
+
+      // Verificar palavras dos vaults
+      for (const result of results) {
+        const wordName = result.word.name.toLowerCase();
+        if (!newWordExistsMap.has(wordName)) {
+          newWordExistsMap.set(wordName, new Set());
+        }
+        // A palavra já existe no vault onde foi encontrada
+        newWordExistsMap.get(wordName)!.add(result.vault.id);
+      }
+
+      // Verificar palavras da API em todos os vaults
+      for (const apiResult of apiResults) {
+        const wordName = apiResult.word.toLowerCase();
+        if (!newWordExistsMap.has(wordName)) {
+          newWordExistsMap.set(wordName, new Set());
+        }
+
+        for (const vault of vaults) {
+          try {
+            const exists = await wordExistsInVault(apiResult.word, vault.id);
+            if (exists) {
+              newWordExistsMap.get(wordName)!.add(vault.id);
+            }
+          } catch (error) {
+            console.error(
+              `Erro ao verificar palavra ${apiResult.word} no vault ${vault.id}:`,
+              error
+            );
+          }
+        }
+      }
+
+      setWordExistsMap(newWordExistsMap);
+    };
+
+    checkWordsInVaults();
+  }, [results, apiResults, vaults]);
 
   // Buscar palavra na API pública
   const searchWordInApi = async (word: string): Promise<ApiWordResult[]> => {
@@ -137,9 +197,11 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
     setIsAddingToVault(true);
     try {
       let wordData;
+      let wordName: string;
 
       if ("vault" in selectedWord) {
         // É uma palavra existente dos vaults
+        wordName = selectedWord.word.name;
         wordData = {
           name: selectedWord.word.name,
           grammaticalClass: selectedWord.word.grammaticalClass,
@@ -147,9 +209,11 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
           translations: selectedWord.word.translations,
           confidence: selectedWord.word.confidence,
           vaultId: vault.id,
+          isSaved: true, // Palavras copiadas são salvas por padrão
         };
       } else {
         // É uma palavra da API
+        wordName = selectedWord.word;
         const firstMeaning = selectedWord.meanings[0];
         wordData = {
           name: selectedWord.word,
@@ -158,25 +222,97 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
           translations: [firstMeaning?.definitions[0]?.definition || ""],
           confidence: 1,
           vaultId: vault.id,
+          isSaved: true, // Palavras da API são salvas por padrão
         };
       }
 
-      await createWord(wordData);
+      // Verificar se a palavra já existe no vault
+      const wordExists = await wordExistsInVault(wordName, vault.id);
+      if (wordExists) {
+        toast({
+          title: "Palavra já existe",
+          description: `"${wordName}" já está no vault "${vault.name}"`,
+          variant: "destructive",
+        });
+        return;
+      }
+
+      console.log("wordData preparado:", wordData);
+      console.log("Tipo de wordData:", typeof wordData);
+      console.log("Tipo de vaultId:", typeof wordData.vaultId);
+      console.log("Tipo de translations:", typeof wordData.translations);
+      console.log("Tipo de confidence:", typeof wordData.confidence);
+
+      // Verificar se os dados estão corretos
+      if (typeof wordData.vaultId !== "number") {
+        throw new Error(
+          `vaultId deve ser um número, recebido: ${typeof wordData.vaultId} (${
+            wordData.vaultId
+          })`
+        );
+      }
+
+      if (!Array.isArray(wordData.translations)) {
+        throw new Error(
+          `translations deve ser um array, recebido: ${typeof wordData.translations}`
+        );
+      }
+
+      if (typeof wordData.confidence !== "number") {
+        throw new Error(
+          `confidence deve ser um número, recebido: ${typeof wordData.confidence}`
+        );
+      }
+
+      console.log("Tentando criar palavra com dados:", wordData);
+      console.log("Vault selecionado:", vault);
+
+      const createdWord = await createWord(wordData);
+
+      console.log("Palavra criada com sucesso:", createdWord);
 
       // Fechar dropdown e mostrar mensagem de sucesso
       setSelectedWord(null);
       setVaultSearchTerm("");
+      setOpenDropdownId(null);
+
+      // Mostrar toast de sucesso
+      toast({
+        title: "Palavra adicionada!",
+        description: `"${wordName}" foi adicionada ao vault "${vault.name}"`,
+      });
 
       console.log(
-        `Palavra "${
-          "vault" in selectedWord ? selectedWord.word.name : selectedWord.word
-        }" adicionada ao vault "${vault.name}" com sucesso!`
+        `Palavra "${wordName}" adicionada ao vault "${vault.name}" com sucesso!`
       );
+
+      // Atualizar o mapa de palavras existentes
+      const wordNameLower = wordName.toLowerCase();
+      if (!wordExistsMap.has(wordNameLower)) {
+        wordExistsMap.set(wordNameLower, new Set());
+      }
+      wordExistsMap.get(wordNameLower)!.add(vault.id);
+      setWordExistsMap(new Map(wordExistsMap));
+
+      // Recarregar os dados para mostrar a nova palavra na tabela
+      window.location.reload();
     } catch (error) {
       console.error("Erro ao adicionar palavra ao vault:", error);
+      toast({
+        title: "Erro ao adicionar palavra",
+        description:
+          error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+      });
     } finally {
       setIsAddingToVault(false);
     }
+  };
+
+  // Verificar se uma palavra já existe em um vault específico
+  const isWordInVault = (wordName: string, vaultId: number): boolean => {
+    const wordNameLower = wordName.toLowerCase();
+    return wordExistsMap.get(wordNameLower)?.has(vaultId) || false;
   };
 
   // Filtrar vaults baseado no termo de busca
@@ -270,7 +406,17 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                         </div>
                         {/* Botão de adicionar com dropdown */}
                         <div className="ml-2">
-                          <DropdownMenu>
+                          <DropdownMenu
+                            open={
+                              openDropdownId ===
+                              `${result.vault.id}-${result.word.id}`
+                            }
+                            onOpenChange={(open) => {
+                              if (!open) {
+                                setOpenDropdownId(null);
+                              }
+                            }}
+                          >
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
@@ -280,6 +426,9 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                                   e.stopPropagation();
                                   setSelectedWord(result);
                                   setVaultSearchTerm("");
+                                  setOpenDropdownId(
+                                    `${result.vault.id}-${result.word.id}`
+                                  );
                                 }}
                               >
                                 <PlusCircle className="h-4 w-4 text-gray-600 dark:text-gray-400" />
@@ -327,28 +476,38 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                               {/* Lista de vaults */}
                               <div className="max-h-48 overflow-y-auto">
                                 {filteredVaults.length > 0 ? (
-                                  filteredVaults.map((vault) => (
-                                    <DropdownMenuItem
-                                      key={vault.id}
-                                      className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                                      onClick={() => handleAddToVault(vault)}
-                                      disabled={isAddingToVault}
-                                    >
-                                      <div className="flex items-center w-full">
-                                        <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center mr-3">
-                                          <BookOpen className="h-4 w-4 text-white" />
+                                  filteredVaults.map((vault) => {
+                                    const isInVault = isWordInVault(
+                                      result.word.name,
+                                      vault.id
+                                    );
+                                    return (
+                                      <DropdownMenuItem
+                                        key={vault.id}
+                                        className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                                        onClick={() =>
+                                          !isInVault && handleAddToVault(vault)
+                                        }
+                                        disabled={isAddingToVault || isInVault}
+                                      >
+                                        <div className="flex items-center w-full">
+                                          <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center mr-3">
+                                            <BookOpen className="h-4 w-4 text-white" />
+                                          </div>
+                                          <span className="text-sm text-gray-900 dark:text-white flex-1">
+                                            {vault.name}
+                                          </span>
+                                          {isInVault ? (
+                                            <Check className="h-4 w-4 text-green-500" />
+                                          ) : isAddingToVault ? (
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                          ) : (
+                                            <div className="w-4 h-4 border border-gray-300 dark:border-gray-600 rounded-full"></div>
+                                          )}
                                         </div>
-                                        <span className="text-sm text-gray-900 dark:text-white flex-1">
-                                          {vault.name}
-                                        </span>
-                                        {isAddingToVault ? (
-                                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                                        ) : (
-                                          <div className="w-4 h-4 border border-gray-300 dark:border-gray-600 rounded-full"></div>
-                                        )}
-                                      </div>
-                                    </DropdownMenuItem>
-                                  ))
+                                      </DropdownMenuItem>
+                                    );
+                                  })
                                 ) : (
                                   <div className="px-3 py-2 text-center">
                                     <p className="text-xs text-gray-500 dark:text-gray-400">
@@ -417,7 +576,14 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                         </div>
                         {/* Botão de adicionar com dropdown */}
                         <div className="ml-2">
-                          <DropdownMenu>
+                          <DropdownMenu
+                            open={openDropdownId === `api-${index}`}
+                            onOpenChange={(open) => {
+                              if (!open) {
+                                setOpenDropdownId(null);
+                              }
+                            }}
+                          >
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
@@ -426,6 +592,7 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                                 onClick={() => {
                                   setSelectedWord(apiResult);
                                   setVaultSearchTerm("");
+                                  setOpenDropdownId(`api-${index}`);
                                 }}
                               >
                                 <PlusCircle className="h-4 w-4 text-gray-600 dark:text-gray-400" />
@@ -473,28 +640,38 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                               {/* Lista de vaults */}
                               <div className="max-h-48 overflow-y-auto">
                                 {filteredVaults.length > 0 ? (
-                                  filteredVaults.map((vault) => (
-                                    <DropdownMenuItem
-                                      key={vault.id}
-                                      className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
-                                      onClick={() => handleAddToVault(vault)}
-                                      disabled={isAddingToVault}
-                                    >
-                                      <div className="flex items-center w-full">
-                                        <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center mr-3">
-                                          <BookOpen className="h-4 w-4 text-white" />
+                                  filteredVaults.map((vault) => {
+                                    const isInVault = isWordInVault(
+                                      apiResult.word,
+                                      vault.id
+                                    );
+                                    return (
+                                      <DropdownMenuItem
+                                        key={vault.id}
+                                        className="px-3 py-2 hover:bg-gray-50 dark:hover:bg-gray-700 cursor-pointer"
+                                        onClick={() =>
+                                          !isInVault && handleAddToVault(vault)
+                                        }
+                                        disabled={isAddingToVault || isInVault}
+                                      >
+                                        <div className="flex items-center w-full">
+                                          <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center mr-3">
+                                            <BookOpen className="h-4 w-4 text-white" />
+                                          </div>
+                                          <span className="text-sm text-gray-900 dark:text-white flex-1">
+                                            {vault.name}
+                                          </span>
+                                          {isInVault ? (
+                                            <Check className="h-4 w-4 text-green-500" />
+                                          ) : isAddingToVault ? (
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                          ) : (
+                                            <div className="w-4 h-4 border border-gray-300 dark:border-gray-600 rounded-full"></div>
+                                          )}
                                         </div>
-                                        <span className="text-sm text-gray-900 dark:text-white flex-1">
-                                          {vault.name}
-                                        </span>
-                                        {isAddingToVault ? (
-                                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
-                                        ) : (
-                                          <div className="w-4 h-4 border border-gray-300 dark:border-gray-600 rounded-full"></div>
-                                        )}
-                                      </div>
-                                    </DropdownMenuItem>
-                                  ))
+                                      </DropdownMenuItem>
+                                    );
+                                  })
                                 ) : (
                                   <div className="px-3 py-2 text-center">
                                     <p className="text-xs text-gray-500 dark:text-gray-400">

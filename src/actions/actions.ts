@@ -29,6 +29,7 @@ export interface CreateWordData {
   translations: string[];
   confidence: number; // 1-4
   vaultId: number;
+  isSaved?: boolean; // Opcional, padrão true
 }
 
 export interface SearchResult {
@@ -134,40 +135,64 @@ export async function deleteVault(vaultId: number): Promise<void> {
 // Criar nova palavra
 export async function createWord(data: CreateWordData): Promise<Word> {
   try {
+    console.log("=== INÍCIO createWord ===");
+    console.log("createWord chamada com dados:", data);
+
     if (!data.name || !data.grammaticalClass || !data.vaultId) {
+      console.error("Validação falhou:", {
+        name: !!data.name,
+        grammaticalClass: !!data.grammaticalClass,
+        vaultId: !!data.vaultId,
+      });
       throw new Error("Nome da palavra e classe gramatical são obrigatórios");
     }
 
     if (data.name.trim().length === 0) {
+      console.error("Nome da palavra está vazio após trim");
       throw new Error("Nome da palavra é obrigatório");
     }
+
+    console.log("Validações passaram, buscando vault...");
 
     // Verificar se o vault existe
     const existingVault = await prisma.vault.findUnique({
       where: { id: data.vaultId },
     });
 
+    console.log("Vault encontrado:", existingVault);
+
     if (!existingVault) {
+      console.error("Vault não encontrado para ID:", data.vaultId);
       throw new Error("Vault não encontrado");
     }
 
     // Criar a palavra
+    const wordData = {
+      name: data.name.trim(),
+      grammaticalClass: data.grammaticalClass,
+      category: data.category || null,
+      translations: data.translations,
+      confidence: data.confidence,
+      vaultId: data.vaultId,
+      status: true,
+      isSaved: data.isSaved ?? true, // true por padrão se não especificado
+    };
+
+    console.log("Dados para criar palavra:", wordData);
+    console.log("Tentando criar palavra no banco...");
+
     const newWord = await prisma.word.create({
-      data: {
-        name: data.name.trim(),
-        grammaticalClass: data.grammaticalClass,
-        category: data.category || null,
-        translations: data.translations,
-        confidence: data.confidence,
-        vaultId: data.vaultId,
-        status: true,
-        isSaved: false,
-      } as any, // Type assertion para resolver problema de tipo
+      data: wordData as any, // Type assertion para resolver problema de tipo
     });
 
+    console.log("Palavra criada no banco com sucesso:", newWord);
+    console.log("=== FIM createWord - SUCESSO ===");
+
     // Revalidar as páginas
+    console.log("Revalidando páginas...");
     revalidatePath("/home");
     revalidatePath("/home/vault");
+    console.log("Páginas revalidadas");
 
     return {
       id: newWord.id,
@@ -179,8 +204,17 @@ export async function createWord(data: CreateWordData): Promise<Word> {
       isSaved: newWord.isSaved,
     };
   } catch (error) {
-    console.error("Erro ao criar palavra:", error);
-    throw new Error("Erro ao criar palavra");
+    console.error("=== ERRO em createWord ===");
+    console.error("Tipo do erro:", typeof error);
+    console.error("Erro completo:", error);
+    console.error("Stack trace:", error instanceof Error ? error.stack : "N/A");
+    console.error("=== FIM ERRO ===");
+
+    if (error instanceof Error) {
+      throw new Error(`Erro ao criar palavra: ${error.message}`);
+    } else {
+      throw new Error("Erro desconhecido ao criar palavra");
+    }
   }
 }
 
@@ -249,5 +283,28 @@ export async function searchWordInVaults(
   } catch (error) {
     console.error("Erro ao buscar palavra:", error);
     throw new Error("Erro ao buscar palavra");
+  }
+}
+
+// Verificar se uma palavra já existe em um vault
+export async function wordExistsInVault(
+  wordName: string,
+  vaultId: number
+): Promise<boolean> {
+  try {
+    const existingWord = await prisma.word.findFirst({
+      where: {
+        name: {
+          equals: wordName,
+          mode: "insensitive", // Case insensitive
+        },
+        vaultId: vaultId,
+      },
+    });
+
+    return !!existingWord;
+  } catch (error) {
+    console.error("Erro ao verificar se palavra existe no vault:", error);
+    return false;
   }
 }

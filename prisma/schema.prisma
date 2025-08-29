@@ -8,16 +8,14 @@ datasource db {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  // Relacionamentos
-  vaults       Vault[]
-  wordHistory  WordHistory[]
+  id          Int           @id @default(autoincrement())
+  name        String
+  email       String        @unique
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  password    String
+  vaults      Vault[]
+  wordHistory WordHistory[]
 }
 
 model Vault {
@@ -25,49 +23,35 @@ model Vault {
   name      String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  // Relacionamento com usuário (cada vault pertence a 1 usuário)
-  userId Int
-  user   User @relation(fields: [userId], references: [id])
-
-  // Relacionamento com palavras
-  words Word[]
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  words     Word[]
 }
 
 model Word {
-  id               Int       @id @default(autoincrement())
-  status           Boolean   @default(true)
+  id               Int           @id @default(autoincrement())
+  status           Boolean       @default(true)
   name             String
   grammaticalClass String
-  category         String?   // Tornando opcional
+  category         String?
   translations     String[]
   lastPractice     DateTime?
-  confidence       Int       @default(1) // Mudando para 1-4
-  isSaved          Boolean   @default(false)
-  createdAt        DateTime  @default(now())
-  updatedAt        DateTime  @updatedAt
-
-  // Relacionamento com Vault
-  vaultId Int
-  vault   Vault @relation(fields: [vaultId], references: [id])
-
-  // Relacionamento n:n (palavras relacionadas entre si)
-  relatedWords Word[] @relation("RelatedWords")
-  relatedBy    Word[] @relation("RelatedWords")
-
-  // Histórico de adição
-  wordHistory WordHistory[]
+  confidence       Int           @default(1)
+  isSaved          Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  vaultId          Int
+  vault            Vault         @relation(fields: [vaultId], references: [id])
+  wordHistory      WordHistory[]
+  Word_A           Word[]        @relation("RelatedWords")
+  Word_B           Word[]        @relation("RelatedWords")
 }
 
 model WordHistory {
   id        Int      @id @default(autoincrement())
   createdAt DateTime @default(now())
-
-  // Relacionamento com usuário (cada usuário tem seu log separado)
-  userId Int
-  user   User @relation(fields: [userId], references: [id])
-
-  // Palavra adicionada
-  wordId Int
-  word   Word @relation(fields: [wordId], references: [id])
+  userId    Int
+  wordId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  word      Word     @relation(fields: [wordId], references: [id])
 }
