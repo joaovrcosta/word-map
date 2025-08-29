@@ -28,6 +28,8 @@ export function TextViewer({ text }: TextViewerProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [userVaults, setUserVaults] = useState<Vault[]>([]);
   const [isAddingWord, setIsAddingWord] = useState(false);
+  const [wordInfoMap, setWordInfoMap] = useState<Record<string, any>>({});
+  const [loadingWords, setLoadingWords] = useState<Set<string>>(new Set());
   const { toast } = useToast();
 
   useEffect(() => {
@@ -54,6 +56,47 @@ export function TextViewer({ text }: TextViewerProps) {
 
     loadData();
   }, [text.content]);
+
+  // Função para buscar informações da palavra na API de dicionário
+  const fetchWordInfo = async (word: string) => {
+    try {
+      const response = await fetch(
+        `https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`
+      );
+
+      if (!response.ok) {
+        return null;
+      }
+
+      const data = await response.json();
+      return data[0]; // Primeira entrada
+    } catch (error) {
+      console.error("Erro ao buscar palavra:", error);
+      return null;
+    }
+  };
+
+  // Função para buscar informações da palavra
+  const handleFetchWordInfo = async (word: string) => {
+    if (wordInfoMap[word] || loadingWords.has(word)) {
+      return; // Já foi buscada ou está sendo buscada
+    }
+
+    setLoadingWords((prev) => new Set(prev).add(word));
+
+    const info = await fetchWordInfo(word);
+
+    setWordInfoMap((prev) => ({
+      ...prev,
+      [word]: info,
+    }));
+
+    setLoadingWords((prev) => {
+      const newSet = new Set(prev);
+      newSet.delete(word);
+      return newSet;
+    });
+  };
 
   // Função para adicionar palavra ao vault
   const handleAddWordToVault = async (word: string, vaultId: number) => {
@@ -159,47 +202,126 @@ export function TextViewer({ text }: TextViewerProps) {
     </DropdownMenu>
   );
 
-  // Função para renderizar dropdown de adicionar palavra
-  const renderAddWordDropdown = (word: string) => (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <span className="word-clickable text-gray-900 dark:text-gray-100 px-1 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
-          {word}
-        </span>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-64">
-        <div className="p-3">
-          <div className="font-medium text-sm mb-3 text-center text-gray-600 dark:text-gray-400">
-            Adicionar "{word}" ao vault:
-          </div>
-          <div className="space-y-2">
-            {userVaults.map((vault) => (
-              <DropdownMenuItem
-                key={vault.id}
-                onClick={() => handleAddWordToVault(word, vault.id)}
-                disabled={isAddingWord}
-                className="flex items-center gap-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
-              >
-                <BookOpen className="w-4 h-4 text-blue-600" />
-                <span>{vault.name}</span>
-                {isAddingWord && (
-                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 ml-auto"></div>
-                )}
-              </DropdownMenuItem>
-            ))}
-          </div>
-          {userVaults.length === 0 && (
-            <div className="text-center py-4 text-gray-500 dark:text-gray-400">
-              <p className="text-sm">Nenhum vault encontrado</p>
-              <p className="text-xs">
-                Crie um vault primeiro para adicionar palavras
-              </p>
+  // Função para renderizar dropdown de adicionar palavra com informações da API
+  const renderAddWordDropdown = (word: string) => {
+    const wordInfo = wordInfoMap[word];
+    const isLoadingInfo = loadingWords.has(word);
+
+    return (
+      <DropdownMenu
+        onOpenChange={(open) => {
+          if (open) {
+            handleFetchWordInfo(word);
+          }
+        }}
+      >
+        <DropdownMenuTrigger asChild>
+          <span className="word-clickable text-gray-900 dark:text-gray-100 px-1 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+            {word}
+          </span>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent className="w-80 max-h-96 overflow-y-auto">
+          <div className="p-3">
+            <div className="font-medium text-lg mb-3 text-center border-b pb-2">
+              Adicionar "{word}" ao vault
             </div>
-          )}
-        </div>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
+
+            {/* Informações da palavra da API */}
+            {isLoadingInfo && (
+              <div className="text-center py-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto mb-2"></div>
+                <p className="text-sm text-gray-500">Buscando informações...</p>
+              </div>
+            )}
+
+            {wordInfo && (
+              <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+                <div className="text-sm text-gray-700 dark:text-gray-300 space-y-2">
+                  {/* Pronúncia */}
+                  {wordInfo.phonetic && (
+                    <div>
+                      <span className="font-medium text-blue-600">
+                        Pronúncia:
+                      </span>{" "}
+                      {wordInfo.phonetic}
+                    </div>
+                  )}
+
+                  {/* Definições */}
+                  {wordInfo.meanings && wordInfo.meanings.length > 0 && (
+                    <div>
+                      <span className="font-medium text-blue-600">
+                        Definições:
+                      </span>
+                      <div className="mt-1 space-y-1">
+                        {wordInfo.meanings
+                          .slice(0, 2)
+                          .map((meaning: any, index: number) => (
+                            <div
+                              key={index}
+                              className="text-xs pl-2 border-l-2 border-blue-300"
+                            >
+                              <span className="font-medium text-gray-600 dark:text-gray-400">
+                                {meaning.partOfSpeech}:
+                              </span>{" "}
+                              {meaning.definitions[0]?.definition ||
+                                "Definição não disponível"}
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Exemplos */}
+                  {wordInfo.meanings &&
+                    wordInfo.meanings[0]?.definitions[0]?.example && (
+                      <div>
+                        <span className="font-medium text-blue-600">
+                          Exemplo:
+                        </span>
+                        <div className="mt-1 text-xs italic text-gray-600 dark:text-gray-400 pl-2">
+                          "{wordInfo.meanings[0].definitions[0].example}"
+                        </div>
+                      </div>
+                    )}
+                </div>
+              </div>
+            )}
+
+            {/* Seleção de vault */}
+            <div className="space-y-2">
+              <div className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+                Escolha o vault:
+              </div>
+              {userVaults.map((vault) => (
+                <DropdownMenuItem
+                  key={vault.id}
+                  onClick={() => handleAddWordToVault(word, vault.id)}
+                  disabled={isAddingWord}
+                  className="flex items-center gap-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
+                >
+                  <BookOpen className="w-4 h-4 text-blue-600" />
+                  <span>{vault.name}</span>
+                  {isAddingWord && (
+                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-600 ml-auto"></div>
+                  )}
+                </DropdownMenuItem>
+              ))}
+            </div>
+
+            {userVaults.length === 0 && (
+              <div className="text-center py-4 text-gray-500 dark:text-gray-400">
+                <p className="text-sm">Nenhum vault encontrado</p>
+                <p className="text-xs">
+                  Crie um vault primeiro para adicionar palavras
+                </p>
+              </div>
+            )}
+          </div>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    );
+  };
 
   // Função para renderizar o texto com highlights interativos e palavras clicáveis
   const renderInteractiveText = () => {
