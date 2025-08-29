@@ -26,7 +26,7 @@ model Vault {
   updatedAt DateTime @updatedAt
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
-  words     Word[]
+  words     Word[]   @relation("VaultWords")
 }
 
 model Word {
@@ -42,7 +42,7 @@ model Word {
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   vaultId          Int
-  vault            Vault         @relation(fields: [vaultId], references: [id])
+  vault            Vault         @relation("VaultWords", fields: [vaultId], references: [id], onDelete: Cascade)
   wordHistory      WordHistory[]
   Word_A           Word[]        @relation("RelatedWords")
   Word_B           Word[]        @relation("RelatedWords")

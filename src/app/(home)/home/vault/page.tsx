@@ -82,15 +82,38 @@ export default function VaultPage() {
 
   // Deletar vault usando Server Action
   const handleDeleteVault = async (vaultId: number) => {
-    if (!confirm("Tem certeza que deseja excluir este vault?")) return;
+    if (!confirm("Tem certeza que deseja excluir este vault? Esta ação não pode ser desfeita e todas as palavras e conexões serão perdidas.")) return;
 
     try {
+      // Mostrar loading
+      const vaultToDelete = vaults.find(v => v.id === vaultId);
+      if (vaultToDelete) {
+        setVaults((prev) => prev.map(v => 
+          v.id === vaultId 
+            ? { ...v, isDeleting: true }
+            : v
+        ));
+      }
+
       await deleteVault(vaultId);
 
       // Remover o vault da lista local
       setVaults((prev) => prev.filter((vault) => vault.id !== vaultId));
+      
+      // Mostrar mensagem de sucesso
+      alert("Vault excluído com sucesso!");
     } catch (error) {
       console.error("Erro ao excluir vault:", error);
+      
+      // Reverter o estado de loading
+      if (vaultToDelete) {
+        setVaults((prev) => prev.map(v => 
+          v.id === vaultId 
+            ? { ...v, isDeleting: false }
+            : v
+        ));
+      }
+      
       alert(
         `Erro ao deletar vault: ${
           error instanceof Error ? error.message : "Erro desconhecido"
@@ -192,8 +215,13 @@ export default function VaultPage() {
                       size="sm"
                       className="h-8 w-8 p-0"
                       onClick={() => handleDeleteVault(vault.id)}
+                      disabled={vault.isDeleting}
                     >
-                      <Trash size={16} className="text-red-500" />
+                      {vault.isDeleting ? (
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-red-500"></div>
+                      ) : (
+                        <Trash size={16} className="text-red-500" />
+                      )}
                     </Button>
                   </div>
                 </div>

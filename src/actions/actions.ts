@@ -10,6 +10,7 @@ export interface Vault {
   updatedAt: Date;
   userId: number;
   words: Word[];
+  isDeleting?: boolean; // Propriedade opcional para UI
 }
 
 export interface Word {
@@ -108,29 +109,104 @@ export async function createVault(name: string): Promise<Vault> {
 // Deletar vault
 export async function deleteVault(vaultId: number): Promise<void> {
   try {
+    console.log(`=== INÍCIO deleteVault ===`);
+    console.log(`Tentando deletar vault com ID: ${vaultId}`);
+
     if (!vaultId || isNaN(vaultId)) {
       throw new Error("ID do vault inválido");
     }
 
-    // Verificar se o vault existe
+    // Verificar se o vault existe e buscar suas palavras
     const existingVault = await prisma.vault.findUnique({
       where: { id: vaultId },
+      include: {
+        words: {
+          include: {
+            Word_A: true,
+            Word_B: true,
+          },
+        },
+      },
     });
 
     if (!existingVault) {
       throw new Error("Vault não encontrado");
     }
 
-    // Deletar o vault (as palavras serão deletadas em cascata se configurado no schema)
+    console.log(`Vault encontrado: ${existingVault.name}`);
+    console.log(`Palavras no vault: ${existingVault.words.length}`);
+
+    // Primeiro, desfazer todas as conexões entre palavras
+    if (existingVault.words.length > 0) {
+      console.log("Desfazendo conexões entre palavras...");
+
+      for (const word of existingVault.words) {
+        const relatedWords = [...word.Word_A, ...word.Word_B];
+
+        if (relatedWords.length > 0) {
+          console.log(
+            `Desfazendo ${relatedWords.length} conexões da palavra "${word.name}"`
+          );
+
+          for (const relatedWord of relatedWords) {
+            try {
+              await prisma.word.update({
+                where: { id: word.id },
+                data: {
+                  Word_A: {
+                    disconnect: { id: relatedWord.id },
+                  },
+                },
+              });
+              console.log(
+                `Conexão desfeita entre "${word.name}" e "${relatedWord.name}"`
+              );
+            } catch (error) {
+              console.warn(
+                `Erro ao desfazer conexão entre "${word.name}" e "${relatedWord.name}":`,
+                error
+              );
+            }
+          }
+        }
+      }
+    }
+
+    // Deletar todas as palavras do vault
+    if (existingVault.words.length > 0) {
+      console.log("Deletando palavras do vault...");
+
+      for (const word of existingVault.words) {
+        try {
+          await prisma.word.delete({
+            where: { id: word.id },
+          });
+          console.log(`Palavra "${word.name}" deletada com sucesso`);
+        } catch (error) {
+          console.warn(`Erro ao deletar palavra "${word.name}":`, error);
+        }
+      }
+    }
+
+    // Deletar o vault
     await prisma.vault.delete({
       where: { id: vaultId },
     });
 
-    // Revalidar a página para remover o vault deletado
+    console.log(`Vault "${existingVault.name}" deletado com sucesso`);
+    console.log(`=== FIM deleteVault - SUCESSO ===`);
+
+    // Revalidar as páginas
+    revalidatePath("/home");
     revalidatePath("/home/vault");
   } catch (error) {
-    console.error("Erro ao deletar vault:", error);
-    throw new Error("Erro ao deletar vault");
+    console.error("=== ERRO em deleteVault ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao deletar vault: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
   }
 }
 
@@ -819,17 +895,16 @@ export async function getLinkableWords(wordId: number): Promise<Word[]> {
 }
 
 // Buscar todas as relações entre palavras
-export async function getAllWordRelations(): Promise<Array<{ wordA: Word; wordB: Word }>> {
+export async function getAllWordRelations(): Promise<
+  Array<{ wordA: Word; wordB: Word }>
+> {
   try {
     console.log("=== INÍCIO getAllWordRelations ===");
 
     // Buscar todas as palavras que têm relacionamentos
     const wordsWithRelations = await prisma.word.findMany({
       where: {
-        OR: [
-          { Word_A: { some: {} } },
-          { Word_B: { some: {} } }
-        ]
+        OR: [{ Word_A: { some: {} } }, { Word_B: { some: {} } }],
       },
       include: {
         Word_A: {
@@ -861,7 +936,7 @@ export async function getAllWordRelations(): Promise<Array<{ wordA: Word; wordB:
 
     // Processar as relações
     const relations: Array<{ wordA: Word; wordB: Word }> = [];
-    
+
     wordsWithRelations.forEach((word) => {
       // Adicionar relações Word_A
       word.Word_A.forEach((relatedWord) => {
@@ -870,7 +945,7 @@ export async function getAllWordRelations(): Promise<Array<{ wordA: Word; wordB:
           wordB: relatedWord,
         });
       });
-      
+
       // Adicionar relações Word_B
       word.Word_B.forEach((relatedWord) => {
         relations.push({
@@ -882,11 +957,20 @@ export async function getAllWordRelations(): Promise<Array<{ wordA: Word; wordB:
 
     // Remover duplicatas (mesma relação em ambas as direções)
     const uniqueRelations = relations.filter((relation, index, self) => {
-      const key = `${Math.min(relation.wordA.id, relation.wordB.id)}-${Math.max(relation.wordA.id, relation.wordB.id)}`;
-      return index === self.findIndex(r => {
-        const rKey = `${Math.min(r.wordA.id, r.wordB.id)}-${Math.max(r.wordA.id, r.wordB.id)}`;
-        return rKey === key;
-      });
+      const key = `${Math.min(relation.wordA.id, relation.wordB.id)}-${Math.max(
+        relation.wordA.id,
+        relation.wordB.id
+      )}`;
+      return (
+        index ===
+        self.findIndex((r) => {
+          const rKey = `${Math.min(r.wordA.id, r.wordB.id)}-${Math.max(
+            r.wordA.id,
+            r.wordB.id
+          )}`;
+          return rKey === key;
+        })
+      );
     });
 
     console.log("Relações encontradas:", uniqueRelations.length);
