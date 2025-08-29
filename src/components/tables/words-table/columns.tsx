@@ -310,7 +310,7 @@ export const columns: ColumnDef<Word>[] = [
   },
   {
     accessorKey: "confidence",
-    header: "Nível de Confiança",
+    header: "Grau de confiança",
     cell: ({ row }) => {
       const confidence = row.getValue("confidence") as number;
 
@@ -345,13 +345,25 @@ export const columns: ColumnDef<Word>[] = [
       };
 
       return (
-        <div className="flex items-center gap-2">
-          <span className={`font-medium ${getConfidenceColor(confidence)}`}>
-            {confidence}
-          </span>
-          <span className="text-sm text-gray-600 dark:text-gray-400">
-            - {getConfidenceText(confidence)}
-          </span>
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center gap-2">
+            {/* <span className={`font-medium ${getConfidenceColor(confidence)}`}>
+              {confidence}
+            </span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">
+              - {getConfidenceText(confidence)}
+            </span> */}
+          </div>
+          <div className="flex gap-1 px-1">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div
+                key={i}
+                className={`h-3 w-2 rounded-sm ${
+                  i < confidence ? "bg-yellow-500" : "bg-gray-300"
+                }`}
+              />
+            ))}
+          </div>
         </div>
       );
     },
