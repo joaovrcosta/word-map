@@ -20,6 +20,7 @@ export interface Word {
   translations: string[];
   confidence: number; // 1-4
   isSaved: boolean;
+  vaultId: number; // ID do vault onde a palavra está
 }
 
 export interface CreateWordData {
@@ -57,6 +58,7 @@ export async function getVaults(): Promise<Vault[]> {
             translations: true,
             confidence: true,
             isSaved: true,
+            vaultId: true,
           },
         },
       },
@@ -202,6 +204,7 @@ export async function createWord(data: CreateWordData): Promise<Word> {
       translations: newWord.translations,
       confidence: newWord.confidence,
       isSaved: newWord.isSaved,
+      vaultId: newWord.vaultId, // Adicionar vaultId ao retorno
     };
   } catch (error) {
     console.error("=== ERRO em createWord ===");
@@ -275,6 +278,7 @@ export async function searchWordInVaults(
         translations: word.translations,
         confidence: word.confidence,
         isSaved: word.isSaved,
+        vaultId: word.vaultId, // Adicionar vaultId ao resultado
       },
       vault: word.vault,
     }));
@@ -306,5 +310,119 @@ export async function wordExistsInVault(
   } catch (error) {
     console.error("Erro ao verificar se palavra existe no vault:", error);
     return false;
+  }
+}
+
+// Mover palavra para outro vault
+export async function moveWordToVault(
+  wordId: number,
+  newVaultId: number
+): Promise<Word> {
+  try {
+    console.log("=== INÍCIO moveWordToVault ===");
+    console.log("Movendo palavra:", wordId, "para vault:", newVaultId);
+
+    // Verificar se o novo vault existe
+    const existingVault = await prisma.vault.findUnique({
+      where: { id: newVaultId },
+    });
+
+    if (!existingVault) {
+      throw new Error("Vault de destino não encontrado");
+    }
+
+    // Verificar se a palavra já existe no novo vault
+    const existingWord = await prisma.word.findFirst({
+      where: {
+        name: {
+          equals: (
+            await prisma.word.findUnique({ where: { id: wordId } })
+          )?.name,
+          mode: "insensitive",
+        },
+        vaultId: newVaultId,
+      },
+    });
+
+    if (existingWord) {
+      throw new Error("Palavra já existe no vault de destino");
+    }
+
+    // Atualizar a palavra para o novo vault
+    const updatedWord = await prisma.word.update({
+      where: { id: wordId },
+      data: {
+        vaultId: newVaultId,
+        isSaved: true, // Sempre true ao mover para um vault
+      },
+    });
+
+    console.log("Palavra movida com sucesso:", updatedWord);
+    console.log("=== FIM moveWordToVault - SUCESSO ===");
+
+    // Revalidar as páginas
+    revalidatePath("/home");
+    revalidatePath("/home/vault");
+
+    return {
+      id: updatedWord.id,
+      name: updatedWord.name,
+      grammaticalClass: updatedWord.grammaticalClass,
+      category: updatedWord.category,
+      translations: updatedWord.translations,
+      confidence: updatedWord.confidence,
+      isSaved: updatedWord.isSaved,
+      vaultId: updatedWord.vaultId, // Adicionar vaultId ao retorno
+    };
+  } catch (error) {
+    console.error("=== ERRO em moveWordToVault ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao mover palavra: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}
+
+// Fazer unsave da palavra (remover do vault atual)
+export async function unsaveWord(wordId: number): Promise<Word> {
+  try {
+    console.log("=== INÍCIO unsaveWord ===");
+    console.log("Fazendo unsave da palavra:", wordId);
+
+    // Atualizar a palavra para isSaved = false
+    const updatedWord = await prisma.word.update({
+      where: { id: wordId },
+      data: {
+        isSaved: false,
+      },
+    });
+
+    console.log("Palavra com unsave feito com sucesso:", updatedWord);
+    console.log("=== FIM unsaveWord - SUCESSO ===");
+
+    // Revalidar as páginas
+    revalidatePath("/home");
+    revalidatePath("/home/vault");
+
+    return {
+      id: updatedWord.id,
+      name: updatedWord.name,
+      grammaticalClass: updatedWord.grammaticalClass,
+      category: updatedWord.category,
+      translations: updatedWord.translations,
+      confidence: updatedWord.confidence,
+      isSaved: updatedWord.isSaved,
+      vaultId: updatedWord.vaultId, // Adicionar vaultId ao retorno
+    };
+  } catch (error) {
+    console.error("=== ERRO em unsaveWord ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao fazer unsave da palavra: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
   }
 }
