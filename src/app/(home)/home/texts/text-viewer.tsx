@@ -287,7 +287,7 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
                 {vault.words.map((vaultWord) => (
                   <div key={vaultWord.id} className="text-sm space-y-2">
                     <div className="text-gray-600 dark:text-gray-400">
-                      <strong>Traduções:</strong>{" "}
+                      <strong>Significado:</strong>{" "}
                       {vaultWord.translations.join(", ")}
                     </div>
                     <div className="flex items-center gap-2">
@@ -403,14 +403,15 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
                       {wordInfo.meanings?.[0]?.partOfSpeech || "substantivo"}
                     </div>
                     <div>
-                      <span className="font-medium">Traduções:</span>{" "}
+                      <span className="font-medium">Significado:</span>{" "}
                       {wordInfo.meanings?.[0]?.definitions
                         ?.slice(0, 2)
                         ?.map((def: any) => def.definition)
                         ?.join(", ") || "Nenhuma"}
                     </div>
                     <div>
-                      <span className="font-medium">Nível:</span> 1 (iniciante)
+                      <span className="font-medium">Nível:</span> 1 (pouco
+                      praticada)
                     </div>
                   </div>
                 </div>
