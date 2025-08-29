@@ -229,7 +229,7 @@ function RelatedWordsCell({ word }: { word: Word }) {
           <span className="font-medium text-gray-900 dark:text-white">
             {relatedWord.name}
           </span>
-          <span className="text-gray-500 dark:text-gray-400">
+          <span className="text-gray-500 dark:text-gray-400 truncate max-w-xs">
             ({relatedWord.translations[0]})
           </span>
         </div>
@@ -254,7 +254,9 @@ export const columns: ColumnDef<Word>[] = [
       return (
         <div className="">
           <p className="font-medium">{wordName}</p>
-          <p className="text-sm text-gray-500">{wordTranslations.join(", ")}</p>
+          <p className="text-sm text-gray-500 truncate max-w-xs">
+            {wordTranslations.join(", ")}
+          </p>
         </div>
       );
     },
