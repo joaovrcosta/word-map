@@ -38,6 +38,7 @@ export default function HomePage() {
     confidence: 1,
   });
   const [isCreatingWord, setIsCreatingWord] = useState(false);
+  const [isTableUpdating, setIsTableUpdating] = useState(false);
   const searchParams = useSearchParams();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -83,6 +84,7 @@ export default function HomePage() {
     }
 
     setIsCreatingWord(true);
+    setIsTableUpdating(true);
     try {
       const wordData = {
         name: newWord.name.trim(),
@@ -118,6 +120,8 @@ export default function HomePage() {
       alert("Erro ao criar palavra. Tente novamente.");
     } finally {
       setIsCreatingWord(false);
+      // Aguardar um pouco para mostrar o spinner
+      setTimeout(() => setIsTableUpdating(false), 500);
     }
   }, [selectedVault, newWord, queryClient]);
 
@@ -425,7 +429,11 @@ export default function HomePage() {
         </div>
         <div className="p-6">
           {currentWords.length > 0 ? (
-            <DataTable columns={columns} data={currentWords} />
+            <DataTable
+              columns={columns}
+              data={currentWords}
+              isLoading={isTableUpdating}
+            />
           ) : (
             <div className="text-center py-12">
               <BookOpen className="mx-auto h-12 w-12 text-gray-400" />

@@ -758,14 +758,24 @@ export async function unlinkWords(
     console.log("Deslinkando palavras:", wordId1, "e", wordId2);
 
     // Remover o relacionamento bidirecional
-    await prisma.word.update({
-      where: { id: wordId1 },
-      data: {
-        Word_A: {
-          disconnect: { id: wordId2 },
+    await Promise.all([
+      prisma.word.update({
+        where: { id: wordId1 },
+        data: {
+          Word_A: {
+            disconnect: { id: wordId2 },
+          },
         },
-      },
-    });
+      }),
+      prisma.word.update({
+        where: { id: wordId2 },
+        data: {
+          Word_A: {
+            disconnect: { id: wordId1 },
+          },
+        },
+      }),
+    ]);
 
     console.log("Palavras deslinkadas com sucesso");
     console.log("=== FIM unlinkWords - SUCESSO ===");

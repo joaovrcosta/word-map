@@ -25,9 +25,14 @@ import { useQueryClient } from "@tanstack/react-query";
 interface EditWordDialogProps {
   word: Word;
   onWordUpdated: () => void;
+  onTableUpdating?: (isUpdating: boolean) => void;
 }
 
-export function EditWordDialog({ word, onWordUpdated }: EditWordDialogProps) {
+export function EditWordDialog({
+  word,
+  onWordUpdated,
+  onTableUpdating,
+}: EditWordDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -43,6 +48,9 @@ export function EditWordDialog({ word, onWordUpdated }: EditWordDialogProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+
+    // Notificar que a tabela está sendo atualizada
+    onTableUpdating?.(true);
 
     try {
       const updatedWord = await updateWord(word.id, {
@@ -84,6 +92,8 @@ export function EditWordDialog({ word, onWordUpdated }: EditWordDialogProps) {
       });
     } finally {
       setIsLoading(false);
+      // Aguardar um pouco para mostrar o spinner
+      setTimeout(() => onTableUpdating?.(false), 500);
     }
   };
 
@@ -246,33 +256,6 @@ export function EditWordDialog({ word, onWordUpdated }: EditWordDialogProps) {
           </div>
 
           {/* Nível de confiança */}
-          <div className="space-y-2">
-            <label
-              htmlFor="confidence"
-              className="text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Nível de confiança
-            </label>
-            <Select
-              value={formData.confidence.toString()}
-              onValueChange={(value) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  confidence: parseInt(value),
-                }))
-              }
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione o nível" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="1">1 - Iniciante</SelectItem>
-                <SelectItem value="2">2 - Básico</SelectItem>
-                <SelectItem value="3">3 - Intermediário</SelectItem>
-                <SelectItem value="4">4 - Avançado</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
 
           {/* Botões */}
           <div className="flex gap-2 pt-4">

@@ -24,9 +24,14 @@ import { useQueryClient } from "@tanstack/react-query";
 interface LinkWordsDialogProps {
   word: Word;
   onWordsLinked: () => void;
+  onTableUpdating?: (isUpdating: boolean) => void;
 }
 
-export function LinkWordsDialog({ word, onWordsLinked }: LinkWordsDialogProps) {
+export function LinkWordsDialog({
+  word,
+  onWordsLinked,
+  onTableUpdating,
+}: LinkWordsDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [relatedWords, setRelatedWords] = useState<Word[]>([]);
@@ -63,6 +68,10 @@ export function LinkWordsDialog({ word, onWordsLinked }: LinkWordsDialogProps) {
 
   const handleLinkWord = async (targetWordId: number) => {
     setIsLoading(true);
+
+    // Notificar que a tabela está sendo atualizada
+    onTableUpdating?.(true);
+
     try {
       await linkWords(word.id, targetWordId);
 
@@ -71,9 +80,8 @@ export function LinkWordsDialog({ word, onWordsLinked }: LinkWordsDialogProps) {
         description: "As palavras foram conectadas com sucesso",
       });
 
-      // Atualizar as listas locais
-      await fetchRelatedWords();
-      await fetchLinkableWords();
+      // Atualizar as listas locais imediatamente
+      await Promise.all([fetchRelatedWords(), fetchLinkableWords()]);
 
       // Invalidar o cache do React Query para atualizar a tabela imediatamente
       // Usar uma abordagem mais agressiva para garantir atualização
@@ -94,11 +102,17 @@ export function LinkWordsDialog({ word, onWordsLinked }: LinkWordsDialogProps) {
       });
     } finally {
       setIsLoading(false);
+      // Aguardar um pouco para mostrar o spinner
+      setTimeout(() => onTableUpdating?.(false), 500);
     }
   };
 
   const handleUnlinkWord = async (targetWordId: number) => {
     setIsLoading(true);
+
+    // Notificar que a tabela está sendo atualizada
+    onTableUpdating?.(true);
+
     try {
       await unlinkWords(word.id, targetWordId);
 
@@ -107,9 +121,8 @@ export function LinkWordsDialog({ word, onWordsLinked }: LinkWordsDialogProps) {
         description: "As palavras foram desconectadas",
       });
 
-      // Atualizar as listas locais
-      await fetchRelatedWords();
-      await fetchLinkableWords();
+      // Atualizar as listas locais imediatamente
+      await Promise.all([fetchRelatedWords(), fetchLinkableWords()]);
 
       // Invalidar o cache do React Query para atualizar a tabela imediatamente
       // Usar uma abordagem mais agressiva para garantir atualização
@@ -130,6 +143,8 @@ export function LinkWordsDialog({ word, onWordsLinked }: LinkWordsDialogProps) {
       });
     } finally {
       setIsLoading(false);
+      // Aguardar um pouco para mostrar o spinner
+      setTimeout(() => onTableUpdating?.(false), 500);
     }
   };
 

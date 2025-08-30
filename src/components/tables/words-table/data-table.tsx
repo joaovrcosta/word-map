@@ -1,16 +1,15 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useEffect } from "react";
 import {
   ColumnDef,
   flexRender,
   getCoreRowModel,
-  getFilteredRowModel,
-  getPaginationRowModel,
   useReactTable,
+  getPaginationRowModel,
+  getFilteredRowModel,
   ColumnFiltersState,
 } from "@tanstack/react-table";
-
 import {
   Table,
   TableBody,
@@ -19,57 +18,30 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight, Search } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
-}
-
-// Interface estendida para incluir campos de data
-interface WordWithDates {
-  id: number;
-  name: string;
-  grammaticalClass: string;
-  category: string | null;
-  translations: string[];
-  confidence: number;
-  isSaved: boolean;
-  vaultId: number;
-  createdAt?: Date;
-  updatedAt?: Date;
+  isLoading?: boolean;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
+  isLoading = false,
 }: DataTableProps<TData, TValue>) {
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
 
-  // Ordenar dados por createdAt (mais recentes primeiro)
-  const sortedData = useMemo(() => {
-    return [...data].sort((a: any, b: any) => {
-      // Se não tiver createdAt, usar ID como fallback (IDs maiores são mais recentes)
-      if (!a.createdAt || !b.createdAt) {
-        return b.id - a.id;
-      }
-
-      const dateA = new Date(a.createdAt);
-      const dateB = new Date(b.createdAt);
-      return dateB.getTime() - dateA.getTime();
-    });
-  }, [data]);
-
   const table = useReactTable({
-    data: sortedData,
+    data,
     columns,
     getCoreRowModel: getCoreRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
     onColumnFiltersChange: setColumnFilters,
     onGlobalFilterChange: setGlobalFilter,
     globalFilterFn: "includesString",
@@ -84,28 +56,99 @@ export function DataTable<TData, TValue>({
     },
   });
 
-  return (
-    <div className="space-y-4">
-      {/* Campo de busca */}
-      <div className="flex items-center space-x-2">
-        <div className="relative flex-1 max-w-sm">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+  // Mostrar loading spinner quando isLoading for true
+  if (isLoading) {
+    return (
+      <div className="w-full">
+        {/* Header com search e paginação */}
+        <div className="flex items-center justify-between py-4">
           <Input
             placeholder="Buscar palavras..."
-            value={globalFilter ?? ""}
+            value={globalFilter}
             onChange={(event) => setGlobalFilter(event.target.value)}
-            className="pl-10"
+            className="max-w-sm"
           />
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              <span>Página</span>
+              <strong>
+                {table.getState().pagination.pageIndex + 1} de{" "}
+                {table.getPageCount()}
+              </strong>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
         </div>
-        <div className="text-sm text-gray-600 dark:text-gray-400">
-          {table.getFilteredRowModel().rows.length} de {data.length} resultados
+
+        {/* Loading spinner */}
+        <div className="flex items-center justify-center py-12">
+          <div className="flex flex-col items-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+            <p className="text-sm text-muted-foreground">
+              Atualizando tabela...
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-full">
+      {/* Header com search e paginação */}
+      <div className="flex items-center justify-between py-4">
+        <Input
+          placeholder="Buscar palavras..."
+          value={globalFilter}
+          onChange={(event) => setGlobalFilter(event.target.value)}
+          className="max-w-sm"
+        />
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.previousPage()}
+            disabled={!table.getCanPreviousPage()}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <div className="flex items-center gap-1 text-sm text-muted-foreground">
+            <span>Página</span>
+            <strong>
+              {table.getState().pagination.pageIndex + 1} de{" "}
+              {table.getPageCount()}
+            </strong>
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => table.nextPage()}
+            disabled={!table.getCanNextPage()}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
         </div>
       </div>
 
       {/* Tabela */}
-      <div className="overflow-hidden rounded-[20px] border-[2px] px-4 pb-4">
-        <Table className="">
-          <TableHeader className="">
+      <div className="rounded-md border">
+        <Table>
+          <TableHeader>
             {table.getHeaderGroups().map((headerGroup) => (
               <TableRow key={headerGroup.id}>
                 {headerGroup.headers.map((header) => {
@@ -123,7 +166,7 @@ export function DataTable<TData, TValue>({
               </TableRow>
             ))}
           </TableHeader>
-          <TableBody className="">
+          <TableBody>
             {table.getRowModel().rows?.length ? (
               table.getRowModel().rows.map((row) => (
                 <TableRow
@@ -154,38 +197,31 @@ export function DataTable<TData, TValue>({
         </Table>
       </div>
 
-      {/* Paginação */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-2">
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Página {table.getState().pagination.pageIndex + 1} de{" "}
+      {/* Paginação inferior */}
+      <div className="flex items-center justify-end space-x-2 py-4">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => table.previousPage()}
+          disabled={!table.getCanPreviousPage()}
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+        <div className="flex items-center gap-1 text-sm text-muted-foreground">
+          <span>Página</span>
+          <strong>
+            {table.getState().pagination.pageIndex + 1} de{" "}
             {table.getPageCount()}
-          </p>
-          <span className="text-sm text-gray-600 dark:text-gray-400">
-            | {table.getFilteredRowModel().rows.length} resultados
-          </span>
+          </strong>
         </div>
-
-        <div className="flex items-center space-x-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronLeft className="h-4 w-4" />
-            Anterior
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            Próxima
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => table.nextPage()}
+          disabled={!table.getCanNextPage()}
+        >
+          <ChevronRight className="h-4 w-4" />
+        </Button>
       </div>
     </div>
   );
