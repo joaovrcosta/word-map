@@ -197,3 +197,4 @@ if (word.confidence === 4) return Math.random() < 0.25;
 ---
 
 _Sistema implementado com Next.js, TypeScript, Prisma e Shadcn UI_
+

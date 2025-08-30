@@ -8,16 +8,18 @@ datasource db {
 }
 
 model User {
-  id          Int           @id @default(autoincrement())
-  name        String
-  email       String        @unique
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
-  password    String
-  vaults      Vault[]
-  wordHistory WordHistory[]
-  texts       Text[]
-  settings    UserSettings?
+  id               Int           @id @default(autoincrement())
+  name             String
+  email            String        @unique
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  password         String
+  resetCode        String?
+  resetCodeExpires DateTime?
+  vaults           Vault[]
+  wordHistory      WordHistory[]
+  texts            Text[]
+  settings         UserSettings?
 }
 
 model UserSettings {

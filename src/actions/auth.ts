@@ -1,10 +1,15 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
-import bcrypt from "bcryptjs";
-import jwt from "jsonwebtoken";
+import { hash, compare } from "bcryptjs";
+import jwt, { sign } from "jsonwebtoken";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import {
+  sendEmail,
+  generateResetEmailHtml,
+  generateResetEmailText,
+} from "@/lib/email";
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key";
 
@@ -54,7 +59,7 @@ export async function registerUser(data: RegisterData): Promise<User> {
     }
 
     // Hash da senha
-    const hashedPassword = await bcrypt.hash(data.password, 12);
+    const hashedPassword = await hash(data.password, 12);
 
     // Criar usuário
     const user = await prisma.user.create({
@@ -103,7 +108,7 @@ export async function loginUser(data: LoginData): Promise<User> {
     console.log("Usuário encontrado:", user.id);
 
     // Verificar senha
-    const isPasswordValid = await bcrypt.compare(
+    const isPasswordValid = await compare(
       data.password,
       (user as any).password
     );
@@ -116,7 +121,7 @@ export async function loginUser(data: LoginData): Promise<User> {
     console.log("Senha válida, gerando JWT...");
 
     // Gerar JWT
-    const token = jwt.sign(
+    const token = sign(
       {
         userId: user.id,
         email: user.email,
@@ -210,5 +215,115 @@ export async function isAuthenticated(): Promise<boolean> {
     return user !== null;
   } catch (error) {
     return false;
+  }
+}
+
+// Gerar código de reset
+export async function generateResetCode(email: string) {
+  try {
+    // Verificar se o usuário existe
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      return { success: false, message: "Usuário não encontrado" };
+    }
+
+    // Gerar código de 6 dígitos
+    const resetCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+    // Salvar código no banco (em produção, usar tabela separada)
+    await prisma.user.update({
+      where: { email },
+      data: {
+        resetCode,
+        resetCodeExpires: new Date(Date.now() + 15 * 60 * 1000), // 15 minutos
+      },
+    });
+
+    // Enviar email com o código
+    const emailSent = await sendEmail({
+      from: "noreply@wordmap.com",
+      to: email,
+      subject: "Reset de Senha - Word Map",
+      html: generateResetEmailHtml(email, resetCode),
+      text: generateResetEmailText(email, resetCode),
+    });
+
+    if (!emailSent) {
+      return { success: false, message: "Erro ao enviar email" };
+    }
+
+    return {
+      success: true,
+      message: "Código de reset enviado para seu email",
+    };
+  } catch (error) {
+    console.error("Erro ao gerar código de reset:", error);
+    return { success: false, message: "Erro interno do servidor" };
+  }
+}
+
+// Verificar código de reset
+export async function verifyResetCode(email: string, code: string) {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email },
+    });
+
+    if (!user) {
+      return { success: false, message: "Usuário não encontrado" };
+    }
+
+    if (!user.resetCode || !user.resetCodeExpires) {
+      return { success: false, message: "Código de reset não solicitado" };
+    }
+
+    if (user.resetCode !== code) {
+      return { success: false, message: "Código inválido" };
+    }
+
+    if (new Date() > user.resetCodeExpires) {
+      return { success: false, message: "Código expirado" };
+    }
+
+    return { success: true, message: "Código válido" };
+  } catch (error) {
+    console.error("Erro ao verificar código de reset:", error);
+    return { success: false, message: "Erro interno do servidor" };
+  }
+}
+
+// Resetar senha
+export async function resetPassword(
+  email: string,
+  code: string,
+  newPassword: string
+) {
+  try {
+    // Verificar código primeiro
+    const codeVerification = await verifyResetCode(email, code);
+    if (!codeVerification.success) {
+      return codeVerification;
+    }
+
+    // Hash da nova senha
+    const hashedPassword = await hash(newPassword, 12);
+
+    // Atualizar senha e limpar código de reset
+    await prisma.user.update({
+      where: { email },
+      data: {
+        password: hashedPassword,
+        resetCode: null,
+        resetCodeExpires: null,
+      },
+    });
+
+    return { success: true, message: "Senha alterada com sucesso" };
+  } catch (error) {
+    console.error("Erro ao resetar senha:", error);
+    return { success: false, message: "Erro interno do servidor" };
   }
 }

@@ -2,6 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { loginUser, type LoginData } from "@/actions/auth";
@@ -150,9 +151,18 @@ function LoginForm() {
             </Button>
           </div>
 
-          <div className="text-center">
+          <div className="text-center space-y-2">
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Use o email e senha que você criou no registro
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">
+              Esqueceu sua senha?{" "}
+              <Link
+                href="/reset-password"
+                className="font-medium text-blue-600 hover:text-blue-500"
+              >
+                Reset de Senha
+              </Link>
             </p>
           </div>
         </form>
