@@ -16,6 +16,7 @@ import {
   Brain,
 } from "lucide-react";
 import { FlashcardWord } from "@/actions/flashcards";
+import { FlashcardSkeleton } from "./FlashcardSkeleton";
 
 interface FlashcardProps {
   word: FlashcardWord;
@@ -36,13 +37,7 @@ export function Flashcard({
 
   // Verificação de segurança para evitar erros
   if (!word || !word.name) {
-    return (
-      <Card className="min-h-[300px] flex flex-col items-center justify-center">
-        <CardContent className="text-center">
-          <p className="text-gray-500">Carregando palavra...</p>
-        </CardContent>
-      </Card>
-    );
+    return <FlashcardSkeleton />;
   }
 
   const confidenceLabels = {

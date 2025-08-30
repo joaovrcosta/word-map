@@ -37,6 +37,8 @@ import {
 } from "@/actions/flashcards";
 import { Flashcard } from "./Flashcard";
 import { SessionSummary } from "./SessionSummary";
+import { FlashcardDeckSkeleton } from "./FlashcardDeckSkeleton";
+import { FlashcardSkeleton } from "./FlashcardSkeleton";
 
 interface FlashcardDeckProps {
   vaultId: number;
@@ -160,11 +162,7 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
   };
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
-      </div>
-    );
+    return <FlashcardDeckSkeleton />;
   }
 
   if (words.length === 0) {
@@ -251,7 +249,7 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
             )}
 
             {/* Mostrar primeira palavra como preview */}
-            {words.length > 0 && (
+            {words.length > 0 ? (
               <div className="mt-6">
                 <h4 className="text-sm font-medium text-gray-600 mb-3">
                   Preview da primeira palavra:
@@ -262,6 +260,13 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
                   onToggleAnswer={() => {}}
                   onAnswer={() => {}}
                 />
+              </div>
+            ) : (
+              <div className="mt-6">
+                <h4 className="text-sm font-medium text-gray-600 mb-3">
+                  Preview da primeira palavra:
+                </h4>
+                <FlashcardSkeleton />
               </div>
             )}
 
