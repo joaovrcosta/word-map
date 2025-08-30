@@ -37,6 +37,7 @@ type SidebarLink = {
 const links: SidebarLink[] = [
   { name: "Homepage", path: "/home", icon: AlignBottomIcon },
   { name: "Vault", path: "/home/vault", icon: VaultIcon },
+  { name: "Flashcards", path: "/home/flashcards", icon: Brain },
   { name: "Texts", path: "/home/texts", icon: BookOpen },
   { name: "Connections", path: "/home/connections", icon: Network },
   { name: "Perfil", path: "/home/profile", icon: User },

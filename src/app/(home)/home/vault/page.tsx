@@ -2,6 +2,7 @@
 
 import { useState, useCallback } from "react";
 import { Plus, FolderOpen, Trash, Pencil, Eye } from "@phosphor-icons/react";
+import { Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -208,6 +209,17 @@ export default function VaultPage() {
                     </CardDescription>
                   </div>
                   <div className="flex items-center gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() =>
+                        router.push(`/home/vault/${vault.id}/flashcards`)
+                      }
+                      title="Estudar com Flashcards"
+                    >
+                      <Brain size={16} className="text-purple-500" />
+                    </Button>
                     <Button
                       variant="ghost"
                       size="sm"
