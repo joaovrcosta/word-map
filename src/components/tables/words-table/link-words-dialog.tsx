@@ -8,6 +8,7 @@ import {
   getRelatedWords,
   getLinkableWords,
 } from "@/actions/actions";
+import { getUserSettings } from "@/actions/user-settings";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -59,7 +60,16 @@ export function LinkWordsDialog({
 
   const fetchLinkableWords = async () => {
     try {
-      const linkable = await getLinkableWords(word.id);
+      // Buscar configurações do usuário
+      const userSettings = await getUserSettings(1); // TODO: Usar userId real da autenticação
+      const useAllVaults = userSettings?.useAllVaultsForLinks || false;
+
+      // Passar o vaultId atual e a configuração para filtrar palavras
+      const linkable = await getLinkableWords(
+        word.id,
+        word.vaultId,
+        useAllVaults
+      );
       setLinkableWords(linkable);
     } catch (error) {
       console.error("Erro ao buscar palavras linkáveis:", error);

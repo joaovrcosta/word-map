@@ -17,6 +17,16 @@ model User {
   vaults      Vault[]
   wordHistory WordHistory[]
   texts       Text[]
+  settings    UserSettings?
+}
+
+model UserSettings {
+  id                    Int      @id @default(autoincrement())
+  userId                Int      @unique
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  useAllVaultsForLinks  Boolean  @default(false) 
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
 }
 
 model Vault {

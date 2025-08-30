@@ -14,6 +14,7 @@ import {
   FilePen,
   BookOpen,
   Network,
+  User,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import {
@@ -38,6 +39,7 @@ const links: SidebarLink[] = [
   { name: "Vault", path: "/home/vault", icon: VaultIcon },
   { name: "Texts", path: "/home/texts", icon: BookOpen },
   { name: "Connections", path: "/home/connections", icon: Network },
+  { name: "Perfil", path: "/home/profile", icon: User },
 ];
 
 interface SidebarItemProps {

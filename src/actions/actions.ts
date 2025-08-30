@@ -853,10 +853,16 @@ export async function getRelatedWords(wordId: number): Promise<Word[]> {
 }
 
 // Buscar palavras para linkar (excluindo a atual e já relacionadas)
-export async function getLinkableWords(wordId: number): Promise<Word[]> {
+export async function getLinkableWords(
+  wordId: number,
+  currentVaultId?: number,
+  useAllVaultsForLinks: boolean = false
+): Promise<Word[]> {
   try {
     console.log("=== INÍCIO getLinkableWords ===");
     console.log("Buscando palavras linkáveis para:", wordId);
+    console.log("Vault atual:", currentVaultId);
+    console.log("Usar todos os vaults:", useAllVaultsForLinks);
 
     // Buscar a palavra atual com suas relações
     const currentWord = await prisma.word.findUnique({
@@ -878,11 +884,22 @@ export async function getLinkableWords(wordId: number): Promise<Word[]> {
       wordId, // Excluir a própria palavra
     ]);
 
-    // Buscar todas as outras palavras
-    const allWords = await prisma.word.findMany({
-      where: {
-        id: { notIn: Array.from(relatedIds) },
-      },
+    // Construir filtro baseado na configuração
+    let whereClause: any = {
+      id: { notIn: Array.from(relatedIds) },
+    };
+
+    // Se não usar todos os vaults e tiver um vault atual, filtrar apenas por ele
+    if (!useAllVaultsForLinks && currentVaultId) {
+      whereClause.vaultId = currentVaultId;
+      console.log("Filtrando apenas palavras do vault atual:", currentVaultId);
+    } else {
+      console.log("Buscando palavras de todos os vaults");
+    }
+
+    // Buscar palavras baseado no filtro
+    const linkableWords = await prisma.word.findMany({
+      where: whereClause,
       select: {
         id: true,
         name: true,
@@ -896,10 +913,10 @@ export async function getLinkableWords(wordId: number): Promise<Word[]> {
       orderBy: { name: "asc" },
     });
 
-    console.log("Palavras linkáveis encontradas:", allWords.length);
+    console.log("Palavras linkáveis encontradas:", linkableWords.length);
     console.log("=== FIM getLinkableWords - SUCESSO ===");
 
-    return allWords;
+    return linkableWords;
   } catch (error) {
     console.error("=== ERRO em getLinkableWords ===");
     console.error("Erro completo:", error);

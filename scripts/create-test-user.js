@@ -5,40 +5,35 @@ const prisma = new PrismaClient();
 
 async function createTestUser() {
   try {
-    // Hash da senha
-    const hashedPassword = await bcrypt.hash("123456", 12);
+    console.log("👤 Criando usuário de teste...\n");
+
+    // Verificar se já existe um usuário
+    const existingUser = await prisma.user.findFirst();
+    if (existingUser) {
+      console.log("✅ Usuário já existe:", existingUser.name);
+      return existingUser;
+    }
 
     // Criar usuário de teste
-    const user = await prisma.user.create({
+    const hashedPassword = await bcrypt.hash("123456", 10);
+
+    const testUser = await prisma.user.create({
       data: {
         name: "Usuário Teste",
-        email: "teste@teste.com",
+        email: "teste@example.com",
         password: hashedPassword,
       },
     });
 
-    console.log("Usuário de teste criado com sucesso:", {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      createdAt: user.createdAt,
-    });
+    console.log("✅ Usuário criado com sucesso:");
+    console.log(`  - ID: ${testUser.id}`);
+    console.log(`  - Nome: ${testUser.name}`);
+    console.log(`  - Email: ${testUser.email}`);
 
-    // Criar um vault de teste
-    const vault = await prisma.vault.create({
-      data: {
-        name: "Meu Primeiro Vault",
-        userId: user.id,
-      },
-    });
-
-    console.log("Vault de teste criado:", {
-      id: vault.id,
-      name: vault.name,
-      userId: vault.userId,
-    });
+    return testUser;
   } catch (error) {
-    console.error("Erro ao criar usuário de teste:", error);
+    console.error("❌ Erro ao criar usuário:", error.message);
+    console.error("Detalhes:", error);
   } finally {
     await prisma.$disconnect();
   }
