@@ -34,7 +34,7 @@ export default function TextsPage() {
       setIsLoadingTexts(true);
       // TODO: Pegar userId do contexto de autenticação
       const userId = 1; // Temporário
-      const textsData = await getUserTexts(userId);
+      const textsData = await getUserTexts();
       setTexts(textsData);
     } catch (error) {
       console.error("Erro ao buscar textos:", error);

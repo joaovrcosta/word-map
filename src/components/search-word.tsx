@@ -366,7 +366,7 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
           placeholder="Adicione palavras em seus vaults"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 pr-10 h-[52px] text-xl rounded-[16px] bg-white border-b-[4px] border-gray-200 dark:border-gray-700"
+          className="pl-10 pr-10 h-[52px] !text-lg rounded-[16px] bg-white border-b-[4px] border-gray-200 dark:border-gray-700"
         />
         {searchTerm && (
           <Button

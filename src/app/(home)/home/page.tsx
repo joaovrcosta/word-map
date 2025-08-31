@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { createWord } from "@/actions/actions";
 import { SearchWord } from "@/components/search-word";
+import { ImportExportWords } from "@/components/import-export-words";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useWords, useVaults } from "@/hooks/use-words";
 import { useQueryClient } from "@tanstack/react-query";
@@ -279,6 +280,7 @@ function HomePageContent() {
                       <SelectItem value="preposicao">Preposição</SelectItem>
                       <SelectItem value="conjuncao">Conjunção</SelectItem>
                       <SelectItem value="interjeicao">Interjeição</SelectItem>
+                      <SelectItem value="phrasal-verb">Phrasal Verb</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
@@ -362,6 +364,15 @@ function HomePageContent() {
               </div>
             </DialogContent>
           </Dialog>
+
+          {/* Botão de Importar/Exportar */}
+          {selectedVault && (
+            <ImportExportWords
+              vaultId={selectedVault.id}
+              vaultName={selectedVault.name}
+              wordCount={currentWords.length}
+            />
+          )}
         </div>
       </div>
 

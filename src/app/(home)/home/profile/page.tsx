@@ -77,8 +77,8 @@ export default function ProfilePage() {
     const loadData = async () => {
       try {
         const [statsData, userSettings] = await Promise.all([
-          getUserStats(userId),
-          getUserSettings(userId),
+          getUserStats(),
+          getUserSettings(),
         ]);
 
         setStats(statsData);
@@ -102,7 +102,7 @@ export default function ProfilePage() {
     };
 
     loadData();
-  }, [userId, updateSettings]);
+  }, [updateSettings]);
 
   // Função para calcular estatísticas gamificadas
   const calculateGamificationStats = (
@@ -151,7 +151,7 @@ export default function ProfilePage() {
   const handleSettingChange = async (useAllVaults: boolean) => {
     setSaving(true);
     try {
-      await upsertUserSettings(userId, useAllVaults);
+      await upsertUserSettings(useAllVaults);
       updateSettings({ useAllVaultsForLinks: useAllVaults });
     } catch (error) {
       console.error("Erro ao salvar configuração:", error);

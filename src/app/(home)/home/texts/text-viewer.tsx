@@ -59,12 +59,9 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
     const loadData = async () => {
       try {
         setIsLoading(true);
-        // TODO: Pegar userId do contexto de autenticação
-        const userId = 1; // Temporário
-
         // Carregar palavras encontradas e vaults do usuário
         const [words, vaults] = await Promise.all([
-          checkTextWords(text.content, userId),
+          checkTextWords(text.content),
           getVaults(),
         ]);
 
@@ -99,9 +96,7 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
       text.content = editContent;
 
       // Recarregar dados para atualizar as palavras encontradas
-      // TODO: Pegar userId do contexto de autenticação
-      const userId = 1; // Temporário
-      const words = await checkTextWords(editContent, userId);
+      const words = await checkTextWords(editContent);
       setFoundWords(words);
 
       // Chamar callback de atualização se fornecido
@@ -173,9 +168,6 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
     try {
       setIsAddingWord(true);
 
-      // TODO: Pegar userId do contexto de autenticação
-      const userId = 1; // Temporário
-
       // Verificar se a palavra já existe no vault
       const vault = userVaults.find((v) => v.id === vaultId);
       if (
@@ -242,7 +234,7 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
 
       // Recarregar dados para atualizar a lista
       const [words, vaults] = await Promise.all([
-        checkTextWords(text.content, userId),
+        checkTextWords(text.content),
         getVaults(),
       ]);
 

@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "@/actions/auth";
 
 export interface Vault {
   id: number;
@@ -89,14 +90,16 @@ export async function createVault(name: string): Promise<Vault> {
       throw new Error("Nome do vault é obrigatório");
     }
 
-    // TODO: Pegar o userId do usuário autenticado
-    // Por enquanto, usando userId = 1 como mock
-    const userId = 1;
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
 
     const newVault = await prisma.vault.create({
       data: {
         name: name.trim(),
-        userId: userId,
+        userId: user.id,
       },
       include: {
         words: true,
@@ -1035,18 +1038,23 @@ export interface Text {
 // Criar novo texto
 export async function createText(
   title: string,
-  content: string,
-  userId: number
+  content: string
 ): Promise<Text> {
   try {
     console.log("=== INÍCIO createText ===");
     console.log("Criando texto:", title);
 
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
     const newText = await prisma.text.create({
       data: {
         title: title.trim(),
         content: content.trim(),
-        userId: userId,
+        userId: user.id,
       },
     });
 
@@ -1077,13 +1085,20 @@ export async function createText(
 }
 
 // Buscar textos do usuário
-export async function getUserTexts(userId: number): Promise<Text[]> {
+export async function getUserTexts(): Promise<Text[]> {
   try {
     console.log("=== INÍCIO getUserTexts ===");
-    console.log("Buscando textos para usuário:", userId);
+
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    console.log("Buscando textos para usuário:", user.id);
 
     const texts = await prisma.text.findMany({
-      where: { userId: userId },
+      where: { userId: user.id },
       orderBy: { updatedAt: "desc" },
     });
 
@@ -1183,11 +1198,18 @@ export async function deleteText(textId: number): Promise<void> {
 
 // Verificar palavras do texto que estão nos vaults
 export async function checkTextWords(
-  content: string,
-  userId: number
+  content: string
 ): Promise<Array<{ word: string; vaultInfo: Vault[] }>> {
   try {
     console.log("=== INÍCIO checkTextWords ===");
+
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    const userId = user.id;
     console.log("Verificando palavras do texto para usuário:", userId);
 
     // Extrair palavras únicas do texto (apenas palavras em inglês)
@@ -1328,5 +1350,176 @@ export async function updateVaultName(
         error instanceof Error ? error.message : "Erro desconhecido"
       }`
     );
+  }
+}
+
+// Exportar palavras de um vault
+export async function exportVaultWords(vaultId: number): Promise<string> {
+  try {
+    console.log("Backend: Iniciando exportação para vaultId:", vaultId);
+
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      console.log("Backend: Usuário não autenticado");
+      throw new Error("Usuário não autenticado");
+    }
+    console.log("Backend: Usuário autenticado:", {
+      userId: user.id,
+      email: user.email,
+    });
+
+    const vault = await prisma.vault.findUnique({
+      where: { id: vaultId },
+      include: {
+        words: {
+          select: {
+            name: true,
+            grammaticalClass: true,
+            category: true,
+            translations: true,
+            confidence: true,
+            isSaved: true,
+            createdAt: true,
+            updatedAt: true,
+          },
+          orderBy: {
+            createdAt: "desc",
+          },
+        },
+      },
+    });
+
+    console.log("Backend: Vault encontrado:", vault ? "sim" : "não");
+    if (!vault) {
+      throw new Error("Vault não encontrado");
+    }
+
+    // Verificar se o vault pertence ao usuário autenticado
+    if (vault.userId !== user.id) {
+      console.log(
+        "Backend: Acesso negado - vault.userId:",
+        vault.userId,
+        "user.id:",
+        user.id
+      );
+      throw new Error("Acesso negado: vault não pertence ao usuário");
+    }
+
+    console.log("Backend: Número de palavras no vault:", vault.words.length);
+
+    const exportData = {
+      vaultName: vault.name,
+      exportDate: new Date().toISOString(),
+      totalWords: vault.words.length,
+      words: vault.words,
+    };
+
+    const result = JSON.stringify(exportData, null, 2);
+    console.log(
+      "Backend: Exportação concluída com sucesso, tamanho:",
+      result.length
+    );
+    return result;
+  } catch (error) {
+    console.error("Backend: Erro ao exportar palavras:", error);
+    throw new Error("Erro ao exportar palavras");
+  }
+}
+
+// Importar palavras para um vault
+export async function importWordsToVault(
+  vaultId: number,
+  importData: string
+): Promise<{ success: boolean; importedCount: number; errors: string[] }> {
+  try {
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    const data = JSON.parse(importData);
+
+    if (!data.words || !Array.isArray(data.words)) {
+      throw new Error("Formato de importação inválido");
+    }
+
+    const errors: string[] = [];
+    let importedCount = 0;
+
+    // Verificar se o vault existe
+    const vault = await prisma.vault.findUnique({
+      where: { id: vaultId },
+    });
+
+    if (!vault) {
+      throw new Error("Vault não encontrado");
+    }
+
+    // Verificar se o vault pertence ao usuário autenticado
+    if (vault.userId !== user.id) {
+      throw new Error("Acesso negado: vault não pertence ao usuário");
+    }
+
+    // Processar cada palavra
+    for (const wordData of data.words) {
+      try {
+        // Validar dados obrigatórios
+        if (!wordData.name || !wordData.grammaticalClass) {
+          errors.push(
+            `Palavra "${
+              wordData.name || "sem nome"
+            }": dados obrigatórios faltando`
+          );
+          continue;
+        }
+
+        // Verificar se a palavra já existe no vault
+        const existingWord = await prisma.word.findFirst({
+          where: {
+            name: wordData.name,
+            vaultId: vaultId,
+          },
+        });
+
+        if (existingWord) {
+          errors.push(`Palavra "${wordData.name}" já existe no vault`);
+          continue;
+        }
+
+        // Criar a palavra
+        await prisma.word.create({
+          data: {
+            name: wordData.name,
+            grammaticalClass: wordData.grammaticalClass,
+            category: wordData.category || null,
+            translations: Array.isArray(wordData.translations)
+              ? wordData.translations
+              : [],
+            confidence: wordData.confidence || 1,
+            isSaved: wordData.isSaved || false,
+            vaultId: vaultId,
+          },
+        });
+
+        importedCount++;
+      } catch (error) {
+        errors.push(
+          `Erro ao importar "${wordData.name}": ${
+            error instanceof Error ? error.message : "Erro desconhecido"
+          }`
+        );
+      }
+    }
+
+    return {
+      success: importedCount > 0,
+      importedCount,
+      errors,
+    };
+  } catch (error) {
+    console.error("Erro ao importar palavras:", error);
+    throw new Error("Erro ao importar palavras");
   }
 }

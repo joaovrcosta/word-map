@@ -28,7 +28,7 @@ export function CreateTextForm({ onSuccess, onCancel }: CreateTextFormProps) {
       // TODO: Pegar userId do contexto de autenticação
       const userId = 1; // Temporário
 
-      await createText(formData.title, formData.content, userId);
+      await createText(formData.title, formData.content);
 
       toast({
         title: "Texto criado!",

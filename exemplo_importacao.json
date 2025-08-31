@@ -1,0 +1,37 @@
+{
+  "vaultName": "Exemplo de Importação",
+  "exportDate": "2024-01-15T10:30:00.000Z",
+  "totalWords": 3,
+  "words": [
+    {
+      "name": "casa",
+      "grammaticalClass": "substantivo",
+      "category": "lugares",
+      "translations": ["house", "home"],
+      "confidence": 2,
+      "isSaved": false,
+      "createdAt": "2024-01-15T10:00:00.000Z",
+      "updatedAt": "2024-01-15T10:00:00.000Z"
+    },
+    {
+      "name": "correr",
+      "grammaticalClass": "verbo",
+      "category": "ações",
+      "translations": ["run", "race"],
+      "confidence": 3,
+      "isSaved": true,
+      "createdAt": "2024-01-15T10:15:00.000Z",
+      "updatedAt": "2024-01-15T10:15:00.000Z"
+    },
+    {
+      "name": "bonito",
+      "grammaticalClass": "adjetivo",
+      "category": "características",
+      "translations": ["beautiful", "pretty", "nice"],
+      "confidence": 1,
+      "isSaved": false,
+      "createdAt": "2024-01-15T10:20:00.000Z",
+      "updatedAt": "2024-01-15T10:20:00.000Z"
+    }
+  ]
+}

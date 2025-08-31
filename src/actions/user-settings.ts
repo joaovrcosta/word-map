@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "@/actions/auth";
 
 export interface UserSettings {
   id: number;
@@ -12,12 +13,16 @@ export interface UserSettings {
 }
 
 // Buscar configurações do usuário
-export async function getUserSettings(
-  userId: number
-): Promise<UserSettings | null> {
+export async function getUserSettings(): Promise<UserSettings | null> {
   try {
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
     const settings = await prisma.userSettings.findUnique({
-      where: { userId },
+      where: { userId: user.id },
     });
 
     return settings;
@@ -29,15 +34,20 @@ export async function getUserSettings(
 
 // Criar ou atualizar configurações do usuário
 export async function upsertUserSettings(
-  userId: number,
   useAllVaultsForLinks: boolean
 ): Promise<UserSettings> {
   try {
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
     const settings = await prisma.userSettings.upsert({
-      where: { userId },
+      where: { userId: user.id },
       update: { useAllVaultsForLinks },
       create: {
-        userId,
+        userId: user.id,
         useAllVaultsForLinks,
       },
     });
@@ -51,8 +61,15 @@ export async function upsertUserSettings(
 }
 
 // Buscar estatísticas do usuário
-export async function getUserStats(userId: number) {
+export async function getUserStats() {
   try {
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    const userId = user.id;
     const [
       totalWords,
       totalVaults,
