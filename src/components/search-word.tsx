@@ -358,15 +358,15 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
   );
 
   return (
-    <div className="relative w-full max-w-md">
+    <div className="relative w-full">
       <div className="relative">
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
         <Input
           type="text"
-          placeholder="Pesquisar palavras..."
+          placeholder="Adicione palavras em seus vaults"
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10 pr-10"
+          className="pl-10 pr-10 h-[52px] text-xl rounded-[16px] bg-white border-b-[4px] border-gray-200 dark:border-gray-700"
         />
         {searchTerm && (
           <Button

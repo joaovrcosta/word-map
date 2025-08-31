@@ -377,18 +377,7 @@ export default function HomePage() {
         </div>
       </div>
 
-      {/* Barra de Pesquisa */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Pesquisar Palavras
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Encontre palavras em todos os seus vaults
-          </p>
-        </div>
-        <SearchWord />
-      </div>
+      <SearchWord />
 
       {/* Estatísticas */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
