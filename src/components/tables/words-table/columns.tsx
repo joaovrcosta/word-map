@@ -27,6 +27,7 @@ import { PencilSimple } from "@phosphor-icons/react/dist/ssr";
 import { useUpdateWord, useVaults } from "@/hooks/use-words";
 import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
+import { EditableTranslationsCell } from "./editable-translations-cell";
 
 // Componente para a célula da coluna "Salva"
 function SavedCell({ word }: { word: Word }) {
@@ -273,17 +274,7 @@ export const columns: ColumnDef<Word>[] = [
     accessorKey: "name",
     header: "Palavra",
     cell: ({ row }) => {
-      const wordName = row.getValue("name") as string;
-      const wordTranslations = row.original.translations;
-
-      return (
-        <div className="">
-          <p className="font-medium">{wordName}</p>
-          <p className="text-sm text-gray-500 truncate max-w-xs">
-            {wordTranslations.join(", ")}
-          </p>
-        </div>
-      );
+      return <EditableTranslationsCell word={row.original} />;
     },
   },
   {

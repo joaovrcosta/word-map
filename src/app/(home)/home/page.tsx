@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { Plus, BookOpen, Target, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/tables/words-table/data-table";
@@ -28,7 +28,7 @@ import { useSearchParams, useRouter } from "next/navigation";
 import { useWords, useVaults } from "@/hooks/use-words";
 import { useQueryClient } from "@tanstack/react-query";
 
-export default function HomePage() {
+function HomePageContent() {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newWord, setNewWord] = useState({
     name: "",
@@ -100,11 +100,7 @@ export default function HomePage() {
 
       await createWord(wordData);
 
-      // Invalidar o cache do React Query para atualizar a tabela imediatamente
-      queryClient.invalidateQueries({ queryKey: ["vaults"] });
-      queryClient.refetchQueries({ queryKey: ["vaults"] });
-
-      // Limpar formulário
+      // Resetar formulário
       setNewWord({
         name: "",
         grammaticalClass: "",
@@ -115,17 +111,29 @@ export default function HomePage() {
 
       // Fechar dialog
       setIsCreateDialogOpen(false);
+
+      // Invalidar cache para atualizar a tabela
+      queryClient.invalidateQueries({ queryKey: ["vaults"] });
+
+      // Mostrar toast de sucesso
+      // toast({
+      //   title: "Palavra criada!",
+      //   description: `"${wordData.name}" foi adicionada ao vault "${selectedVault.name}"`,
+      // });
     } catch (error) {
       console.error("Erro ao criar palavra:", error);
-      alert("Erro ao criar palavra. Tente novamente.");
+      // toast({
+      //   title: "Erro ao criar palavra",
+      //   description: error instanceof Error ? error.message : "Erro desconhecido",
+      //   variant: "destructive",
+      // });
     } finally {
       setIsCreatingWord(false);
-      // Aguardar um pouco para mostrar o spinner
-      setTimeout(() => setIsTableUpdating(false), 500);
+      setIsTableUpdating(false);
     }
   }, [selectedVault, newWord, queryClient]);
 
-  // Resetar formulário quando dialog fechar
+  // Handler para fechar dialog
   const handleDialogClose = useCallback(() => {
     setIsCreateDialogOpen(false);
     setNewWord({
@@ -137,7 +145,7 @@ export default function HomePage() {
     });
   }, []);
 
-  // Estatísticas calculadas de forma otimizada
+  // Estatísticas calculadas
   const stats = useMemo(
     () => [
       {
@@ -149,102 +157,82 @@ export default function HomePage() {
       },
       {
         title: "Palavras Salvas",
-        value: currentWords.filter((w) => w.isSaved).length,
+        value: currentWords.filter((word) => word.isSaved).length,
         icon: Target,
         color: "text-green-600",
         bgColor: "bg-green-100",
       },
       {
-        title: "Confiança Média",
+        title: "Grau de Confiança",
         value:
           currentWords.length > 0
             ? Math.round(
-                currentWords.reduce((acc, w) => acc + w.confidence, 0) /
+                currentWords.reduce((acc, word) => acc + word.confidence, 0) /
                   currentWords.length
               )
             : 0,
+        suffix: "/4",
         icon: Trophy,
         color: "text-yellow-600",
         bgColor: "bg-yellow-100",
-        suffix: "%",
       },
     ],
     [currentWords]
   );
 
-  // Loading state otimizado
+  // Loading state
   if (isLoading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Carregando...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!vaults || vaults.length === 0) {
-    return (
-      <div className="container mx-auto p-6">
-        <div className="text-center py-12">
-          <BookOpen className="mx-auto h-12 w-12 text-gray-400" />
-          <h3 className="mt-4 text-lg font-medium text-gray-900">
-            Nenhum vault encontrado
-          </h3>
-          <p className="mt-2 text-gray-600">
-            Crie um vault primeiro para começar a adicionar palavras.
-          </p>
-          <Button
-            className="mt-4"
-            onClick={() => (window.location.href = "/home/vault")}
-          >
-            Criar Vault
-          </Button>
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Carregando vaults...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header com seleção de vault */}
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 px-12 pt-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            {selectedVault ? selectedVault.name : "Selecione um Vault"}
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+            Dashboard
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
+          <p className="text-gray-600 dark:text-gray-400">
             Gerencie suas palavras e acompanhe seu progresso
           </p>
         </div>
 
+        {/* Seleção de Vault */}
         <div className="flex items-center gap-4">
-          {/* Seletor de Vault */}
-          <Select
-            value={selectedVault?.id.toString()}
-            onValueChange={handleVaultChange}
-          >
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Selecione um vault" />
-            </SelectTrigger>
-            <SelectContent>
-              {vaults.map((vault) => (
-                <SelectItem key={vault.id} value={vault.id.toString()}>
-                  {vault.name} ({vault.words.length} palavras)
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {vaults && vaults.length > 0 && (
+            <Select
+              value={selectedVault?.id.toString() || ""}
+              onValueChange={handleVaultChange}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Selecione um vault" />
+              </SelectTrigger>
+              <SelectContent>
+                {vaults.map((vault) => (
+                  <SelectItem key={vault.id} value={vault.id.toString()}>
+                    {vault.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
 
-          {/* Botão de adicionar palavra */}
+          {/* Botão de Criar Palavra */}
           <Dialog
             open={isCreateDialogOpen}
             onOpenChange={setIsCreateDialogOpen}
           >
             <DialogTrigger asChild>
-              <Button className="flex items-center gap-2">
-                <Plus size={20} />
+              <Button>
+                <Plus size={20} className="mr-2" />
                 Nova Palavra
               </Button>
             </DialogTrigger>
@@ -254,11 +242,11 @@ export default function HomePage() {
               </DialogHeader>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Palavra
                   </label>
                   <Input
-                    placeholder="Ex: Hello"
+                    placeholder="Digite a palavra"
                     value={newWord.name}
                     onChange={(e) =>
                       setNewWord((prev) => ({ ...prev, name: e.target.value }))
@@ -267,7 +255,7 @@ export default function HomePage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Classe Gramatical
                   </label>
                   <Select
@@ -286,21 +274,21 @@ export default function HomePage() {
                       <SelectItem value="substantivo">Substantivo</SelectItem>
                       <SelectItem value="verbo">Verbo</SelectItem>
                       <SelectItem value="adjetivo">Adjetivo</SelectItem>
-                      <SelectItem value="advérbio">Advérbio</SelectItem>
+                      <SelectItem value="adverbio">Advérbio</SelectItem>
                       <SelectItem value="pronome">Pronome</SelectItem>
-                      <SelectItem value="preposição">Preposição</SelectItem>
-                      <SelectItem value="conjunção">Conjunção</SelectItem>
-                      <SelectItem value="interjeição">Interjeição</SelectItem>
+                      <SelectItem value="preposicao">Preposição</SelectItem>
+                      <SelectItem value="conjuncao">Conjunção</SelectItem>
+                      <SelectItem value="interjeicao">Interjeição</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Categoria (opcional)
                   </label>
                   <Input
-                    placeholder="Ex: saudação, tecnologia, comida"
+                    placeholder="Ex: cores, animais, profissões..."
                     value={newWord.category}
                     onChange={(e) =>
                       setNewWord((prev) => ({
@@ -312,8 +300,24 @@ export default function HomePage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Nível de Confiança
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Traduções
+                  </label>
+                  <Input
+                    placeholder="Digite as traduções separadas por vírgula"
+                    value={newWord.translations}
+                    onChange={(e) =>
+                      setNewWord((prev) => ({
+                        ...prev,
+                        translations: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Grau de Confiança
                   </label>
                   <Select
                     value={newWord.confidence.toString()}
@@ -325,7 +329,7 @@ export default function HomePage() {
                     }
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione o nível" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="1">1 - Iniciante</SelectItem>
@@ -334,22 +338,6 @@ export default function HomePage() {
                       <SelectItem value="4">4 - Avançado</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Traduções (separadas por vírgula)
-                  </label>
-                  <Input
-                    placeholder="Ex: olá, oi, hey"
-                    value={newWord.translations}
-                    onChange={(e) =>
-                      setNewWord((prev) => ({
-                        ...prev,
-                        translations: e.target.value,
-                      }))
-                    }
-                  />
                 </div>
 
                 <div className="flex justify-end gap-3 pt-4">
@@ -444,5 +432,22 @@ export default function HomePage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function HomePage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+            <p className="mt-4 text-gray-600">Carregando...</p>
+          </div>
+        </div>
+      }
+    >
+      <HomePageContent />
+    </Suspense>
   );
 }
