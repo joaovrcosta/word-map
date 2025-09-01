@@ -3,6 +3,7 @@
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/actions/auth";
+import { translateDefinitions } from "@/lib/translate";
 
 export interface Vault {
   id: number;
@@ -1569,15 +1570,31 @@ export async function importWordsToVault(
           continue;
         }
 
+        // Preparar traduções
+        let translations = Array.isArray(wordData.translations)
+          ? wordData.translations
+          : [];
+
+        // Traduzir traduções para português se estiverem em inglês
+        if (translations.length > 0) {
+          try {
+            translations = await translateDefinitions(translations);
+          } catch (error) {
+            console.warn(
+              "Erro ao traduzir traduções durante importação, usando originais:",
+              error
+            );
+            // Manter traduções originais em caso de erro
+          }
+        }
+
         // Criar a palavra
         await prisma.word.create({
           data: {
             name: wordData.name,
             grammaticalClass: wordData.grammaticalClass,
             category: wordData.category || null,
-            translations: Array.isArray(wordData.translations)
-              ? wordData.translations
-              : [],
+            translations: translations,
             confidence: wordData.confidence || 1,
             isSaved: wordData.isSaved || false,
             vaultId: vaultId,

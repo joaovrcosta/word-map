@@ -25,6 +25,7 @@ import {
 import { createWord } from "@/actions/actions";
 import { SearchWord } from "@/components/search-word";
 import { ImportExportWords } from "@/components/import-export-words";
+import { translateToPortuguese } from "@/lib/translate";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useWords, useVaults } from "@/hooks/use-words";
 import { useQueryClient } from "@tanstack/react-query";
@@ -87,14 +88,37 @@ function HomePageContent() {
     setIsCreatingWord(true);
     setIsTableUpdating(true);
     try {
+      // Extrair traduções do input
+      const rawTranslations = newWord.translations
+        .split(",")
+        .map((t) => t.trim())
+        .filter((t) => t);
+
+      // Traduzir traduções para português se estiverem em inglês
+      let translations = rawTranslations;
+      if (rawTranslations.length > 0) {
+        try {
+          translations = await Promise.all(
+            rawTranslations.map(async (translation) => {
+              // Verificar se parece ser inglês (contém apenas caracteres ASCII)
+              const isEnglish = /^[a-zA-Z\s\-']+$/.test(translation);
+              if (isEnglish) {
+                return await translateToPortuguese(translation);
+              }
+              return translation; // Manter se não for inglês
+            })
+          );
+        } catch (error) {
+          console.warn("Erro ao traduzir traduções, usando originais:", error);
+          translations = rawTranslations;
+        }
+      }
+
       const wordData = {
         name: newWord.name.trim(),
         grammaticalClass: newWord.grammaticalClass,
         category: newWord.category.trim() || undefined,
-        translations: newWord.translations
-          .split(",")
-          .map((t) => t.trim())
-          .filter((t) => t),
+        translations: translations,
         confidence: newWord.confidence,
         vaultId: selectedVault.id,
       };

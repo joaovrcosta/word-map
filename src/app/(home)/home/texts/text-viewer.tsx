@@ -31,6 +31,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { translateDefinitions } from "@/lib/translate";
 
 interface TextViewerProps {
   text: Text;
@@ -216,10 +217,21 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
             primaryMeaning.definitions &&
             primaryMeaning.definitions.length > 0
           ) {
-            wordData.translations = primaryMeaning.definitions
+            const definitions = primaryMeaning.definitions
               .slice(0, 3) // Máximo 3 definições
               .map((def: any) => def.definition)
               .filter((def: string) => def && def.length > 0);
+
+            // Traduzir definições para português
+            try {
+              wordData.translations = await translateDefinitions(definitions);
+            } catch (error) {
+              console.warn(
+                "Erro ao traduzir definições, usando originais:",
+                error
+              );
+              wordData.translations = definitions;
+            }
           }
         }
       }

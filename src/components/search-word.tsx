@@ -23,6 +23,7 @@ import {
 } from "@/actions/actions";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useToast } from "@/hooks/use-toast";
+import { translateDefinitions } from "@/lib/translate";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -217,11 +218,37 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
         // É uma palavra da API
         wordName = selectedWord.word;
         const firstMeaning = selectedWord.meanings[0];
+
+        // Extrair definições da API
+        let definitions: string[] = [];
+        if (firstMeaning?.definitions && firstMeaning.definitions.length > 0) {
+          definitions = firstMeaning.definitions
+            .slice(0, 3) // Máximo 3 definições
+            .map((def) => def.definition)
+            .filter((def) => def && def.length > 0);
+        }
+
+        // Traduzir definições para português
+        let translatedDefinitions = definitions;
+        if (definitions.length > 0) {
+          try {
+            console.log("Definições originais:", definitions);
+            translatedDefinitions = await translateDefinitions(definitions);
+            console.log("Definições traduzidas:", translatedDefinitions);
+          } catch (error) {
+            console.warn(
+              "Erro ao traduzir definições, usando originais:",
+              error
+            );
+            translatedDefinitions = definitions;
+          }
+        }
+
         wordData = {
           name: selectedWord.word,
           grammaticalClass: firstMeaning?.partOfSpeech || "substantivo",
           category: undefined,
-          translations: [firstMeaning?.definitions[0]?.definition || ""],
+          translations: translatedDefinitions,
           confidence: 1,
           vaultId: vault.id,
           isSaved: true, // Palavras da API são salvas por padrão

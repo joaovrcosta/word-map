@@ -21,6 +21,7 @@ import {
 import { Edit2, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import { translateToPortuguese } from "@/lib/translate";
 
 interface EditWordDialogProps {
   word: Word;
@@ -53,11 +54,36 @@ export function EditWordDialog({
     onTableUpdating?.(true);
 
     try {
+      // Filtrar traduções vazias
+      const rawTranslations = formData.translations.filter(
+        (t) => t.trim() !== ""
+      );
+
+      // Traduzir traduções para português se estiverem em inglês
+      let translations = rawTranslations;
+      if (rawTranslations.length > 0) {
+        try {
+          translations = await Promise.all(
+            rawTranslations.map(async (translation) => {
+              // Verificar se parece ser inglês (contém apenas caracteres ASCII)
+              const isEnglish = /^[a-zA-Z\s\-']+$/.test(translation);
+              if (isEnglish) {
+                return await translateToPortuguese(translation);
+              }
+              return translation; // Manter se não for inglês
+            })
+          );
+        } catch (error) {
+          console.warn("Erro ao traduzir traduções, usando originais:", error);
+          translations = rawTranslations;
+        }
+      }
+
       const updatedWord = await updateWord(word.id, {
         name: formData.name,
         grammaticalClass: formData.grammaticalClass,
         category: formData.category || null,
-        translations: formData.translations.filter((t) => t.trim() !== ""),
+        translations: translations,
         confidence: formData.confidence,
       });
 
