@@ -2,6 +2,7 @@
 
 import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
+import { getCurrentUser } from "@/actions/auth";
 
 export interface FlashcardWord {
   id: number;
@@ -42,10 +43,19 @@ export async function getFlashcardWords(
   vaultId: number
 ): Promise<FlashcardWord[]> {
   try {
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
     const words = await prisma.word.findMany({
       where: {
         vaultId: vaultId,
         isSaved: true,
+        vault: {
+          userId: user.id, // Filtrar apenas palavras dos vaults do usuário atual
+        },
       },
       select: {
         id: true,
@@ -73,8 +83,17 @@ export async function getFlashcardWords(
 // Buscar informações do vault para flashcards
 export async function getVaultForFlashcards(vaultId: number) {
   try {
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
     const vault = await prisma.vault.findUnique({
-      where: { id: vaultId },
+      where: {
+        id: vaultId,
+        userId: user.id, // Verificar se o vault pertence ao usuário atual
+      },
       select: {
         id: true,
         name: true,
@@ -86,7 +105,7 @@ export async function getVaultForFlashcards(vaultId: number) {
     });
 
     if (!vault) {
-      throw new Error("Vault não encontrado");
+      throw new Error("Vault não encontrado ou não pertence ao usuário");
     }
 
     return {
@@ -107,6 +126,26 @@ export async function updateWordProgress(
   reviewCount: number
 ): Promise<void> {
   try {
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    // Verificar se a palavra existe e pertence ao usuário
+    const existingWord = await prisma.word.findUnique({
+      where: {
+        id: wordId,
+        vault: {
+          userId: user.id, // Verificar se a palavra pertence ao usuário atual
+        },
+      },
+    });
+
+    if (!existingWord) {
+      throw new Error("Palavra não encontrada ou não pertence ao usuário");
+    }
+
     // Em produção, isso seria uma tabela separada de progresso
     // Por enquanto, vamos apenas atualizar a confiança da palavra
     await prisma.word.update({

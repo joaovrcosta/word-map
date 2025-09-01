@@ -48,10 +48,19 @@ export interface SearchResult {
   };
 }
 
-// Buscar todos os vaults
+// Buscar todos os vaults do usuário autenticado
 export async function getVaults(): Promise<Vault[]> {
   try {
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
     const vaults = await prisma.vault.findMany({
+      where: {
+        userId: user.id, // Filtrar apenas vaults do usuário atual
+      },
       include: {
         words: {
           select: {
@@ -126,9 +135,18 @@ export async function deleteVault(vaultId: number): Promise<void> {
       throw new Error("ID do vault inválido");
     }
 
-    // Verificar se o vault existe e buscar suas palavras
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    // Verificar se o vault existe, pertence ao usuário e buscar suas palavras
     const existingVault = await prisma.vault.findUnique({
-      where: { id: vaultId },
+      where: {
+        id: vaultId,
+        userId: user.id, // Verificar se o vault pertence ao usuário atual
+      },
       include: {
         words: {
           include: {
@@ -140,7 +158,7 @@ export async function deleteVault(vaultId: number): Promise<void> {
     });
 
     if (!existingVault) {
-      throw new Error("Vault não encontrado");
+      throw new Error("Vault não encontrado ou não pertence ao usuário");
     }
 
     console.log(`Vault encontrado: ${existingVault.name}`);
@@ -318,9 +336,18 @@ export async function searchWordInVaults(
 
     const trimmedSearch = searchTerm.trim().toLowerCase();
 
-    // Buscar palavras que contenham o termo de pesquisa
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    // Buscar palavras que contenham o termo de pesquisa apenas dos vaults do usuário
     const words = await prisma.word.findMany({
       where: {
+        vault: {
+          userId: user.id, // Filtrar apenas palavras dos vaults do usuário atual
+        },
         OR: [
           {
             name: {
@@ -519,13 +546,27 @@ export async function deleteWord(wordId: number): Promise<void> {
     console.log("=== INÍCIO deleteWord ===");
     console.log("Deletando palavra:", wordId);
 
-    // Verificar se a palavra existe
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    // Verificar se a palavra existe e pertence ao usuário
     const existingWord = await prisma.word.findUnique({
-      where: { id: wordId },
+      where: {
+        id: wordId,
+        vault: {
+          userId: user.id, // Verificar se a palavra pertence ao usuário atual
+        },
+      },
+      include: {
+        vault: true,
+      },
     });
 
     if (!existingWord) {
-      throw new Error("Palavra não encontrada");
+      throw new Error("Palavra não encontrada ou não pertence ao usuário");
     }
 
     // Deletar a palavra
@@ -620,13 +661,24 @@ export async function updateWord(
     console.log("=== INÍCIO updateWord ===");
     console.log("Editando palavra:", wordId, "com dados:", data);
 
-    // Verificar se a palavra existe
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    // Verificar se a palavra existe e pertence ao usuário
     const existingWord = await prisma.word.findUnique({
-      where: { id: wordId },
+      where: {
+        id: wordId,
+        vault: {
+          userId: user.id, // Verificar se a palavra pertence ao usuário atual
+        },
+      },
     });
 
     if (!existingWord) {
-      throw new Error("Palavra não encontrada");
+      throw new Error("Palavra não encontrada ou não pertence ao usuário");
     }
 
     // Preparar dados para atualização
@@ -900,9 +952,20 @@ export async function getLinkableWords(
       console.log("Buscando palavras de todos os vaults");
     }
 
-    // Buscar palavras baseado no filtro
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    // Buscar palavras baseado no filtro, apenas dos vaults do usuário atual
     const linkableWords = await prisma.word.findMany({
-      where: whereClause,
+      where: {
+        ...whereClause,
+        vault: {
+          userId: user.id, // Filtrar apenas palavras dos vaults do usuário atual
+        },
+      },
       select: {
         id: true,
         name: true,
@@ -938,9 +1001,18 @@ export async function getAllWordRelations(): Promise<
   try {
     console.log("=== INÍCIO getAllWordRelations ===");
 
-    // Buscar todas as palavras que têm relacionamentos
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    // Buscar todas as palavras que têm relacionamentos apenas dos vaults do usuário
     const wordsWithRelations = await prisma.word.findMany({
       where: {
+        vault: {
+          userId: user.id, // Filtrar apenas palavras dos vaults do usuário atual
+        },
         OR: [{ Word_A: { some: {} } }, { Word_B: { some: {} } }],
       },
       include: {
@@ -1297,13 +1369,22 @@ export async function updateVaultName(
       throw new Error("Nome do vault é obrigatório");
     }
 
-    // Verificar se o vault existe
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    // Verificar se o vault existe e pertence ao usuário
     const existingVault = await prisma.vault.findUnique({
-      where: { id: vaultId },
+      where: {
+        id: vaultId,
+        userId: user.id, // Verificar se o vault pertence ao usuário atual
+      },
     });
 
     if (!existingVault) {
-      throw new Error("Vault não encontrado");
+      throw new Error("Vault não encontrado ou não pertence ao usuário");
     }
 
     // Atualizar o nome do vault
