@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Plus, FileText, Edit2, Trash2, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -19,47 +20,23 @@ import {
 } from "@/components/ui/card";
 import { Text, getUserTexts, deleteText } from "@/actions/actions";
 import { CreateTextForm } from "./create-text-form";
-import { TextViewer } from "./text-viewer";
 
 export default function TextsPage() {
+  const router = useRouter();
   const [texts, setTexts] = useState<Text[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isLoadingTexts, setIsLoadingTexts] = useState(true);
-  const [selectedText, setSelectedText] = useState<Text | null>(null);
-  const [isViewerOpen, setIsViewerOpen] = useState(false);
 
   // Buscar textos usando Server Action
   const fetchTexts = async () => {
     try {
       setIsLoadingTexts(true);
-      // TODO: Pegar userId do contexto de autenticação
-      const userId = 1; // Temporário
       const textsData = await getUserTexts();
       setTexts(textsData);
     } catch (error) {
       console.error("Erro ao buscar textos:", error);
-      // Em caso de erro, manter dados mockados como fallback
-      const mockTexts: Text[] = [
-        {
-          id: 1,
-          title: "Artigo sobre Tecnologia",
-          content:
-            "This is a sample text about technology. It contains words like computer, software, and internet that might be in your vaults.",
-          userId: 1,
-          createdAt: new Date("2024-01-15"),
-          updatedAt: new Date("2024-01-20"),
-        },
-        {
-          id: 2,
-          title: "História em Inglês",
-          content:
-            "Once upon a time, there was a beautiful princess who loved to read books and learn new words.",
-          userId: 1,
-          createdAt: new Date("2024-01-10"),
-          updatedAt: new Date("2024-01-18"),
-        },
-      ];
-      setTexts(mockTexts);
+      // Em caso de erro, mostrar lista vazia
+      setTexts([]);
     } finally {
       setIsLoadingTexts(false);
     }
@@ -88,10 +65,9 @@ export default function TextsPage() {
     }
   };
 
-  // Abrir visualizador de texto
+  // Navegar para página do texto
   const handleViewText = (text: Text) => {
-    setSelectedText(text);
-    setIsViewerOpen(true);
+    router.push(`/home/texts/${text.id}`);
   };
 
   // Recarregar textos após criação
@@ -237,18 +213,6 @@ export default function TextsPage() {
             </Card>
           ))}
         </div>
-      )}
-
-      {/* Visualizador de Texto */}
-      {selectedText && (
-        <Dialog open={isViewerOpen} onOpenChange={setIsViewerOpen}>
-          <DialogContent className="max-w-6xl max-h-[90vh]">
-            <DialogHeader>
-              <DialogTitle>{selectedText.title}</DialogTitle>
-            </DialogHeader>
-            <TextViewer text={selectedText} />
-          </DialogContent>
-        </Dialog>
       )}
     </div>
   );

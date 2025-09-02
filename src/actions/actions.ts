@@ -1157,6 +1157,52 @@ export async function createText(
   }
 }
 
+// Buscar texto por ID
+export async function getTextById(textId: number): Promise<Text | null> {
+  try {
+    console.log("=== INÍCIO getTextById ===");
+    console.log("Buscando texto com ID:", textId);
+
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    const text = await prisma.text.findFirst({
+      where: {
+        id: textId,
+        userId: user.id, // Garantir que o texto pertence ao usuário
+      },
+    });
+
+    if (!text) {
+      console.log("Texto não encontrado ou não pertence ao usuário");
+      return null;
+    }
+
+    console.log("Texto encontrado:", text.title);
+    console.log("=== FIM getTextById - SUCESSO ===");
+
+    return {
+      id: text.id,
+      title: text.title,
+      content: text.content,
+      userId: text.userId,
+      createdAt: text.createdAt,
+      updatedAt: text.updatedAt,
+    };
+  } catch (error) {
+    console.error("=== ERRO em getTextById ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao buscar texto: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}
+
 // Buscar textos do usuário
 export async function getUserTexts(): Promise<Text[]> {
   try {
