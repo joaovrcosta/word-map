@@ -323,6 +323,129 @@ const AddWordDropdown = memo(
 
 AddWordDropdown.displayName = "AddWordDropdown";
 
+// Componente memoizado para o dialog de edição de palavras
+const EditWordDialog = memo(
+  ({
+    isOpen,
+    onOpenChange,
+    editingWord,
+    editTranslations,
+    editGrammaticalClass,
+    editConfidence,
+    onTranslationsChange,
+    onGrammaticalClassChange,
+    onConfidenceChange,
+    onSave,
+    onCancel,
+    isSaving,
+  }: {
+    isOpen: boolean;
+    onOpenChange: (open: boolean) => void;
+    editingWord: {
+      id: number;
+      name: string;
+      translations: string[];
+      grammaticalClass: string;
+      confidence: number;
+    } | null;
+    editTranslations: string;
+    editGrammaticalClass: string;
+    editConfidence: number;
+    onTranslationsChange: (value: string) => void;
+    onGrammaticalClassChange: (value: string) => void;
+    onConfidenceChange: (value: number) => void;
+    onSave: () => void;
+    onCancel: () => void;
+    isSaving: boolean;
+  }) => {
+    return (
+      <Dialog open={isOpen} onOpenChange={onOpenChange}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Editar Palavra</DialogTitle>
+          </DialogHeader>
+          {editingWord && (
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Palavra
+                </label>
+                <Input
+                  value={editingWord.name}
+                  disabled
+                  className="mt-1 bg-gray-50 dark:bg-gray-800"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Significados (separados por vírgula)
+                </label>
+                <Textarea
+                  value={editTranslations}
+                  onChange={(e) => onTranslationsChange(e.target.value)}
+                  className="mt-1"
+                  placeholder="Ex: casa, lar, residência"
+                  rows={3}
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Classe Gramatical
+                </label>
+                <Input
+                  value={editGrammaticalClass}
+                  onChange={(e) => onGrammaticalClassChange(e.target.value)}
+                  className="mt-1"
+                  placeholder="Ex: substantivo, verbo, adjetivo"
+                />
+              </div>
+
+              <div>
+                <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Nível de Confiança (1-5)
+                </label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="5"
+                  value={editConfidence}
+                  onChange={(e) => onConfidenceChange(parseInt(e.target.value))}
+                  className="mt-1"
+                />
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4">
+                <Button
+                  variant="outline"
+                  onClick={onCancel}
+                  disabled={isSaving}
+                >
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={onSave}
+                  disabled={isSaving}
+                  className="bg-blue-600 hover:bg-blue-700"
+                >
+                  {isSaving ? (
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  ) : (
+                    "Salvar"
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+    );
+  }
+);
+
+EditWordDialog.displayName = "EditWordDialog";
+
 // Hook personalizado para gerenciar visualização de texto em chunks
 const useTextChunks = (content: string, chunkSize: number = 1000) => {
   const [visibleChunks, setVisibleChunks] = useState<number[]>([]);
@@ -535,13 +658,34 @@ export default function TextPage() {
   };
 
   // Função para abrir modal de edição
-  const handleEditWord = (vaultWord: any) => {
+  const handleEditWord = useCallback((vaultWord: any) => {
     setEditingWord(vaultWord);
     setEditTranslations(vaultWord.translations.join(", "));
     setEditGrammaticalClass(vaultWord.grammaticalClass);
     setEditConfidence(vaultWord.confidence);
     setIsEditDialogOpen(true);
-  };
+  }, []);
+
+  // Callbacks otimizados para o dialog de edição
+  const handleTranslationsChange = useCallback((value: string) => {
+    setEditTranslations(value);
+  }, []);
+
+  const handleGrammaticalClassChange = useCallback((value: string) => {
+    setEditGrammaticalClass(value);
+  }, []);
+
+  const handleConfidenceChange = useCallback((value: number) => {
+    setEditConfidence(value);
+  }, []);
+
+  const handleDialogCancel = useCallback(() => {
+    setIsEditDialogOpen(false);
+  }, []);
+
+  const handleDialogOpenChange = useCallback((open: boolean) => {
+    setIsEditDialogOpen(open);
+  }, []);
 
   // Função para salvar edição da palavra
   const handleSaveWordEdit = async () => {
@@ -658,14 +802,30 @@ export default function TextPage() {
           }
         }
 
+        // Preparar traduções originais
+        const originalTranslations = wordInfo?.meanings?.[0]?.definitions
+          ?.slice(0, 2)
+          ?.map((def: any) => def.definition) || [word];
+
+        // Traduzir as definições para português
+        let translatedDefinitions = originalTranslations;
+        try {
+          translatedDefinitions = await translateDefinitions(
+            originalTranslations
+          );
+          console.log("Traduções originais:", originalTranslations);
+          console.log("Traduções traduzidas:", translatedDefinitions);
+        } catch (error) {
+          console.warn("Erro ao traduzir definições, usando originais:", error);
+          // Manter traduções originais em caso de erro
+        }
+
         // Preparar dados da palavra
         const wordData = {
           name: word,
           grammaticalClass:
             wordInfo?.meanings?.[0]?.partOfSpeech || "substantivo",
-          translations: wordInfo?.meanings?.[0]?.definitions
-            ?.slice(0, 2)
-            ?.map((def: any) => def.definition) || [word],
+          translations: translatedDefinitions,
           confidence: 1,
           vaultId: vaultId,
         };
@@ -704,10 +864,22 @@ export default function TextPage() {
     ) => {
       try {
         setIsAddingWord(true);
+
+        // Traduzir as definições para português
+        let translatedDefinitions = translations;
+        try {
+          translatedDefinitions = await translateDefinitions(translations);
+          console.log("Traduções originais:", translations);
+          console.log("Traduções traduzidas:", translatedDefinitions);
+        } catch (error) {
+          console.warn("Erro ao traduzir definições, usando originais:", error);
+          // Manter traduções originais em caso de erro
+        }
+
         const wordData = {
           name: word,
           grammaticalClass,
-          translations,
+          translations: translatedDefinitions,
           confidence,
           vaultId,
         };
@@ -1090,89 +1262,20 @@ export default function TextPage() {
         )}
 
         {/* Modal de Edição de Palavra */}
-        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Editar Palavra</DialogTitle>
-            </DialogHeader>
-            {editingWord && (
-              <div className="space-y-4">
-                <div>
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Palavra
-                  </label>
-                  <Input
-                    value={editingWord.name}
-                    disabled
-                    className="mt-1 bg-gray-50 dark:bg-gray-800"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Significados (separados por vírgula)
-                  </label>
-                  <Textarea
-                    value={editTranslations}
-                    onChange={(e) => setEditTranslations(e.target.value)}
-                    className="mt-1"
-                    placeholder="Ex: casa, lar, residência"
-                    rows={3}
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Classe Gramatical
-                  </label>
-                  <Input
-                    value={editGrammaticalClass}
-                    onChange={(e) => setEditGrammaticalClass(e.target.value)}
-                    className="mt-1"
-                    placeholder="Ex: substantivo, verbo, adjetivo"
-                  />
-                </div>
-
-                <div>
-                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Nível de Confiança (1-5)
-                  </label>
-                  <Input
-                    type="number"
-                    min="1"
-                    max="5"
-                    value={editConfidence}
-                    onChange={(e) =>
-                      setEditConfidence(parseInt(e.target.value))
-                    }
-                    className="mt-1"
-                  />
-                </div>
-
-                <div className="flex justify-end gap-2 pt-4">
-                  <Button
-                    variant="outline"
-                    onClick={() => setIsEditDialogOpen(false)}
-                    disabled={isSaving}
-                  >
-                    Cancelar
-                  </Button>
-                  <Button
-                    onClick={handleSaveWordEdit}
-                    disabled={isSaving}
-                    className="bg-blue-600 hover:bg-blue-700"
-                  >
-                    {isSaving ? (
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                    ) : (
-                      "Salvar"
-                    )}
-                  </Button>
-                </div>
-              </div>
-            )}
-          </DialogContent>
-        </Dialog>
+        <EditWordDialog
+          isOpen={isEditDialogOpen}
+          onOpenChange={handleDialogOpenChange}
+          editingWord={editingWord}
+          editTranslations={editTranslations}
+          editGrammaticalClass={editGrammaticalClass}
+          editConfidence={editConfidence}
+          onTranslationsChange={handleTranslationsChange}
+          onGrammaticalClassChange={handleGrammaticalClassChange}
+          onConfidenceChange={handleConfidenceChange}
+          onSave={handleSaveWordEdit}
+          onCancel={handleDialogCancel}
+          isSaving={isSaving}
+        />
       </div>
     </div>
   );
