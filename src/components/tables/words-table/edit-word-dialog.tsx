@@ -95,17 +95,6 @@ export function EditWordDialog({
       // Fechar o dialog primeiro
       setIsOpen(false);
 
-      // Invalidar o cache do React Query para atualizar a tabela imediatamente
-      // Usar uma abordagem mais agressiva para garantir atualização
-      queryClient.invalidateQueries({ queryKey: ["vaults"] });
-      queryClient.invalidateQueries({ queryKey: ["relatedWords"] });
-
-      // Forçar um refetch imediato
-      await Promise.all([
-        queryClient.refetchQueries({ queryKey: ["vaults"] }),
-        queryClient.refetchQueries({ queryKey: ["relatedWords"] }),
-      ]);
-
       // Chamar callback se fornecido
       onWordUpdated();
     } catch (error) {

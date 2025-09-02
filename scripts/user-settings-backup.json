@@ -1,0 +1,29 @@
+{
+  "timestamp": "2025-09-02T03:38:53.104Z",
+  "settings": [
+    {
+      "id": 14,
+      "userId": 2,
+      "useAllVaultsForLinks": false,
+      "createdAt": "2025-08-31T05:45:29.884Z",
+      "updatedAt": "2025-08-31T05:45:29.884Z",
+      "user": {
+        "id": 2,
+        "name": "Ademir",
+        "email": "ademir@gmail.com"
+      }
+    },
+    {
+      "id": 18,
+      "userId": 1,
+      "useAllVaultsForLinks": true,
+      "createdAt": "2025-09-02T03:37:10.006Z",
+      "updatedAt": "2025-09-02T03:37:10.025Z",
+      "user": {
+        "id": 1,
+        "name": "João Victor Ribeiro Costa",
+        "email": "joaovr.costa@gmail.com"
+      }
+    }
+  ]
+}

@@ -18,17 +18,20 @@ export async function getUserSettings(): Promise<UserSettings | null> {
     // Verificar se o usuário está autenticado
     const user = await getCurrentUser();
     if (!user) {
-      throw new Error("Usuário não autenticado");
+      console.log("Usuário não autenticado ao buscar configurações");
+      return null;
     }
 
+    console.log("Buscando configurações para usuário:", user.id);
     const settings = await prisma.userSettings.findUnique({
       where: { userId: user.id },
     });
 
+    console.log("Configurações encontradas:", settings);
     return settings;
   } catch (error) {
     console.error("Erro ao buscar configurações do usuário:", error);
-    throw new Error("Erro ao buscar configurações do usuário");
+    return null;
   }
 }
 
@@ -37,26 +40,74 @@ export async function upsertUserSettings(
   useAllVaultsForLinks: boolean
 ): Promise<UserSettings> {
   try {
+    console.log("Iniciando upsert de configurações do usuário...");
+
     // Verificar se o usuário está autenticado
     const user = await getCurrentUser();
     if (!user) {
+      console.log("Usuário não autenticado ao salvar configurações");
       throw new Error("Usuário não autenticado");
     }
 
-    const settings = await prisma.userSettings.upsert({
+    console.log("Usuário autenticado:", { id: user.id, name: user.name });
+
+    // Verificar se já existem configurações
+    const existingSettings = await prisma.userSettings.findUnique({
       where: { userId: user.id },
-      update: { useAllVaultsForLinks },
-      create: {
-        userId: user.id,
-        useAllVaultsForLinks,
-      },
     });
 
-    revalidatePath("/home/profile");
+    console.log("Configurações existentes:", existingSettings);
+
+    let settings: UserSettings;
+
+    if (existingSettings) {
+      console.log("Atualizando configurações existentes...");
+      settings = await prisma.userSettings.update({
+        where: { userId: user.id },
+        data: { useAllVaultsForLinks },
+      });
+    } else {
+      console.log("Criando novas configurações...");
+      settings = await prisma.userSettings.create({
+        data: {
+          userId: user.id,
+          useAllVaultsForLinks,
+        },
+      });
+    }
+
+    console.log("Configurações salvas com sucesso:", settings);
+
+    // Revalidar cache da página de perfil
+    try {
+      revalidatePath("/home/profile");
+      console.log("Cache da página de perfil revalidado");
+    } catch (revalidateError) {
+      console.warn("Erro ao revalidar cache (não crítico):", revalidateError);
+    }
+
     return settings;
   } catch (error) {
-    console.error("Erro ao salvar configurações do usuário:", error);
-    throw new Error("Erro ao salvar configurações do usuário");
+    console.error("Erro detalhado ao salvar configurações do usuário:", error);
+
+    // Verificar se é um erro específico do Prisma
+    if (error instanceof Error) {
+      if (error.message.includes("Unique constraint")) {
+        throw new Error("Configurações já existem para este usuário");
+      }
+      if (error.message.includes("Foreign key constraint")) {
+        throw new Error("Usuário não encontrado");
+      }
+      if (error.message.includes("Connection")) {
+        throw new Error("Erro de conexão com o banco de dados");
+      }
+    }
+
+    throw new Error(
+      `Erro ao salvar configurações: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
   }
 }
 
@@ -66,9 +117,11 @@ export async function getUserStats() {
     // Verificar se o usuário está autenticado
     const user = await getCurrentUser();
     if (!user) {
+      console.log("Usuário não autenticado ao buscar estatísticas");
       throw new Error("Usuário não autenticado");
     }
 
+    console.log("Buscando estatísticas para usuário:", user.id);
     const userId = user.id;
     const [
       totalWords,

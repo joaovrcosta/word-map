@@ -2,7 +2,8 @@
 
 import { prisma } from "@/lib/prisma";
 import { hash, compare } from "bcryptjs";
-import jwt, { sign } from "jsonwebtoken";
+import { sign } from "jsonwebtoken";
+import { jwtVerify } from "jose";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import {
@@ -179,16 +180,17 @@ export async function getCurrentUser(): Promise<User | null> {
       return null;
     }
 
-    // Verificar JWT
-    const decoded = jwt.verify(token.value, JWT_SECRET) as any;
+    // Verificar JWT usando jose (consistente com o middleware)
+    const secret = new TextEncoder().encode(JWT_SECRET);
+    const { payload } = await jwtVerify(token.value, secret);
 
-    if (!decoded || !decoded.userId) {
+    if (!payload || !payload.userId) {
       return null;
     }
 
     // Buscar usuário atualizado
     const user = await prisma.user.findUnique({
-      where: { id: decoded.userId },
+      where: { id: payload.userId as number },
     });
 
     if (!user) {

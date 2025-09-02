@@ -76,16 +76,25 @@ export default function ProfilePage() {
   useEffect(() => {
     const loadData = async () => {
       try {
+        console.log("Iniciando carregamento de dados do perfil...");
+
         const [statsData, userSettings] = await Promise.all([
           getUserStats(),
           getUserSettings(),
         ]);
+
+        console.log("Dados carregados:", { statsData, userSettings });
 
         setStats(statsData);
 
         if (userSettings) {
           updateSettings({
             useAllVaultsForLinks: userSettings.useAllVaultsForLinks,
+          });
+        } else {
+          // Se não há configurações, usar padrão
+          updateSettings({
+            useAllVaultsForLinks: false,
           });
         }
 
@@ -96,6 +105,16 @@ export default function ProfilePage() {
         }
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
+        // Definir valores padrão em caso de erro
+        setStats({
+          totalWords: 0,
+          totalVaults: 0,
+          wordsByConfidence: [],
+          wordsByCategory: [],
+          wordsByGrammaticalClass: [],
+          recentActivity: 0,
+          totalConnections: 0,
+        });
       } finally {
         setLoading(false);
       }
@@ -151,10 +170,18 @@ export default function ProfilePage() {
   const handleSettingChange = async (useAllVaults: boolean) => {
     setSaving(true);
     try {
-      await upsertUserSettings(useAllVaults);
+      console.log("Iniciando mudança de configuração:", useAllVaults);
+      const result = await upsertUserSettings(useAllVaults);
+      console.log("Configuração salva com sucesso:", result);
       updateSettings({ useAllVaultsForLinks: useAllVaults });
     } catch (error) {
       console.error("Erro ao salvar configuração:", error);
+      // Mostrar erro mais específico
+      if (error instanceof Error) {
+        alert(`Erro ao salvar configuração: ${error.message}`);
+      } else {
+        alert("Erro desconhecido ao salvar configuração");
+      }
     } finally {
       setSaving(false);
     }

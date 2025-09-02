@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, memo, useMemo } from "react";
 import {
   ColumnDef,
   flexRender,
@@ -22,13 +22,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
 
-interface DataTableProps<TData, TValue> {
+interface DataTableProps<TData, TValue = unknown> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   isLoading?: boolean;
 }
 
-export function DataTable<TData, TValue>({
+export function DataTable<TData, TValue = unknown>({
   columns,
   data,
   isLoading = false,
@@ -36,25 +36,31 @@ export function DataTable<TData, TValue>({
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
 
-  const table = useReactTable({
-    data,
-    columns,
-    getCoreRowModel: getCoreRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    onColumnFiltersChange: setColumnFilters,
-    onGlobalFilterChange: setGlobalFilter,
-    globalFilterFn: "includesString",
-    state: {
-      columnFilters,
-      globalFilter,
-    },
-    initialState: {
-      pagination: {
-        pageSize: 40, // 40 resultados por página
+  // Memoizar a configuração da tabela para evitar recriações desnecessárias
+  const tableConfig = useMemo(
+    () => ({
+      data,
+      columns,
+      getCoreRowModel: getCoreRowModel(),
+      getPaginationRowModel: getPaginationRowModel(),
+      getFilteredRowModel: getFilteredRowModel(),
+      onColumnFiltersChange: setColumnFilters,
+      onGlobalFilterChange: setGlobalFilter,
+      globalFilterFn: "includesString" as const,
+      state: {
+        columnFilters,
+        globalFilter,
       },
-    },
-  });
+      initialState: {
+        pagination: {
+          pageSize: 40, // 40 resultados por página
+        },
+      },
+    }),
+    [data, columns, columnFilters, globalFilter]
+  );
+
+  const table = useReactTable(tableConfig);
 
   // Mostrar loading spinner quando isLoading for true
   if (isLoading) {

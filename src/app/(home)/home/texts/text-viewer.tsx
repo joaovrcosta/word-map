@@ -539,9 +539,11 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
               placeholder="Título do texto"
             />
           ) : (
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-              {text.title}
-            </h1>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                {text.title}
+              </h1>
+            </div>
           )}
         </div>
 
@@ -585,8 +587,8 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
       </div>
 
       {/* Estatísticas */}
-      <div className="grid grid-cols-1 md:grgid-cols-3 gap-3">
-        <Card className="p-3">
+      <div className="flex gap-3">
+        <Card className="p-3 flex-1">
           <div className="text-center">
             <div className="text-2xl font-bold text-gray-900 dark:text-white">
               {editContent.split(" ").length}
@@ -597,7 +599,7 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
           </div>
         </Card>
 
-        <Card className="p-3">
+        <Card className="p-3 flex-1">
           <div className="text-center">
             <div className="text-2xl font-bold text-green-600">
               {foundWords.length}
@@ -608,7 +610,7 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
           </div>
         </Card>
 
-        <Card className="p-3">
+        <Card className="p-3 flex-1">
           <div className="text-center">
             <div className="text-2xl font-bold text-blue-600">
               {

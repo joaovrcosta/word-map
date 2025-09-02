@@ -441,7 +441,7 @@ function HomePageContent() {
         </div>
         <div className="p-6">
           {currentWords.length > 0 ? (
-            <DataTable
+            <DataTable<Word>
               columns={columns}
               data={currentWords}
               isLoading={isTableUpdating}

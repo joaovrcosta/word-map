@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, memo, useCallback } from "react";
 import { Word } from "@/actions/actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,7 +13,7 @@ interface EditableTranslationsCellProps {
   word: Word;
 }
 
-export function EditableTranslationsCell({
+export const EditableTranslationsCell = memo(function EditableTranslationsCell({
   word,
 }: EditableTranslationsCellProps) {
   const [isEditing, setIsEditing] = useState(false);
@@ -25,17 +25,17 @@ export function EditableTranslationsCell({
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
-  const handleEdit = () => {
+  const handleEdit = useCallback(() => {
     setIsEditing(true);
     setTranslations(word.translations.join(", "));
-  };
+  }, [word.translations]);
 
-  const handleCancel = () => {
+  const handleCancel = useCallback(() => {
     setIsEditing(false);
     setTranslations(word.translations.join(", "));
-  };
+  }, [word.translations]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (translations.trim() === "") {
       toast({
         title: "Erro",
@@ -59,6 +59,13 @@ export function EditableTranslationsCell({
       return;
     }
 
+    // Verificar se realmente houve mudança
+    const currentTranslations = word.translations.join(", ");
+    if (translations === currentTranslations) {
+      setIsEditing(false);
+      return;
+    }
+
     setIsLoading(true);
     try {
       await updateWordMutation.mutateAsync({
@@ -71,8 +78,6 @@ export function EditableTranslationsCell({
         description: `"${word.name}" foi atualizada com sucesso`,
       });
 
-      // Invalidar cache para atualizar a tabela
-      queryClient.invalidateQueries({ queryKey: ["vaults"] });
       setIsEditing(false);
     } catch (error) {
       console.error("Erro ao atualizar traduções:", error);
@@ -87,15 +92,29 @@ export function EditableTranslationsCell({
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [
+    translations,
+    word.translations,
+    word.id,
+    word.name,
+    updateWordMutation,
+    toast,
+  ]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter") {
-      handleSave();
-    } else if (e.key === "Escape") {
-      handleCancel();
-    }
-  };
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter") {
+        handleSave();
+      } else if (e.key === "Escape") {
+        handleCancel();
+      }
+    },
+    [handleSave, handleCancel]
+  );
+
+  const cleanTranslations = word.translations.map((t) =>
+    t.replace(/;/g, "").trim()
+  );
 
   if (isEditing) {
     return (
@@ -141,10 +160,17 @@ export function EditableTranslationsCell({
   return (
     <div className="flex items-center gap-2 group">
       <div className="flex-1 min-w-0">
-        <p className="font-medium">{word.name}</p>
-        <p className="text-sm text-gray-500 truncate max-w-xs">
-          {word.translations.join(", ")}
-        </p>
+        <p className="font-medium text-[18px]">{word.name}</p>
+        <div className="flex flex-wrap gap-1 max-w-[600px] mt-2">
+          {cleanTranslations.map((translation, index) => (
+            <span
+              key={index}
+              className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 border border-gray-200 lowercase"
+            >
+              {translation}
+            </span>
+          ))}
+        </div>
       </div>
       <Button
         size="sm"
@@ -158,4 +184,4 @@ export function EditableTranslationsCell({
       </Button>
     </div>
   );
-}
+});

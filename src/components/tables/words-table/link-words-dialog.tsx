@@ -61,7 +61,7 @@ export function LinkWordsDialog({
   const fetchLinkableWords = async () => {
     try {
       // Buscar configurações do usuário
-      const userSettings = await getUserSettings(1); // TODO: Usar userId real da autenticação
+      const userSettings = await getUserSettings();
       const useAllVaults = userSettings?.useAllVaultsForLinks || false;
 
       // Passar o vaultId atual e a configuração para filtrar palavras
