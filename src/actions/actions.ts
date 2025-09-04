@@ -25,6 +25,7 @@ export interface Word {
   isSaved: boolean;
   frequency: number; // Contador de frequência
   vaultId: number; // ID do vault onde a palavra está
+  createdAt: Date; // Data de criação da palavra
 }
 
 export interface CreateWordData {
@@ -314,6 +315,7 @@ export async function createWord(data: CreateWordData): Promise<Word> {
       isSaved: newWord.isSaved,
       frequency: newWord.frequency,
       vaultId: newWord.vaultId,
+      createdAt: newWord.createdAt,
     };
   } catch (error) {
     console.error("=== ERRO em createWord ===");
@@ -398,6 +400,7 @@ export async function searchWordInVaults(
         isSaved: word.isSaved,
         frequency: word.frequency,
         vaultId: word.vaultId, // Adicionar vaultId ao resultado
+        createdAt: word.createdAt,
       },
       vault: word.vault,
     }));
@@ -493,6 +496,7 @@ export async function moveWordToVault(
       isSaved: updatedWord.isSaved,
       frequency: updatedWord.frequency,
       vaultId: updatedWord.vaultId, // Adicionar vaultId ao retorno
+      createdAt: updatedWord.createdAt,
     };
   } catch (error) {
     console.error("=== ERRO em moveWordToVault ===");
@@ -536,6 +540,7 @@ export async function unsaveWord(wordId: number): Promise<Word> {
       isSaved: updatedWord.isSaved,
       frequency: updatedWord.frequency,
       vaultId: updatedWord.vaultId, // Adicionar vaultId ao retorno
+      createdAt: updatedWord.createdAt,
     };
   } catch (error) {
     console.error("=== ERRO em unsaveWord ===");
@@ -731,6 +736,7 @@ export async function updateWord(
       isSaved: updatedWord.isSaved,
       frequency: updatedWord.frequency,
       vaultId: updatedWord.vaultId,
+      createdAt: updatedWord.createdAt,
     };
   } catch (error) {
     console.error("=== ERRO em updateWord ===");
@@ -878,6 +884,7 @@ export async function getRelatedWords(wordId: number): Promise<Word[]> {
             isSaved: true,
             frequency: true,
             vaultId: true,
+            createdAt: true,
           },
         },
         Word_B: {
@@ -891,6 +898,7 @@ export async function getRelatedWords(wordId: number): Promise<Word[]> {
             isSaved: true,
             frequency: true,
             vaultId: true,
+            createdAt: true,
           },
         },
       },
@@ -987,6 +995,7 @@ export async function getLinkableWords(
         isSaved: true,
         frequency: true,
         vaultId: true,
+        createdAt: true,
       },
       orderBy: { name: "asc" },
     });
@@ -1039,6 +1048,7 @@ export async function getAllWordRelations(): Promise<
             isSaved: true,
             frequency: true,
             vaultId: true,
+            createdAt: true,
           },
         },
         Word_B: {
@@ -1052,6 +1062,7 @@ export async function getAllWordRelations(): Promise<
             isSaved: true,
             frequency: true,
             vaultId: true,
+            createdAt: true,
           },
         },
       },
@@ -1364,6 +1375,7 @@ export async function checkTextWords(
             isSaved: true,
             frequency: true,
             vaultId: true,
+            createdAt: true,
           },
         },
       },
@@ -1523,6 +1535,7 @@ export async function exportVaultWords(vaultId: number): Promise<string> {
             translations: true,
             confidence: true,
             isSaved: true,
+            frequency: true,
             createdAt: true,
             updatedAt: true,
           },
@@ -1658,6 +1671,7 @@ export async function importWordsToVault(
             translations: translations,
             confidence: wordData.confidence || 1,
             isSaved: wordData.isSaved || false,
+            frequency: wordData.frequency || 0,
             vaultId: vaultId,
           },
         });
@@ -1739,6 +1753,7 @@ export async function incrementWordFrequency(wordId: number): Promise<Word> {
       isSaved: updatedWord.isSaved,
       frequency: updatedWord.frequency,
       vaultId: updatedWord.vaultId,
+      createdAt: updatedWord.createdAt,
     };
   } catch (error) {
     console.error("=== ERRO em incrementWordFrequency ===");

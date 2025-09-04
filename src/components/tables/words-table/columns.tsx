@@ -399,6 +399,13 @@ export const columns: ColumnDef<Word>[] = [
     },
   },
   {
+    accessorKey: "relatedWords",
+    header: "Palavras Relacionadas",
+    cell: ({ row }) => {
+      return <RelatedWordsCell word={row.original} />;
+    },
+  },
+  {
     accessorKey: "category",
     header: "Categoria",
     cell: ({ row }) => {
@@ -499,18 +506,32 @@ export const columns: ColumnDef<Word>[] = [
       );
     },
   },
-  {
-    accessorKey: "relatedWords",
-    header: "Palavras Relacionadas",
-    cell: ({ row }) => {
-      return <RelatedWordsCell word={row.original} />;
-    },
-  },
+
   {
     accessorKey: "frequency",
     header: "Frequência",
     cell: ({ row }) => {
       return <FrequencyCell word={row.original} />;
+    },
+  },
+  {
+    accessorKey: "createdAt",
+    header: "Data de Criação",
+    cell: ({ row }) => {
+      const createdAt = row.getValue("createdAt") as Date;
+      const formattedDate = new Date(createdAt).toLocaleDateString("pt-BR", {
+        day: "2-digit",
+        month: "2-digit",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+
+      return (
+        <div className="text-sm text-gray-600 dark:text-gray-400">
+          {formattedDate}
+        </div>
+      );
     },
   },
 ];

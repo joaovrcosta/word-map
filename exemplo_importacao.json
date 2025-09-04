@@ -10,6 +10,7 @@
       "translations": ["house", "home"],
       "confidence": 2,
       "isSaved": false,
+      "frequency": 0,
       "createdAt": "2024-01-15T10:00:00.000Z",
       "updatedAt": "2024-01-15T10:00:00.000Z"
     },
@@ -20,6 +21,7 @@
       "translations": ["run", "race"],
       "confidence": 3,
       "isSaved": true,
+      "frequency": 5,
       "createdAt": "2024-01-15T10:15:00.000Z",
       "updatedAt": "2024-01-15T10:15:00.000Z"
     },
@@ -30,6 +32,7 @@
       "translations": ["beautiful", "pretty", "nice"],
       "confidence": 1,
       "isSaved": false,
+      "frequency": 2,
       "createdAt": "2024-01-15T10:20:00.000Z",
       "updatedAt": "2024-01-15T10:20:00.000Z"
     }
