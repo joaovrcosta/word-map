@@ -21,7 +21,6 @@ import { Vault, Word, SemanticConnection } from "@/actions/actions";
 import { Network, Link, Filter, RefreshCw, Trash2, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import MindMapView from "@/components/MindMapView";
-import { CreateWordConnectionDialog } from "@/components/create-word-connection-dialog";
 import { CreateSemanticConnectionDialog } from "@/components/create-semantic-connection-dialog";
 
 interface ConnectedWord {
@@ -43,7 +42,9 @@ export default function ConnectionsPage() {
     SemanticConnection[]
   >([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<"list" | "semantic">("semantic");
+  const [viewMode, setViewMode] = useState<"list" | "semantic" | "mindmap">(
+    "semantic"
+  );
   const { toast } = useToast();
 
   useEffect(() => {
@@ -158,6 +159,38 @@ export default function ConnectionsPage() {
     return "Fraca";
   };
 
+  // Converter ConnectedWord[] para o formato esperado pelo MindMapView
+  const convertToMindMapConnections = (connectedWords: ConnectedWord[]) => {
+    const connections: any[] = [];
+
+    // Criar conexões baseadas nas palavras relacionadas
+    connectedWords.forEach((word, index) => {
+      if (index < connectedWords.length - 1) {
+        const nextWord = connectedWords[index + 1];
+        connections.push({
+          wordA: {
+            id: word.id,
+            name: word.name,
+            grammaticalClass: word.grammaticalClass,
+            translations: word.translations,
+            vaultId: word.vaultId,
+          },
+          wordB: {
+            id: nextWord.id,
+            name: nextWord.name,
+            grammaticalClass: nextWord.grammaticalClass,
+            translations: nextWord.translations,
+            vaultId: nextWord.vaultId,
+          },
+          vaultA: word.vaultName,
+          vaultB: nextWord.vaultName,
+        });
+      }
+    });
+
+    return connections;
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -183,14 +216,6 @@ export default function ConnectionsPage() {
           </p>
         </div>
         <div className="flex gap-2">
-          <CreateWordConnectionDialog
-            vaults={vaults}
-            onConnectionCreated={handleRefresh}
-          />
-          <CreateSemanticConnectionDialog
-            vaults={vaults}
-            onConnectionCreated={handleRefresh}
-          />
           <Button
             onClick={handleRefresh}
             variant="outline"
@@ -248,6 +273,14 @@ export default function ConnectionsPage() {
                 >
                   Lista
                 </Button>
+                <Button
+                  variant={viewMode === "mindmap" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("mindmap")}
+                  className="rounded-l-none"
+                >
+                  Mapa Mental
+                </Button>
               </div>
             </div>
           </div>
@@ -294,10 +327,16 @@ export default function ConnectionsPage() {
       {viewMode === "semantic" && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Link className="w-5 h-5 text-blue-600" />
-              Conexões Semânticas
-            </CardTitle>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Link className="w-5 h-5 text-blue-600" />
+                Conexões Semânticas
+              </CardTitle>
+              <CreateSemanticConnectionDialog
+                vaults={vaults}
+                onConnectionCreated={handleRefresh}
+              />
+            </div>
           </CardHeader>
           <CardContent>
             {semanticConnections.length === 0 ? (
@@ -310,10 +349,10 @@ export default function ConnectionsPage() {
                   Crie conexões semânticas entre suas palavras para explicar
                   suas relações
                 </p>
-                <CreateSemanticConnectionDialog
+                {/* <CreateSemanticConnectionDialog
                   vaults={vaults}
                   onConnectionCreated={handleRefresh}
-                />
+                /> */}
               </div>
             ) : (
               <div className="space-y-4">
@@ -512,6 +551,38 @@ export default function ConnectionsPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Visualização de Mapa Mental */}
+      {viewMode === "mindmap" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Filter className="w-5 h-5 text-green-600" />
+              Mapa Mental das Conexões
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {connectedWords.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Filter className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <p className="text-lg font-medium mb-2">
+                  Nenhuma conexão para mapear
+                </p>
+                <p className="text-sm">
+                  Conecte palavras para visualizar o mapa mental
+                </p>
+              </div>
+            ) : (
+              <div className="relative min-h-[600px] overflow-auto">
+                <MindMapView
+                  connections={convertToMindMapConnections(connectedWords)}
+                  selectedVault={selectedVault}
+                />
               </div>
             )}
           </CardContent>
