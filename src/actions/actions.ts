@@ -1765,3 +1765,326 @@ export async function incrementWordFrequency(wordId: number): Promise<Word> {
     );
   }
 }
+
+// Interfaces para conexões semânticas com múltiplas palavras
+export interface SemanticConnection {
+  id: number;
+  title: string;
+  description: string;
+  connectionType:
+    | "semantic"
+    | "grammatical"
+    | "contextual"
+    | "opposite"
+    | "similar";
+  createdAt: Date;
+  updatedAt: Date;
+  userId: number;
+  words: SemanticConnectionWord[];
+}
+
+export interface SemanticConnectionWord {
+  id: number;
+  connectionId: number;
+  wordId: number;
+  order: number;
+  title?: string; // Título específico da palavra na conexão (opcional)
+  description?: string; // Descrição específica da palavra na conexão (opcional)
+  createdAt: Date;
+  word: Word;
+}
+
+export interface CreateSemanticConnectionData {
+  title: string;
+  description: string;
+  connectionType:
+    | "semantic"
+    | "grammatical"
+    | "contextual"
+    | "opposite"
+    | "similar";
+  words: {
+    wordId: number;
+    title?: string;
+    description?: string;
+  }[];
+}
+
+// Criar conexão semântica com múltiplas palavras
+export async function createSemanticConnection(
+  data: CreateSemanticConnectionData
+): Promise<SemanticConnection> {
+  console.log("=== INÍCIO createSemanticConnection ===");
+  console.log("Dados recebidos:", data);
+
+  try {
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    // Validar dados
+    if (!data.title.trim()) {
+      throw new Error("Título é obrigatório");
+    }
+
+    if (!data.description.trim()) {
+      throw new Error("Descrição é obrigatória");
+    }
+
+    if (!data.words || data.words.length < 2) {
+      throw new Error(
+        "É necessário pelo menos 2 palavras para criar uma conexão"
+      );
+    }
+
+    // Verificar se todas as palavras existem e pertencem ao usuário
+    const wordIds = data.words.map((w) => w.wordId);
+    const words = await prisma.word.findMany({
+      where: {
+        id: { in: wordIds },
+        vault: {
+          userId: user.id,
+        },
+      },
+      include: {
+        vault: true,
+      },
+    });
+
+    if (words.length !== wordIds.length) {
+      throw new Error(
+        "Uma ou mais palavras não foram encontradas ou não pertencem ao usuário"
+      );
+    }
+
+    // Verificar se já existe uma conexão com o mesmo título
+    const existingConnection = await prisma.semanticConnection.findFirst({
+      where: {
+        title: data.title,
+        userId: user.id,
+      },
+    });
+
+    if (existingConnection) {
+      throw new Error("Já existe uma conexão semântica com este título");
+    }
+
+    // Criar a conexão semântica
+    const connection = await prisma.semanticConnection.create({
+      data: {
+        title: data.title,
+        description: data.description,
+        connectionType: data.connectionType,
+        userId: user.id,
+      },
+    });
+
+    // Adicionar as palavras à conexão com seus títulos e descrições
+    const connectionWords = await Promise.all(
+      data.words.map((wordData, index) =>
+        prisma.semanticConnectionWord.create({
+          data: {
+            connectionId: connection.id,
+            wordId: wordData.wordId,
+            order: index,
+            title: wordData.title || null,
+            description: wordData.description || null,
+          },
+          include: {
+            word: {
+              include: {
+                vault: true,
+              },
+            },
+          },
+        })
+      )
+    );
+
+    // Revalidar cache
+    revalidatePath("/home/connections");
+
+    console.log("Conexão semântica criada com sucesso:", connection.id);
+    console.log("=== FIM createSemanticConnection - SUCESSO ===");
+
+    return {
+      id: connection.id,
+      title: connection.title,
+      description: connection.description,
+      connectionType: connection.connectionType as
+        | "semantic"
+        | "grammatical"
+        | "contextual"
+        | "opposite"
+        | "similar",
+      createdAt: connection.createdAt,
+      updatedAt: connection.updatedAt,
+      userId: connection.userId,
+      words: connectionWords.map((cw) => ({
+        id: cw.id,
+        connectionId: cw.connectionId,
+        wordId: cw.wordId,
+        order: cw.order,
+        title: cw.title || undefined,
+        description: cw.description || undefined,
+        createdAt: cw.createdAt,
+        word: {
+          id: cw.word.id,
+          name: cw.word.name,
+          grammaticalClass: cw.word.grammaticalClass,
+          category: cw.word.category,
+          translations: cw.word.translations,
+          confidence: cw.word.confidence,
+          isSaved: cw.word.isSaved,
+          frequency: cw.word.frequency,
+          vaultId: cw.word.vaultId,
+          createdAt: cw.word.createdAt,
+          updatedAt: cw.word.updatedAt,
+          vault: {
+            id: cw.word.vault.id,
+            name: cw.word.vault.name,
+            createdAt: cw.word.vault.createdAt,
+            updatedAt: cw.word.vault.updatedAt,
+            userId: cw.word.vault.userId,
+          },
+        },
+      })),
+    };
+  } catch (error) {
+    console.error("Erro ao criar conexão semântica:", error);
+    throw error;
+  }
+}
+
+// Buscar conexões semânticas do usuário
+export async function getSemanticConnections(): Promise<SemanticConnection[]> {
+  console.log("=== INÍCIO getSemanticConnections ===");
+
+  try {
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    // Buscar conexões semânticas
+    const connections = await prisma.semanticConnection.findMany({
+      where: {
+        userId: user.id,
+      },
+      include: {
+        words: {
+          include: {
+            word: {
+              include: {
+                vault: true,
+              },
+            },
+          },
+          orderBy: {
+            order: "asc",
+          },
+        },
+      },
+      orderBy: {
+        createdAt: "desc",
+      },
+    });
+
+    console.log(`Encontradas ${connections.length} conexões semânticas`);
+
+    console.log("=== FIM getSemanticConnections - SUCESSO ===");
+    return connections.map((connection) => ({
+      id: connection.id,
+      title: connection.title,
+      description: connection.description,
+      connectionType: connection.connectionType as
+        | "semantic"
+        | "grammatical"
+        | "contextual"
+        | "opposite"
+        | "similar",
+      createdAt: connection.createdAt,
+      updatedAt: connection.updatedAt,
+      userId: connection.userId,
+      words: connection.words.map((cw) => ({
+        id: cw.id,
+        connectionId: cw.connectionId,
+        wordId: cw.wordId,
+        order: cw.order,
+        title: cw.title || undefined,
+        description: cw.description || undefined,
+        createdAt: cw.createdAt,
+        word: {
+          id: cw.word.id,
+          name: cw.word.name,
+          grammaticalClass: cw.word.grammaticalClass,
+          category: cw.word.category,
+          translations: cw.word.translations,
+          confidence: cw.word.confidence,
+          isSaved: cw.word.isSaved,
+          frequency: cw.word.frequency,
+          vaultId: cw.word.vaultId,
+          createdAt: cw.word.createdAt,
+          updatedAt: cw.word.updatedAt,
+          vault: {
+            id: cw.word.vault.id,
+            name: cw.word.vault.name,
+            createdAt: cw.word.vault.createdAt,
+            updatedAt: cw.word.vault.updatedAt,
+            userId: cw.word.vault.userId,
+          },
+        },
+      })),
+    }));
+  } catch (error) {
+    console.error("Erro ao buscar conexões semânticas:", error);
+    throw error;
+  }
+}
+
+// Deletar conexão semântica
+export async function deleteSemanticConnection(
+  connectionId: number
+): Promise<void> {
+  console.log("=== INÍCIO deleteSemanticConnection ===");
+  console.log("ID da conexão:", connectionId);
+
+  try {
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    // Verificar se a conexão existe e pertence ao usuário
+    const connection = await prisma.semanticConnection.findFirst({
+      where: {
+        id: connectionId,
+        userId: user.id,
+      },
+    });
+
+    if (!connection) {
+      throw new Error("Conexão não encontrada ou não pertence ao usuário");
+    }
+
+    // Deletar a conexão (as palavras serão deletadas automaticamente devido ao onDelete: Cascade)
+    await prisma.semanticConnection.delete({
+      where: {
+        id: connectionId,
+      },
+    });
+
+    // Revalidar cache
+    revalidatePath("/home/connections");
+
+    console.log("Conexão semântica deletada com sucesso");
+    console.log("=== FIM deleteSemanticConnection - SUCESSO ===");
+  } catch (error) {
+    console.error("Erro ao deletar conexão semântica:", error);
+    throw error;
+  }
+}

@@ -11,11 +11,18 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { getVaults, getAllWordRelations } from "@/actions/actions";
-import { Vault, Word } from "@/actions/actions";
-import { Network, Link, Filter, RefreshCw } from "lucide-react";
+import {
+  getVaults,
+  getAllWordRelations,
+  getSemanticConnections,
+  deleteSemanticConnection,
+} from "@/actions/actions";
+import { Vault, Word, SemanticConnection } from "@/actions/actions";
+import { Network, Link, Filter, RefreshCw, Trash2, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import MindMapView from "@/components/MindMapView";
+import { CreateWordConnectionDialog } from "@/components/create-word-connection-dialog";
+import { CreateSemanticConnectionDialog } from "@/components/create-semantic-connection-dialog";
 
 interface ConnectedWord {
   id: number;
@@ -28,22 +35,15 @@ interface ConnectedWord {
   connections: number;
 }
 
-interface WordConnection {
-  wordA: Word;
-  wordB: Word;
-  vaultA: string;
-  vaultB: string;
-}
-
 export default function ConnectionsPage() {
   const [vaults, setVaults] = useState<Vault[]>([]);
   const [selectedVault, setSelectedVault] = useState<string>("all");
   const [connectedWords, setConnectedWords] = useState<ConnectedWord[]>([]);
-  const [wordConnections, setWordConnections] = useState<WordConnection[]>([]);
+  const [semanticConnections, setSemanticConnections] = useState<
+    SemanticConnection[]
+  >([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<"list" | "network" | "mindmap">(
-    "list"
-  );
+  const [viewMode, setViewMode] = useState<"list" | "semantic">("semantic");
   const { toast } = useToast();
 
   useEffect(() => {
@@ -53,16 +53,17 @@ export default function ConnectionsPage() {
   const loadData = async () => {
     try {
       setIsLoading(true);
-      const [vaultsData, relatedWordsData] = await Promise.all([
-        getVaults(),
-        getAllWordRelations(),
-      ]);
+      const [vaultsData, relatedWordsData, semanticConnectionsData] =
+        await Promise.all([
+          getVaults(),
+          getAllWordRelations(),
+          getSemanticConnections(),
+        ]);
 
       setVaults(vaultsData);
 
       // Processar palavras conectadas
       const connectedWordsMap = new Map<number, ConnectedWord>();
-      const connectionsMap = new Map<string, WordConnection>();
 
       // Processar relacionamentos
       relatedWordsData.forEach((relation) => {
@@ -93,22 +94,6 @@ export default function ConnectionsPage() {
         const wordBEntry = connectedWordsMap.get(wordB.id)!;
         wordAEntry.connections++;
         wordBEntry.connections++;
-
-        // Adicionar conexão
-        const connectionKey = `${Math.min(wordA.id, wordB.id)}-${Math.max(
-          wordA.id,
-          wordB.id
-        )}`;
-        if (!connectionsMap.has(connectionKey)) {
-          const vaultA = vaultsData.find((v) => v.id === wordA.vaultId);
-          const vaultB = vaultsData.find((v) => v.id === wordB.vaultId);
-          connectionsMap.set(connectionKey, {
-            wordA,
-            wordB,
-            vaultA: vaultA?.name || "Vault não encontrado",
-            vaultB: vaultB?.name || "Vault não encontrado",
-          });
-        }
       });
 
       // Filtrar por vault selecionado
@@ -124,7 +109,7 @@ export default function ConnectionsPage() {
       filteredWords.sort((a, b) => b.connections - a.connections);
 
       setConnectedWords(filteredWords);
-      setWordConnections(Array.from(connectionsMap.values()));
+      setSemanticConnections(semanticConnectionsData);
     } catch (error) {
       console.error("Erro ao carregar dados:", error);
       toast({
@@ -139,6 +124,24 @@ export default function ConnectionsPage() {
 
   const handleRefresh = () => {
     loadData();
+  };
+
+  const handleDeleteSemanticConnection = async (connectionId: number) => {
+    try {
+      await deleteSemanticConnection(connectionId);
+      toast({
+        title: "Conexão deletada",
+        description: "A conexão semântica foi removida",
+      });
+      loadData();
+    } catch (error) {
+      console.error("Erro ao deletar conexão semântica:", error);
+      toast({
+        title: "Erro",
+        description: "Não foi possível deletar a conexão semântica",
+        variant: "destructive",
+      });
+    }
   };
 
   const getConnectionStrength = (connections: number) => {
@@ -179,14 +182,24 @@ export default function ConnectionsPage() {
             Visualize como as palavras estão conectadas entre si nos seus vaults
           </p>
         </div>
-        <Button
-          onClick={handleRefresh}
-          variant="outline"
-          className="flex items-center gap-2"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Atualizar
-        </Button>
+        <div className="flex gap-2">
+          <CreateWordConnectionDialog
+            vaults={vaults}
+            onConnectionCreated={handleRefresh}
+          />
+          <CreateSemanticConnectionDialog
+            vaults={vaults}
+            onConnectionCreated={handleRefresh}
+          />
+          <Button
+            onClick={handleRefresh}
+            variant="outline"
+            className="flex items-center gap-2"
+          >
+            <RefreshCw className="w-4 h-4" />
+            Atualizar
+          </Button>
+        </div>
       </div>
 
       {/* Filtros e Controles */}
@@ -220,28 +233,20 @@ export default function ConnectionsPage() {
               <label className="text-sm font-medium">Visualização:</label>
               <div className="flex border rounded-lg">
                 <Button
+                  variant={viewMode === "semantic" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("semantic")}
+                  className="rounded-r-none"
+                >
+                  Semânticas
+                </Button>
+                <Button
                   variant={viewMode === "list" ? "default" : "ghost"}
                   size="sm"
                   onClick={() => setViewMode("list")}
-                  className="rounded-r-none"
-                >
-                  Lista
-                </Button>
-                <Button
-                  variant={viewMode === "network" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("network")}
                   className="rounded-l-none rounded-r-none"
                 >
-                  Rede
-                </Button>
-                <Button
-                  variant={viewMode === "mindmap" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("mindmap")}
-                  className="rounded-l-none"
-                >
-                  Mapa Mental
+                  Lista
                 </Button>
               </div>
             </div>
@@ -256,9 +261,9 @@ export default function ConnectionsPage() {
             </div>
             <div className="text-center p-4 bg-green-50 rounded-lg">
               <div className="text-2xl font-bold text-green-600">
-                {wordConnections.length}
+                {semanticConnections.length}
               </div>
-              <div className="text-sm text-green-600">Conexões</div>
+              <div className="text-sm text-green-600">Conexões Semânticas</div>
             </div>
             <div className="text-center p-4 bg-purple-50 rounded-lg">
               <div className="text-2xl font-bold text-purple-600">
@@ -284,6 +289,151 @@ export default function ConnectionsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Visualização de Conexões Semânticas */}
+      {viewMode === "semantic" && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Link className="w-5 h-5 text-blue-600" />
+              Conexões Semânticas
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {semanticConnections.length === 0 ? (
+              <div className="text-center py-8 text-gray-500">
+                <Network className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+                <p className="text-lg font-medium mb-2">
+                  Nenhuma conexão semântica encontrada
+                </p>
+                <p className="text-sm mb-4">
+                  Crie conexões semânticas entre suas palavras para explicar
+                  suas relações
+                </p>
+                <CreateSemanticConnectionDialog
+                  vaults={vaults}
+                  onConnectionCreated={handleRefresh}
+                />
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {semanticConnections.map((connection) => (
+                  <div
+                    key={connection.id}
+                    className="border rounded-lg p-6 bg-gradient-to-r from-blue-50 to-purple-50 hover:shadow-md transition-shadow"
+                  >
+                    <div className="mb-4">
+                      <div className="flex items-center justify-center mb-3">
+                        <div className="flex items-center justify-center w-full">
+                          {connection.words.map((wordItem, index) => (
+                            <div
+                              key={wordItem.id}
+                              className="flex items-center"
+                            >
+                              <div className="text-center">
+                                <Badge
+                                  variant="outline"
+                                  className="text-lg px-4 py-2"
+                                >
+                                  {wordItem.word.name}
+                                </Badge>
+                                <div className="text-sm text-gray-600 mt-1">
+                                  {wordItem.word.grammaticalClass}
+                                </div>
+                              </div>
+                              {index < connection.words.length - 1 && (
+                                <div className="flex flex-col items-center mx-2">
+                                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
+                                    <Link className="w-4 h-4 text-blue-600" />
+                                  </div>
+                                  <Badge
+                                    variant="secondary"
+                                    className="mt-2 text-xs"
+                                  >
+                                    {connection.connectionType === "semantic" &&
+                                      "Semântica"}
+                                    {connection.connectionType ===
+                                      "grammatical" && "Gramatical"}
+                                    {connection.connectionType ===
+                                      "contextual" && "Contextual"}
+                                    {connection.connectionType === "opposite" &&
+                                      "Opostos"}
+                                    {connection.connectionType === "similar" &&
+                                      "Similares"}
+                                  </Badge>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Exibir títulos e descrições das palavras */}
+                      <div className="space-y-2">
+                        {connection.words.map((wordItem) => (
+                          <div
+                            key={wordItem.id}
+                            className="bg-white p-3 rounded-lg border"
+                          >
+                            <div className="font-medium text-gray-900 mb-1">
+                              {wordItem.word.name}
+                              {wordItem.title && (
+                                <span className="text-blue-600 ml-2 text-sm">
+                                  - {wordItem.title}
+                                </span>
+                              )}
+                            </div>
+                            {wordItem.description && (
+                              <div className="text-sm text-gray-600">
+                                {wordItem.description}
+                              </div>
+                            )}
+                            <div className="text-xs text-gray-500 mt-1">
+                              {wordItem.word.grammaticalClass} •{" "}
+                              {wordItem.word.translations[0] || "Sem tradução"}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          handleDeleteSemanticConnection(connection.id)
+                        }
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+
+                    <div className="bg-white rounded-lg p-4 border">
+                      <div className="text-sm font-medium text-gray-700 mb-2">
+                        {connection.title}
+                      </div>
+                      <p className="text-gray-800 leading-relaxed">
+                        {connection.description}
+                      </p>
+                    </div>
+
+                    <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
+                      <div>
+                        Criado em{" "}
+                        {new Date(connection.createdAt).toLocaleDateString(
+                          "pt-BR"
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Visualização de Lista */}
       {viewMode === "list" && (
@@ -362,123 +512,6 @@ export default function ConnectionsPage() {
                     </div>
                   </div>
                 ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Visualização de Rede */}
-      {viewMode === "network" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Network className="w-5 h-5 text-purple-600" />
-              Rede de Conexões
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {wordConnections.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Network className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <p className="text-lg font-medium mb-2">
-                  Nenhuma conexão encontrada
-                </p>
-                <p className="text-sm">
-                  Conecte palavras nos seus vaults para visualizar a rede
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {wordConnections.map((connection, index) => (
-                  <div
-                    key={index}
-                    className="border rounded-lg p-4 bg-gradient-to-r from-blue-50 to-purple-50"
-                  >
-                    <div className="flex items-center justify-center mb-3">
-                      <div className="text-center">
-                        <div className="text-sm text-gray-500 mb-1">
-                          Conexão
-                        </div>
-                        <Link className="w-6 h-6 text-blue-600 mx-auto" />
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {/* Palavra A */}
-                      <div className="text-center p-3 bg-white rounded-lg border">
-                        <Badge variant="outline" className="text-lg mb-2">
-                          {connection.wordA.name}
-                        </Badge>
-                        <div className="text-sm text-gray-600 mb-1">
-                          {connection.wordA.grammaticalClass}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {connection.vaultA}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          Nível {connection.wordA.confidence}
-                        </div>
-                      </div>
-
-                      {/* Palavra B */}
-                      <div className="text-center p-3 bg-white rounded-lg border">
-                        <Badge variant="outline" className="text-lg mb-2">
-                          {connection.wordB.name}
-                        </Badge>
-                        <div className="text-sm text-gray-600 mb-1">
-                          {connection.wordB.grammaticalClass}
-                        </div>
-                        <div className="text-xs text-gray-500">
-                          {connection.vaultB}
-                        </div>
-                        <div className="text-xs text-gray-400">
-                          Nível {connection.wordB.confidence}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="mt-3 text-center">
-                      <div className="text-xs text-gray-500">
-                        Relacionadas via:{" "}
-                        {connection.wordA.translations[0] || "Sem tradução"} ↔{" "}
-                        {connection.wordB.translations[0] || "Sem tradução"}
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Visualização de Mapa Mental */}
-      {viewMode === "mindmap" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Network className="w-5 h-5 text-purple-600" />
-              Mapa Mental das Conexões
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {wordConnections.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Network className="w-16 h-16 mx-auto mb-4 text-gray-300" />
-                <p className="text-lg font-medium mb-2">
-                  Nenhuma conexão encontrada
-                </p>
-                <p className="text-sm">
-                  Conecte palavras nos seus vaults para visualizar o mapa mental
-                </p>
-              </div>
-            ) : (
-              <div className="relative min-h-[600px] overflow-auto">
-                <MindMapView
-                  connections={wordConnections}
-                  selectedVault={selectedVault}
-                />
               </div>
             )}
           </CardContent>

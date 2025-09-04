@@ -20,6 +20,7 @@ model User {
   wordHistory      WordHistory[]
   texts            Text[]
   settings         UserSettings?
+  semanticConnections SemanticConnection[]
 }
 
 model UserSettings {
@@ -51,6 +52,7 @@ model Word {
   lastPractice     DateTime?
   confidence       Int           @default(1)
   isSaved          Boolean       @default(false)
+  frequency        Int           @default(0)
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
   vaultId          Int
@@ -58,6 +60,7 @@ model Word {
   wordHistory      WordHistory[]
   Word_A           Word[]        @relation("RelatedWords")
   Word_B           Word[]        @relation("RelatedWords")
+  semanticConnections SemanticConnectionWord[]
 }
 
 model WordHistory {
@@ -77,4 +80,30 @@ model Text {
   updatedAt DateTime @updatedAt
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
+}
+
+model SemanticConnection {
+  id          Int      @id @default(autoincrement())
+  title       String   // Título da conexão semântica
+  description String   @db.Text
+  connectionType String // "semantic", "grammatical", "contextual", "opposite", "similar"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  userId      Int
+  user        User     @relation(fields: [userId], references: [id])
+  words       SemanticConnectionWord[]
+}
+
+model SemanticConnectionWord {
+  id          Int      @id @default(autoincrement())
+  connectionId Int
+  wordId      Int
+  order       Int      // Ordem das palavras na conexão
+  title       String?  // Título específico da palavra na conexão (opcional)
+  description String?  // Descrição específica da palavra na conexão (opcional)
+  createdAt   DateTime @default(now())
+  connection  SemanticConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  word        Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  
+  @@unique([connectionId, wordId])
 }
