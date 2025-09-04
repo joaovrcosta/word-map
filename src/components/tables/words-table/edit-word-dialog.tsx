@@ -18,14 +18,98 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Edit2, Plus, X } from "lucide-react";
+import { Edit2, Plus, X, GripVertical } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface EditWordDialogProps {
   word: Word;
   onWordUpdated: () => void;
   onTableUpdating?: (isUpdating: boolean) => void;
+}
+
+interface SortableTranslationItemProps {
+  id: string;
+  translation: string;
+  index: number;
+  onUpdate: (index: number, value: string) => void;
+  onRemove: (index: number) => void;
+  canRemove: boolean;
+}
+
+function SortableTranslationItem({
+  id,
+  translation,
+  index,
+  onUpdate,
+  onRemove,
+  canRemove,
+}: SortableTranslationItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={`flex gap-2 ${isDragging ? "opacity-50" : ""}`}
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="flex items-center justify-center w-8 h-10 cursor-grab hover:bg-gray-100 rounded transition-colors"
+        title="Arrastar para reordenar"
+      >
+        <GripVertical className="h-4 w-4 text-gray-400" />
+      </div>
+      <Input
+        value={translation}
+        onChange={(e) => onUpdate(index, e.target.value)}
+        placeholder={`Tradução ${index + 1}`}
+        required
+        className="flex-1"
+      />
+      {canRemove && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-10 w-10 p-0 text-red-500 hover:text-red-700"
+          onClick={() => onRemove(index)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
+      )}
+    </div>
+  );
 }
 
 export function EditWordDialog({
@@ -47,6 +131,41 @@ export function EditWordDialog({
   );
   const { toast } = useToast();
   const queryClient = useQueryClient();
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (over && active.id !== over.id) {
+      const oldIndex = formData.translations.findIndex(
+        (_, index) => `translation-${index}` === active.id
+      );
+      const newIndex = formData.translations.findIndex(
+        (_, index) => `translation-${index}` === over.id
+      );
+
+      if (oldIndex !== -1 && newIndex !== -1) {
+        const newTranslations = arrayMove(
+          formData.translations,
+          oldIndex,
+          newIndex
+        );
+        const newKeys = arrayMove(translationKeys, oldIndex, newIndex);
+
+        setFormData((prev) => ({
+          ...prev,
+          translations: newTranslations,
+        }));
+        setTranslationKeys(newKeys);
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -192,6 +311,8 @@ export function EditWordDialog({
                 <SelectItem value="interjeição">Interjeição</SelectItem>
                 <SelectItem value="artigo">Artigo</SelectItem>
                 <SelectItem value="numeral">Numeral</SelectItem>
+                <SelectItem value="phrasel-verb">Phrasal Verb</SelectItem>
+                <SelectItem value="slang">Slang</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -220,27 +341,30 @@ export function EditWordDialog({
               Traduções
             </label>
             <div className="space-y-2">
-              {formData.translations.map((translation, index) => (
-                <div key={translationKeys[index]} className="flex gap-2">
-                  <Input
-                    value={translation}
-                    onChange={(e) => updateTranslation(index, e.target.value)}
-                    placeholder={`Tradução ${index + 1}`}
-                    required
-                  />
-                  {formData.translations.length > 1 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="h-10 w-10 p-0 text-red-500 hover:text-red-700"
-                      onClick={() => removeTranslation(index)}
-                    >
-                      <X className="h-4 w-4" />
-                    </Button>
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={formData.translations.map(
+                    (_, index) => `translation-${index}`
                   )}
-                </div>
-              ))}
+                  strategy={verticalListSortingStrategy}
+                >
+                  {formData.translations.map((translation, index) => (
+                    <SortableTranslationItem
+                      key={translationKeys[index]}
+                      id={`translation-${index}`}
+                      translation={translation}
+                      index={index}
+                      onUpdate={updateTranslation}
+                      onRemove={removeTranslation}
+                      canRemove={formData.translations.length > 1}
+                    />
+                  ))}
+                </SortableContext>
+              </DndContext>
               <Button
                 type="button"
                 variant="outline"
