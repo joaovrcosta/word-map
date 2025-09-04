@@ -23,6 +23,7 @@ export interface Word {
   translations: string[];
   confidence: number; // 1-4
   isSaved: boolean;
+  frequency: number; // Contador de frequência
   vaultId: number; // ID do vault onde a palavra está
 }
 
@@ -72,6 +73,7 @@ export async function getVaults(): Promise<Vault[]> {
             translations: true,
             confidence: true,
             isSaved: true,
+            frequency: true,
             vaultId: true,
             createdAt: true,
             updatedAt: true,
@@ -283,6 +285,7 @@ export async function createWord(data: CreateWordData): Promise<Word> {
       vaultId: data.vaultId,
       status: true,
       isSaved: data.isSaved ?? true, // true por padrão se não especificado
+      frequency: 0, // Iniciar com frequência 0
     };
 
     console.log("Dados para criar palavra:", wordData);
@@ -309,6 +312,7 @@ export async function createWord(data: CreateWordData): Promise<Word> {
       translations: newWord.translations,
       confidence: newWord.confidence,
       isSaved: newWord.isSaved,
+      frequency: newWord.frequency,
       vaultId: newWord.vaultId,
     };
   } catch (error) {
@@ -392,6 +396,7 @@ export async function searchWordInVaults(
         translations: word.translations,
         confidence: word.confidence,
         isSaved: word.isSaved,
+        frequency: word.frequency,
         vaultId: word.vaultId, // Adicionar vaultId ao resultado
       },
       vault: word.vault,
@@ -486,6 +491,7 @@ export async function moveWordToVault(
       translations: updatedWord.translations,
       confidence: updatedWord.confidence,
       isSaved: updatedWord.isSaved,
+      frequency: updatedWord.frequency,
       vaultId: updatedWord.vaultId, // Adicionar vaultId ao retorno
     };
   } catch (error) {
@@ -528,6 +534,7 @@ export async function unsaveWord(wordId: number): Promise<Word> {
       translations: updatedWord.translations,
       confidence: updatedWord.confidence,
       isSaved: updatedWord.isSaved,
+      frequency: updatedWord.frequency,
       vaultId: updatedWord.vaultId, // Adicionar vaultId ao retorno
     };
   } catch (error) {
@@ -722,6 +729,7 @@ export async function updateWord(
       translations: updatedWord.translations,
       confidence: updatedWord.confidence,
       isSaved: updatedWord.isSaved,
+      frequency: updatedWord.frequency,
       vaultId: updatedWord.vaultId,
     };
   } catch (error) {
@@ -868,6 +876,7 @@ export async function getRelatedWords(wordId: number): Promise<Word[]> {
             translations: true,
             confidence: true,
             isSaved: true,
+            frequency: true,
             vaultId: true,
           },
         },
@@ -880,6 +889,7 @@ export async function getRelatedWords(wordId: number): Promise<Word[]> {
             translations: true,
             confidence: true,
             isSaved: true,
+            frequency: true,
             vaultId: true,
           },
         },
@@ -975,6 +985,7 @@ export async function getLinkableWords(
         translations: true,
         confidence: true,
         isSaved: true,
+        frequency: true,
         vaultId: true,
       },
       orderBy: { name: "asc" },
@@ -1026,6 +1037,7 @@ export async function getAllWordRelations(): Promise<
             translations: true,
             confidence: true,
             isSaved: true,
+            frequency: true,
             vaultId: true,
           },
         },
@@ -1038,6 +1050,7 @@ export async function getAllWordRelations(): Promise<
             translations: true,
             confidence: true,
             isSaved: true,
+            frequency: true,
             vaultId: true,
           },
         },
@@ -1349,6 +1362,7 @@ export async function checkTextWords(
             translations: true,
             confidence: true,
             isSaved: true,
+            frequency: true,
             vaultId: true,
           },
         },
@@ -1451,6 +1465,7 @@ export async function updateVaultName(
             translations: true,
             confidence: true,
             isSaved: true,
+            frequency: true,
             vaultId: true,
             createdAt: true,
             updatedAt: true,
@@ -1665,5 +1680,73 @@ export async function importWordsToVault(
   } catch (error) {
     console.error("Erro ao importar palavras:", error);
     throw new Error("Erro ao importar palavras");
+  }
+}
+
+// Incrementar frequência de uma palavra
+export async function incrementWordFrequency(wordId: number): Promise<Word> {
+  try {
+    console.log("=== INÍCIO incrementWordFrequency ===");
+    console.log("Incrementando frequência da palavra ID:", wordId);
+
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    // Buscar a palavra e verificar se pertence ao usuário
+    const word = await prisma.word.findFirst({
+      where: {
+        id: wordId,
+        vault: {
+          userId: user.id,
+        },
+      },
+    });
+
+    if (!word) {
+      throw new Error("Palavra não encontrada ou não pertence ao usuário");
+    }
+
+    // Incrementar a frequência
+    const updatedWord = await prisma.word.update({
+      where: { id: wordId },
+      data: {
+        frequency: {
+          increment: 1,
+        },
+      },
+      include: {
+        vault: true,
+      },
+    });
+
+    console.log("Frequência incrementada com sucesso:", updatedWord.frequency);
+    console.log("=== FIM incrementWordFrequency - SUCESSO ===");
+
+    // Revalidar as páginas
+    revalidatePath("/home");
+    revalidatePath("/home/vault");
+
+    return {
+      id: updatedWord.id,
+      name: updatedWord.name,
+      grammaticalClass: updatedWord.grammaticalClass,
+      category: updatedWord.category,
+      translations: updatedWord.translations,
+      confidence: updatedWord.confidence,
+      isSaved: updatedWord.isSaved,
+      frequency: updatedWord.frequency,
+      vaultId: updatedWord.vaultId,
+    };
+  } catch (error) {
+    console.error("=== ERRO em incrementWordFrequency ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao incrementar frequência: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
   }
 }

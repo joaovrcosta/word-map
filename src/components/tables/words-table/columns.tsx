@@ -28,6 +28,7 @@ import { useUpdateWord, useVaults } from "@/hooks/use-words";
 import { useQueryClient } from "@tanstack/react-query";
 import { useQuery } from "@tanstack/react-query";
 import { EditableTranslationsCell } from "./editable-translations-cell";
+import { incrementWordFrequency } from "@/actions/actions";
 
 // Componente para a célula da coluna "Salva"
 function SavedCell({ word }: { word: Word }) {
@@ -216,6 +217,89 @@ function RelatedWordsCell({ word }: { word: Word }) {
           +{relatedWords.length - 3} mais...
         </div>
       )}
+    </div>
+  );
+}
+
+// Componente para a célula da coluna "Frequência"
+function FrequencyCell({ word }: { word: Word }) {
+  const [localFrequency, setLocalFrequency] = useState(word.frequency);
+  const [isIncrementing, setIsIncrementing] = useState(false);
+  const [isDisabled, setIsDisabled] = useState(false);
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+
+  const handleIncrement = async () => {
+    if (isIncrementing || isDisabled) return;
+
+    setIsIncrementing(true);
+    setIsDisabled(true);
+
+    // Atualização otimista - incrementar visualmente imediatamente
+    setLocalFrequency((prev) => prev + 1);
+
+    try {
+      // Incrementar a frequência no banco de dados
+      await incrementWordFrequency(word.id);
+
+      toast({
+        title: "Frequência atualizada!",
+        description: `"${word.name}" agora tem ${
+          localFrequency + 1
+        } ocorrências`,
+      });
+
+      // Invalidar o cache do React Query para atualizar a tabela
+      queryClient.invalidateQueries({ queryKey: ["vaults"] });
+    } catch (error) {
+      console.error("Erro ao incrementar frequência:", error);
+      // Em caso de erro, reverter para o valor anterior
+      setLocalFrequency(word.frequency);
+
+      toast({
+        title: "Erro ao atualizar frequência",
+        description:
+          error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setIsIncrementing(false);
+
+      // Desabilitar o botão por 500ms
+      setTimeout(() => {
+        setIsDisabled(false);
+      }, 650);
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex items-center gap-1">
+        <span className="text-lg font-semibold text-gray-900 dark:text-white min-w-[2rem] text-center">
+          {localFrequency}
+        </span>
+        <button
+          onClick={handleIncrement}
+          disabled={isIncrementing || isDisabled}
+          className="p-1 rounded-full bg-green-100 hover:bg-green-200 text-green-600 hover:text-green-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          title={`Incrementar frequência de "${word.name}"${
+            isDisabled && !isIncrementing ? " (aguarde 500ms)" : ""
+          }`}
+        >
+          <svg
+            className="w-4 h-4"
+            fill="currentColor"
+            viewBox="0 0 20 20"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <path
+              fillRule="evenodd"
+              d="M10 3a1 1 0 011 1v5h5a1 1 0 110 2h-5v5a1 1 0 11-2 0v-5H4a1 1 0 110-2h5V4a1 1 0 011-1z"
+              clipRule="evenodd"
+            />
+          </svg>
+        </button>
+      </div>
     </div>
   );
 }
@@ -420,6 +504,13 @@ export const columns: ColumnDef<Word>[] = [
     header: "Palavras Relacionadas",
     cell: ({ row }) => {
       return <RelatedWordsCell word={row.original} />;
+    },
+  },
+  {
+    accessorKey: "frequency",
+    header: "Frequência",
+    cell: ({ row }) => {
+      return <FrequencyCell word={row.original} />;
     },
   },
 ];
