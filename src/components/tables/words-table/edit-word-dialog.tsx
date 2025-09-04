@@ -21,7 +21,6 @@ import {
 import { Edit2, Plus, X } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useQueryClient } from "@tanstack/react-query";
-import { translateToPortuguese } from "@/lib/translate";
 
 interface EditWordDialogProps {
   word: Word;
@@ -43,6 +42,9 @@ export function EditWordDialog({
     translations: [...word.translations],
     confidence: word.confidence,
   });
+  const [translationKeys, setTranslationKeys] = useState<number[]>(
+    word.translations.map((_, index) => index)
+  );
   const { toast } = useToast();
   const queryClient = useQueryClient();
 
@@ -55,29 +57,7 @@ export function EditWordDialog({
 
     try {
       // Filtrar traduções vazias
-      const rawTranslations = formData.translations.filter(
-        (t) => t.trim() !== ""
-      );
-
-      // Traduzir traduções para português se estiverem em inglês
-      let translations = rawTranslations;
-      if (rawTranslations.length > 0) {
-        try {
-          translations = await Promise.all(
-            rawTranslations.map(async (translation) => {
-              // Verificar se parece ser inglês (contém apenas caracteres ASCII)
-              const isEnglish = /^[a-zA-Z\s\-']+$/.test(translation);
-              if (isEnglish) {
-                return await translateToPortuguese(translation);
-              }
-              return translation; // Manter se não for inglês
-            })
-          );
-        } catch (error) {
-          console.warn("Erro ao traduzir traduções, usando originais:", error);
-          translations = rawTranslations;
-        }
-      }
+      const translations = formData.translations.filter((t) => t.trim() !== "");
 
       const updatedWord = await updateWord(word.id, {
         name: formData.name,
@@ -113,10 +93,12 @@ export function EditWordDialog({
   };
 
   const addTranslation = () => {
+    const newKey = Math.max(...translationKeys, 0) + 1;
     setFormData((prev) => ({
       ...prev,
       translations: [...prev.translations, ""],
     }));
+    setTranslationKeys((prev) => [...prev, newKey]);
   };
 
   const removeTranslation = (index: number) => {
@@ -124,6 +106,7 @@ export function EditWordDialog({
       ...prev,
       translations: prev.translations.filter((_, i) => i !== index),
     }));
+    setTranslationKeys((prev) => prev.filter((_, i) => i !== index));
   };
 
   const updateTranslation = (index: number, value: string) => {
@@ -141,6 +124,7 @@ export function EditWordDialog({
       translations: [...word.translations],
       confidence: word.confidence,
     });
+    setTranslationKeys(word.translations.map((_, index) => index));
   };
 
   return (
@@ -237,7 +221,7 @@ export function EditWordDialog({
             </label>
             <div className="space-y-2">
               {formData.translations.map((translation, index) => (
-                <div key={index} className="flex gap-2">
+                <div key={translationKeys[index]} className="flex gap-2">
                   <Input
                     value={translation}
                     onChange={(e) => updateTranslation(index, e.target.value)}

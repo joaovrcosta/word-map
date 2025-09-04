@@ -365,18 +365,22 @@ export const columns: ColumnDef<Word>[] = [
     id: "actions",
     header: "Ações",
     cell: ({ row }) => {
+      const queryClient = useQueryClient();
+
       return (
         <div className="flex items-center gap-2">
           <EditWordDialog
             word={row.original}
             onWordUpdated={() => {
-              // O cache será atualizado automaticamente pelo React Query
+              // Invalidar o cache do React Query para atualizar a tabela
+              queryClient.invalidateQueries({ queryKey: ["vaults"] });
             }}
           />
           <LinkWordsDialog
             word={row.original}
             onWordsLinked={() => {
-              // O cache será atualizado automaticamente pelo React Query
+              // Invalidar o cache do React Query para atualizar a tabela
+              queryClient.invalidateQueries({ queryKey: ["vaults"] });
             }}
           />
         </div>

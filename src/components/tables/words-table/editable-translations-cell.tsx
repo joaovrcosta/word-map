@@ -162,14 +162,22 @@ export const EditableTranslationsCell = memo(function EditableTranslationsCell({
       <div className="flex-1 min-w-0">
         <p className="font-medium text-[18px]">{word.name}</p>
         <div className="flex flex-wrap gap-1 max-w-[600px] mt-2">
-          {cleanTranslations.map((translation, index) => (
-            <span
-              key={index}
-              className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 border border-gray-200 lowercase"
-            >
-              {translation}
-            </span>
-          ))}
+          {cleanTranslations.map((translation, index) => {
+            const isLong = translation.length > 80;
+            const displayText = isLong
+              ? translation.substring(0, 80) + "..."
+              : translation;
+
+            return (
+              <span
+                key={index}
+                className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 border border-gray-200 lowercase cursor-default"
+                title={isLong ? translation : undefined}
+              >
+                {displayText}
+              </span>
+            );
+          })}
         </div>
       </div>
       <Button
