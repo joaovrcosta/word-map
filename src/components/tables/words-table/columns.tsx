@@ -96,8 +96,8 @@ function SavedCell({ word }: { word: Word }) {
           <DropdownMenuTrigger asChild>
             <Button
               variant="ghost"
-              size="sm"
-              className="h-6 w-6 p-0 hover:bg-gray-100 dark:hover:bg-gray-700"
+              size="icon-sm"
+              className="h-6 w-6 p-0"
               disabled={isLoading}
             >
               <CheckCircleIcon
@@ -278,10 +278,12 @@ function FrequencyCell({ word }: { word: Word }) {
         <span className="text-lg font-semibold text-gray-900 dark:text-white min-w-[2rem] text-center">
           {localFrequency}
         </span>
-        <button
+        <Button
           onClick={handleIncrement}
           disabled={isIncrementing || isDisabled}
-          className="p-1 rounded-full bg-green-100 hover:bg-green-200 text-green-600 hover:text-green-700 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          variant="success"
+          className="!w-4 !h-4"
+          size="icon-sm"
           title={`Incrementar frequência de "${word.name}"${
             isDisabled && !isIncrementing ? " (aguarde 500ms)" : ""
           }`}
@@ -298,7 +300,7 @@ function FrequencyCell({ word }: { word: Word }) {
               clipRule="evenodd"
             />
           </svg>
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -332,10 +334,12 @@ export const columns: ColumnDef<Word>[] = [
 
       return (
         <div className="flex items-center justify-center">
-          <button
+          <Button
             onClick={handlePlayAudio}
-            className="p-2 rounded-full bg-blue-100 hover:bg-blue-200 text-[#1cb0f6] hover:text-[#1c8df6] transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
+            variant="outline"
+            size="icon-sm"
             title={`Ouvir pronúncia de "${wordName}"`}
+            className="!h-8 !w-8"
           >
             <svg
               className="w-4 h-4"
@@ -349,7 +353,7 @@ export const columns: ColumnDef<Word>[] = [
                 clipRule="evenodd"
               />
             </svg>
-          </button>
+          </Button>
         </div>
       );
     },
@@ -483,15 +487,13 @@ export const columns: ColumnDef<Word>[] = [
             {Array.from({ length: 4 }).map((_, i) => {
               const level = i + 1;
               return (
-                <button
+                <Button
                   key={i}
                   onClick={() => handleConfidenceChange(level)}
                   disabled={updateWordMutation.isPending}
-                  className={`h-3 w-2 rounded-sm transition-all duration-200 hover:scale-110 cursor-pointer ${
-                    i < localConfidence
-                      ? "bg-yellow-500 hover:bg-yellow-600"
-                      : "bg-gray-300 hover:bg-gray-400"
-                  } ${
+                  variant={i < localConfidence ? "warning" : "secondary"}
+                  size="icon-sm"
+                  className={`!h-3 w-2 p-0 ${
                     updateWordMutation.isPending
                       ? "opacity-50 cursor-not-allowed"
                       : ""

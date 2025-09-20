@@ -112,7 +112,7 @@ export default function TextsPage() {
 
         <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
+            <Button className="flex items-center gap-2" size="lg">
               <Plus size={20} />
               Novo Texto
             </Button>

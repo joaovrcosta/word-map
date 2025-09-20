@@ -160,7 +160,7 @@ export const EditableTranslationsCell = memo(function EditableTranslationsCell({
   return (
     <div className="flex items-center gap-2 group">
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-[18px]">{word.name}</p>
+        <p className="font-bold text-[18px] text-[#4b4b4b]">{word.name}</p>
         <div className="flex flex-wrap gap-1 max-w-[400px] mt-2">
           {cleanTranslations.map((translation, index) => {
             const isLong = translation.length > 80;
@@ -184,7 +184,7 @@ export const EditableTranslationsCell = memo(function EditableTranslationsCell({
         size="sm"
         variant="ghost"
         onClick={handleEdit}
-        className="p-0 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-blue-100 hover:text-blue-600"
+        className="p-0 opacity-0 !h-[32px] text-[#1cb0f6] group-hover:opacity-100 transition-opacity hover:bg-blue-100 hover:text-[#1cb1f6d7]"
         title="Editar traduções"
       >
         <p className="text-sm">Editar traduções</p>

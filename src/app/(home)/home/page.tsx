@@ -381,6 +381,7 @@ function HomePageContent() {
                       !newWord.name.trim() ||
                       !newWord.grammaticalClass
                     }
+                    size="lg"
                   >
                     {isCreatingWord ? "Criando..." : "Criar Palavra"}
                   </Button>

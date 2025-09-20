@@ -116,7 +116,7 @@ const SidebarItem = ({
                 className={`relative group w-12 h-12 mx-auto mb-1 flex items-center justify-center rounded-lg transition-all duration-200 ease-out
                   ${
                     isActive
-                      ? "bg-blue-100 text-blue-600 border border-blue-200"
+                      ? "bg-blue-100 text-[#1cb0f6] border border-blue-200"
                       : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                   }
                 `}
@@ -124,7 +124,7 @@ const SidebarItem = ({
                 <link.icon
                   size={20}
                   className={`transition-transform group-hover:scale-105 ${
-                    isActive ? "text-blue-600" : "text-gray-600"
+                    isActive ? "text-[#1cb0f6" : "text-gray-600"
                   }`}
                 />
                 {link.badge && <NotificationBadge count={link.badge} />}
@@ -148,10 +148,10 @@ const SidebarItem = ({
     <li key={link.path}>
       <button
         onClick={handleClick}
-        className={`relative group w-full h-12 px-4 mb-1 flex items-center justify-between rounded-lg transition-all duration-200 ease-out
+        className={`relative group w-full h-12 px-4 mb-1 flex items-center justify-between rounded-2xl transition-all duration-200 ease-out
           ${
             isActive
-              ? "bg-blue-100 text-blue-600 border border-blue-200"
+              ? "bg-blue-100 text-[#1cb0f6] border border-blue-200"
               : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
           }
         `}
@@ -168,14 +168,14 @@ const SidebarItem = ({
             <link.icon
               size={20}
               className={`transition-transform group-hover:scale-105 ${
-                isActive ? "text-blue-600" : "text-gray-600"
+                isActive ? "text-[#1cb0f6]" : "text-gray-600"
               }`}
             />
           </div>
           <div className="flex flex-col items-start">
             <span
-              className={`font-medium text-sm ${
-                isActive ? "text-blue-600" : "text-gray-700"
+              className={`font-bold text-sm ${
+                isActive ? "text-[#1cb0f6]" : "text-gray-700"
               }`}
             >
               {link.name}
@@ -292,7 +292,7 @@ const AppSidebar = () => {
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
         {isOpen ? (
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center">
               <Sparkles size={20} className="text-white" />
             </div>
             <div>
@@ -307,7 +307,7 @@ const AppSidebar = () => {
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center">
               <Sparkles size={20} className="text-white" />
             </div>
             <div className="text-center">
@@ -350,20 +350,11 @@ const AppSidebar = () => {
       <div className="p-3 border-t border-gray-200 dark:border-gray-800">
         {isOpen && (
           <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleTheme}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800"
-            >
+            <Button variant="ghost" size="icon-sm" onClick={toggleTheme}>
               {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </Button>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 relative"
-            >
+            <Button variant="ghost" size="icon-sm" className="relative">
               <Bell size={18} />
               <NotificationBadge count={3} className="h-4 w-4" />
             </Button>
@@ -372,20 +363,11 @@ const AppSidebar = () => {
 
         {!isOpen && (
           <div className="flex flex-col items-center space-y-2">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={toggleTheme}
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800"
-            >
+            <Button variant="ghost" size="icon-sm" onClick={toggleTheme}>
               {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </Button>
 
-            <Button
-              variant="ghost"
-              size="sm"
-              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 relative"
-            >
+            <Button variant="ghost" size="icon-sm" className="relative">
               <Bell size={18} />
               <NotificationBadge count={3} className="h-4 w-4" />
             </Button>
@@ -393,9 +375,8 @@ const AppSidebar = () => {
             {isPermanentlyClosed && (
               <Button
                 variant="outline"
-                size="sm"
+                size="icon-sm"
                 onClick={handleResetSidebar}
-                className="p-2 hover:bg-blue-50 hover:text-blue-600 hover:border-blue-200 border-blue-200 text-blue-600"
                 title="Reabrir sidebar (requer confirmação)"
               >
                 <Sparkles size={16} />

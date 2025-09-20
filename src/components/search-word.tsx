@@ -398,7 +398,7 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
         {searchTerm && (
           <Button
             variant="ghost"
-            size="sm"
+            size="icon-sm"
             onClick={handleClearSearch}
             className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0"
           >
@@ -484,8 +484,8 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                size="icon-sm"
+                                className="h-8 w-8 p-0"
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   setSelectedWord(result);
@@ -663,8 +663,8 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                             <DropdownMenuTrigger asChild>
                               <Button
                                 variant="ghost"
-                                size="sm"
-                                className="h-8 w-8 p-0 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                size="icon-sm"
+                                className="h-8 w-8 p-0"
                                 onClick={() => {
                                   setSelectedWord(apiResult);
                                   setVaultSearchTerm("");

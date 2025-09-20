@@ -152,8 +152,9 @@ export default function RegisterPage() {
           <div>
             <Button
               type="submit"
-              className="group relative w-full flex justify-center py-2 px-4"
+              className="group relative w-full flex justify-center"
               disabled={isLoading}
+              size="lg"
             >
               {isLoading ? (
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>

@@ -14,28 +14,33 @@ describe("Button Component", () => {
     render(<Button>Botão</Button>);
 
     const button = screen.getByRole("button");
-    expect(button).toHaveClass("bg-primary", "text-primary-foreground");
+    expect(button).toHaveClass("bg-[#1cb0f6]", "text-white", "rounded-full");
   });
 
   it("deve aplicar variante destructive", () => {
     render(<Button variant="destructive">Deletar</Button>);
 
     const button = screen.getByRole("button");
-    expect(button).toHaveClass("bg-destructive", "text-white");
+    expect(button).toHaveClass("bg-red-500", "text-white", "rounded-full");
   });
 
   it("deve aplicar variante outline", () => {
     render(<Button variant="outline">Outline</Button>);
 
     const button = screen.getByRole("button");
-    expect(button).toHaveClass("border", "bg-background");
+    expect(button).toHaveClass(
+      "border-2",
+      "border-[#1cb0f6]",
+      "bg-transparent",
+      "rounded-full"
+    );
   });
 
   it("deve aplicar variante secondary", () => {
     render(<Button variant="secondary">Secondary</Button>);
 
     const button = screen.getByRole("button");
-    expect(button).toHaveClass("bg-secondary", "text-secondary-foreground");
+    expect(button).toHaveClass("bg-gray-100", "text-gray-700", "rounded-full");
   });
 
   it("deve aplicar variante ghost", () => {
@@ -43,8 +48,9 @@ describe("Button Component", () => {
 
     const button = screen.getByRole("button");
     expect(button).toHaveClass(
-      "hover:bg-accent",
-      "hover:text-accent-foreground"
+      "text-gray-600",
+      "rounded-full",
+      "hover:bg-gray-100"
     );
   });
 
@@ -52,35 +58,39 @@ describe("Button Component", () => {
     render(<Button variant="link">Link</Button>);
 
     const button = screen.getByRole("button");
-    expect(button).toHaveClass("text-primary", "underline-offset-4");
+    expect(button).toHaveClass(
+      "text-[#1cb0f6]",
+      "underline-offset-4",
+      "rounded-none"
+    );
   });
 
   it("deve aplicar tamanho padrão", () => {
     render(<Button>Botão</Button>);
 
     const button = screen.getByRole("button");
-    expect(button).toHaveClass("h-9", "px-4", "py-2");
+    expect(button).toHaveClass("h-12", "px-6", "py-3");
   });
 
   it("deve aplicar tamanho sm", () => {
     render(<Button size="sm">Botão Pequeno</Button>);
 
     const button = screen.getByRole("button");
-    expect(button).toHaveClass("h-8", "px-3");
+    expect(button).toHaveClass("h-10", "px-4", "py-2");
   });
 
   it("deve aplicar tamanho lg", () => {
     render(<Button size="lg">Botão Grande</Button>);
 
     const button = screen.getByRole("button");
-    expect(button).toHaveClass("h-10", "px-6");
+    expect(button).toHaveClass("h-14", "px-8", "py-4");
   });
 
   it("deve aplicar tamanho icon", () => {
     render(<Button size="icon">🔍</Button>);
 
     const button = screen.getByRole("button");
-    expect(button).toHaveClass("size-9");
+    expect(button).toHaveClass("size-12", "rounded-full");
   });
 
   it("deve aplicar classes customizadas", () => {
@@ -158,10 +168,10 @@ describe("Button Component", () => {
 
     const button = screen.getByRole("button");
     expect(button).toHaveClass(
-      "bg-destructive",
+      "bg-red-500",
       "text-white",
-      "h-10",
-      "px-6",
+      "h-14",
+      "px-8",
       "extra-class"
     );
   });
@@ -186,8 +196,8 @@ describe("Button Component", () => {
     button.focus();
 
     expect(button).toHaveClass(
-      "focus-visible:border-ring",
-      "focus-visible:ring-ring/50"
+      "focus-visible:ring-2",
+      "focus-visible:ring-offset-2"
     );
   });
 

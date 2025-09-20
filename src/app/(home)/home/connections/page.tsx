@@ -258,7 +258,7 @@ export default function ConnectionsPage() {
 
             <div className="flex items-center gap-2">
               <label className="text-sm font-medium">Visualização:</label>
-              <div className="flex border rounded-lg">
+              <div className="flex border rounded-2xl">
                 <Button
                   variant={viewMode === "semantic" ? "default" : "ghost"}
                   size="sm"
