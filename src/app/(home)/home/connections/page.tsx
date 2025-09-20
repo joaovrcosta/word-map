@@ -16,12 +16,14 @@ import {
   getAllWordRelations,
   getSemanticConnections,
   deleteSemanticConnection,
+  updateSemanticConnection,
 } from "@/actions/actions";
 import { Vault, Word, SemanticConnection } from "@/actions/actions";
 import { Network, Link, Filter, RefreshCw, Trash2, Edit } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import MindMapView from "@/components/MindMapView";
 import { CreateSemanticConnectionDialog } from "@/components/create-semantic-connection-dialog";
+import { EditSemanticConnectionDialog } from "@/components/edit-semantic-connection-dialog";
 
 interface ConnectedWord {
   id: number;
@@ -349,10 +351,10 @@ export default function ConnectionsPage() {
                   Crie conexões semânticas entre suas palavras para explicar
                   suas relações
                 </p>
-                {/* <CreateSemanticConnectionDialog
+                <CreateSemanticConnectionDialog
                   vaults={vaults}
                   onConnectionCreated={handleRefresh}
-                /> */}
+                />
               </div>
             ) : (
               <div className="space-y-4">
@@ -414,7 +416,7 @@ export default function ConnectionsPage() {
                             key={wordItem.id}
                             className="bg-white p-3 rounded-lg border"
                           >
-                            <div className="font-medium text-gray-900 mb-1">
+                            <div className="font-medium text-blue-600 text-lg mb-1">
                               {wordItem.word.name}
                               {wordItem.title && (
                                 <span className="text-blue-600 ml-2 text-sm">
@@ -436,7 +438,12 @@ export default function ConnectionsPage() {
                       </div>
                     </div>
 
-                    <div className="flex justify-end">
+                    <div className="flex justify-end gap-2">
+                      <EditSemanticConnectionDialog
+                        connection={connection}
+                        vaults={vaults}
+                        onConnectionUpdated={handleRefresh}
+                      />
                       <Button
                         size="sm"
                         variant="ghost"
@@ -449,14 +456,16 @@ export default function ConnectionsPage() {
                       </Button>
                     </div>
 
-                    <div className="bg-white rounded-lg p-4 border">
-                      <div className="text-sm font-medium text-gray-700 mb-2">
-                        {connection.title}
+                    {connection.description && (
+                      <div className="bg-white rounded-lg p-4 border">
+                        <div className="text-sm font-medium text-gray-700 mb-2">
+                          {connection.title}
+                        </div>
+                        <p className="text-gray-800 leading-relaxed">
+                          {connection.description}
+                        </p>
                       </div>
-                      <p className="text-gray-800 leading-relaxed">
-                        {connection.description}
-                      </p>
-                    </div>
+                    )}
 
                     <div className="flex items-center justify-between mt-4 text-sm text-gray-500">
                       <div>

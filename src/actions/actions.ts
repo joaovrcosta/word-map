@@ -1795,8 +1795,8 @@ export interface SemanticConnectionWord {
 }
 
 export interface CreateSemanticConnectionData {
-  title: string;
-  description: string;
+  title?: string;
+  description?: string;
   connectionType:
     | "semantic"
     | "grammatical"
@@ -1824,14 +1824,7 @@ export async function createSemanticConnection(
       throw new Error("Usuário não autenticado");
     }
 
-    // Validar dados
-    if (!data.title.trim()) {
-      throw new Error("Título é obrigatório");
-    }
-
-    if (!data.description.trim()) {
-      throw new Error("Descrição é obrigatória");
-    }
+    // Validar dados - título e descrição são opcionais
 
     if (!data.words || data.words.length < 2) {
       throw new Error(
@@ -1859,23 +1852,26 @@ export async function createSemanticConnection(
       );
     }
 
-    // Verificar se já existe uma conexão com o mesmo título
-    const existingConnection = await prisma.semanticConnection.findFirst({
-      where: {
-        title: data.title,
-        userId: user.id,
-      },
-    });
+    // Verificar se já existe uma conexão com o mesmo título (apenas se título não estiver vazio)
+    if (data.title && data.title.trim()) {
+      const existingConnection = await prisma.semanticConnection.findFirst({
+        where: {
+          title: data.title,
+          userId: user.id,
+        },
+      });
 
-    if (existingConnection) {
-      throw new Error("Já existe uma conexão semântica com este título");
+      if (existingConnection) {
+        throw new Error("Já existe uma conexão semântica com este título");
+      }
     }
 
     // Criar a conexão semântica
     const connection = await prisma.semanticConnection.create({
       data: {
-        title: data.title,
-        description: data.description,
+        title:
+          (data.title && data.title.trim()) || `Conexão ${data.connectionType}`,
+        description: (data.description && data.description.trim()) || "",
         connectionType: data.connectionType,
         userId: user.id,
       },
@@ -2041,6 +2037,176 @@ export async function getSemanticConnections(): Promise<SemanticConnection[]> {
     }));
   } catch (error) {
     console.error("Erro ao buscar conexões semânticas:", error);
+    throw error;
+  }
+}
+
+// Atualizar conexão semântica
+export async function updateSemanticConnection(
+  connectionId: number,
+  data: CreateSemanticConnectionData
+): Promise<SemanticConnection> {
+  console.log("=== INÍCIO updateSemanticConnection ===");
+  console.log("ID da conexão:", connectionId);
+  console.log("Dados recebidos:", data);
+
+  try {
+    // Verificar se o usuário está autenticado
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    // Verificar se a conexão existe e pertence ao usuário
+    const existingConnection = await prisma.semanticConnection.findFirst({
+      where: {
+        id: connectionId,
+        userId: user.id,
+      },
+    });
+
+    if (!existingConnection) {
+      throw new Error("Conexão não encontrada ou não pertence ao usuário");
+    }
+
+    if (!data.words || data.words.length < 2) {
+      throw new Error(
+        "É necessário pelo menos 2 palavras para criar uma conexão"
+      );
+    }
+
+    // Verificar se todas as palavras existem e pertencem ao usuário
+    const wordIds = data.words.map((w) => w.wordId);
+    const words = await prisma.word.findMany({
+      where: {
+        id: { in: wordIds },
+        vault: {
+          userId: user.id,
+        },
+      },
+      include: {
+        vault: true,
+      },
+    });
+
+    if (words.length !== wordIds.length) {
+      throw new Error(
+        "Uma ou mais palavras não foram encontradas ou não pertencem ao usuário"
+      );
+    }
+
+    // Verificar se já existe uma conexão com o mesmo título (apenas se título não estiver vazio e for diferente do atual)
+    if (
+      data.title &&
+      data.title.trim() &&
+      data.title !== existingConnection.title
+    ) {
+      const duplicateConnection = await prisma.semanticConnection.findFirst({
+        where: {
+          title: data.title,
+          userId: user.id,
+          id: { not: connectionId },
+        },
+      });
+
+      if (duplicateConnection) {
+        throw new Error("Já existe uma conexão semântica com este título");
+      }
+    }
+
+    // Atualizar a conexão semântica
+    const connection = await prisma.semanticConnection.update({
+      where: {
+        id: connectionId,
+      },
+      data: {
+        title:
+          (data.title && data.title.trim()) || `Conexão ${data.connectionType}`,
+        description: (data.description && data.description.trim()) || "",
+        connectionType: data.connectionType,
+      },
+    });
+
+    // Deletar palavras existentes da conexão
+    await prisma.semanticConnectionWord.deleteMany({
+      where: {
+        connectionId: connectionId,
+      },
+    });
+
+    // Adicionar as novas palavras à conexão
+    const connectionWords = await Promise.all(
+      data.words.map((wordData, index) =>
+        prisma.semanticConnectionWord.create({
+          data: {
+            connectionId: connection.id,
+            wordId: wordData.wordId,
+            order: index,
+            title: wordData.title || null,
+            description: wordData.description || null,
+          },
+          include: {
+            word: {
+              include: {
+                vault: true,
+              },
+            },
+          },
+        })
+      )
+    );
+
+    // Revalidar cache
+    revalidatePath("/home/connections");
+
+    console.log("Conexão semântica atualizada com sucesso:", connection.id);
+    console.log("=== FIM updateSemanticConnection - SUCESSO ===");
+
+    return {
+      id: connection.id,
+      title: connection.title,
+      description: connection.description,
+      connectionType: connection.connectionType as
+        | "semantic"
+        | "grammatical"
+        | "contextual"
+        | "opposite"
+        | "similar",
+      createdAt: connection.createdAt,
+      updatedAt: connection.updatedAt,
+      userId: connection.userId,
+      words: connectionWords.map((cw) => ({
+        id: cw.id,
+        connectionId: cw.connectionId,
+        wordId: cw.wordId,
+        order: cw.order,
+        title: cw.title || undefined,
+        description: cw.description || undefined,
+        createdAt: cw.createdAt,
+        word: {
+          id: cw.word.id,
+          name: cw.word.name,
+          grammaticalClass: cw.word.grammaticalClass,
+          category: cw.word.category,
+          translations: cw.word.translations,
+          confidence: cw.word.confidence,
+          isSaved: cw.word.isSaved,
+          frequency: cw.word.frequency,
+          vaultId: cw.word.vaultId,
+          createdAt: cw.word.createdAt,
+          updatedAt: cw.word.updatedAt,
+          vault: {
+            id: cw.word.vault.id,
+            name: cw.word.vault.name,
+            createdAt: cw.word.vault.createdAt,
+            updatedAt: cw.word.vault.updatedAt,
+            userId: cw.word.vault.userId,
+          },
+        },
+      })),
+    };
+  } catch (error) {
+    console.error("Erro ao atualizar conexão semântica:", error);
     throw error;
   }
 }

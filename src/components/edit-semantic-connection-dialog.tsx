@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -21,12 +21,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, X, Search, Edit2 } from "lucide-react";
-import { createSemanticConnection } from "@/actions/actions";
-import type { Word, Vault } from "@/actions/actions";
+import { updateSemanticConnection } from "@/actions/actions";
+import type { Word, Vault, SemanticConnection } from "@/actions/actions";
 
-interface CreateSemanticConnectionDialogProps {
+interface EditSemanticConnectionDialogProps {
+  connection: SemanticConnection;
   vaults: Vault[];
-  onConnectionCreated: () => void;
+  onConnectionUpdated: () => void;
 }
 
 interface WordWithDetails {
@@ -35,10 +36,11 @@ interface WordWithDetails {
   description?: string;
 }
 
-export function CreateSemanticConnectionDialog({
+export function EditSemanticConnectionDialog({
+  connection,
   vaults,
-  onConnectionCreated,
-}: CreateSemanticConnectionDialogProps) {
+  onConnectionUpdated,
+}: EditSemanticConnectionDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState("");
@@ -51,6 +53,22 @@ export function CreateSemanticConnectionDialog({
   >("semantic");
 
   const { toast } = useToast();
+
+  // Inicializar dados quando o diálogo abrir
+  useEffect(() => {
+    if (isOpen) {
+      setTitle(connection.title);
+      setDescription(connection.description);
+      setConnectionType(connection.connectionType);
+      setSelectedWords(
+        connection.words.map((wordItem) => ({
+          word: wordItem.word,
+          title: wordItem.title,
+          description: wordItem.description,
+        }))
+      );
+    }
+  }, [isOpen, connection]);
 
   // Buscar palavras baseado no termo de busca
   const searchWords = (searchTerm: string, vaults: Vault[]): Word[] => {
@@ -134,7 +152,7 @@ export function CreateSemanticConnectionDialog({
 
     setIsLoading(true);
     try {
-      await createSemanticConnection({
+      await updateSemanticConnection(connection.id, {
         title: title.trim() || undefined,
         description: description.trim() || undefined,
         connectionType,
@@ -146,21 +164,20 @@ export function CreateSemanticConnectionDialog({
       });
 
       toast({
-        title: "Conexão criada!",
+        title: "Conexão atualizada!",
         description: `Conexão semântica ${
           title ? `"${title}"` : ""
-        } criada com ${selectedWords.length} palavras`,
+        } atualizada com ${selectedWords.length} palavras`,
       });
 
-      resetForm();
-      onConnectionCreated();
+      onConnectionUpdated();
       setIsOpen(false);
     } catch (error) {
-      console.error("Erro ao criar conexão semântica:", error);
+      console.error("Erro ao atualizar conexão semântica:", error);
       toast({
         title: "Erro",
         description:
-          error instanceof Error ? error.message : "Erro ao criar conexão",
+          error instanceof Error ? error.message : "Erro ao atualizar conexão",
         variant: "destructive",
       });
     } finally {
@@ -168,21 +185,11 @@ export function CreateSemanticConnectionDialog({
     }
   };
 
-  const resetForm = () => {
-    setSelectedWords([]);
-    setSearchTerm("");
-    setTitle("");
-    setDescription("");
-    setConnectionType("semantic");
-    setFilteredWords([]);
-  };
-
   // Verificar se os vaults estão carregados
   if (!vaults || vaults.length === 0) {
     return (
-      <Button disabled>
-        <Plus className="w-4 h-4 mr-2" />
-        Nova Conexão Semântica
+      <Button disabled size="sm" variant="ghost">
+        <Edit2 className="w-4 h-4" />
       </Button>
     );
   }
@@ -190,14 +197,17 @@ export function CreateSemanticConnectionDialog({
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button onClick={resetForm}>
-          <Plus className="w-4 h-4 mr-2" />
-          Nova Conexão Semântica
+        <Button
+          size="sm"
+          variant="ghost"
+          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+        >
+          <Edit2 className="w-4 h-4" />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Criar Conexão Semântica</DialogTitle>
+          <DialogTitle>Editar Conexão Semântica</DialogTitle>
         </DialogHeader>
         <div className="space-y-6">
           {/* Busca de palavras */}
@@ -420,7 +430,7 @@ export function CreateSemanticConnectionDialog({
               disabled={isLoading || selectedWords.length < 2}
               className="flex-1"
             >
-              {isLoading ? "Criando..." : "Criar Conexão"}
+              {isLoading ? "Atualizando..." : "Atualizar Conexão"}
             </Button>
           </div>
         </div>
@@ -428,3 +438,4 @@ export function CreateSemanticConnectionDialog({
     </Dialog>
   );
 }
+
