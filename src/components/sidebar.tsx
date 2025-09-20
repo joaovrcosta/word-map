@@ -31,6 +31,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { NotificationBadge } from "@/components/ui/notification-badge";
+import { ArticleIcon } from "@phosphor-icons/react";
 
 type SidebarLink = {
   name: string;
@@ -43,42 +44,30 @@ type SidebarLink = {
 
 const links: SidebarLink[] = [
   {
-    name: "Dashboard",
+    name: "APRENDER",
     path: "/home",
     icon: Home,
-    description: "Visão geral do seu progresso",
   },
   {
-    name: "Vaults",
-    path: "/home/vault",
-    icon: VaultIcon,
-    badge: 3,
-    description: "Gerencie seus cofres de palavras",
+    name: "TEXTOS",
+    path: "/home/texts",
+    icon: ArticleIcon,
   },
   {
-    name: "Flashcards",
+    name: "FLASHCARDS",
     path: "/home/flashcards",
     icon: Brain,
     badge: 12,
-    description: "Pratique com flashcards",
   },
   {
-    name: "Textos",
-    path: "/home/texts",
-    icon: BookOpen,
-    description: "Analise e estude textos",
-  },
-  {
-    name: "Conexões",
+    name: "CONEXÕES",
     path: "/home/connections",
     icon: Network,
-    description: "Visualize conexões entre palavras",
   },
   {
-    name: "Perfil",
+    name: "PERFIL",
     path: "/home/profile",
     icon: User,
-    description: "Configurações da sua conta",
   },
 ];
 
@@ -124,18 +113,19 @@ const SidebarItem = ({
             <li>
               <button
                 onClick={handleClick}
-                className={`relative group w-12 h-12 mx-auto mb-2 flex items-center justify-center rounded-xl transition-all duration-300 ease-out
+                className={`relative group w-12 h-12 mx-auto mb-1 flex items-center justify-center rounded-lg transition-all duration-200 ease-out
                   ${
                     isActive
-                      ? "bg-gradient-to-br from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900 hover:scale-110"
+                      ? "bg-blue-100 text-blue-600 border border-blue-200"
+                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
                   }
-                  ${isActive ? "ring-2 ring-purple-300 ring-offset-2" : ""}
                 `}
               >
                 <link.icon
                   size={20}
-                  className="transition-transform group-hover:scale-110"
+                  className={`transition-transform group-hover:scale-105 ${
+                    isActive ? "text-blue-600" : "text-gray-600"
+                  }`}
                 />
                 {link.badge && <NotificationBadge count={link.badge} />}
               </button>
@@ -158,31 +148,46 @@ const SidebarItem = ({
     <li key={link.path}>
       <button
         onClick={handleClick}
-        className={`relative group w-full h-12 px-4 mb-2 flex items-center justify-between rounded-xl transition-all duration-300 ease-out
+        className={`relative group w-full h-12 px-4 mb-1 flex items-center justify-between rounded-lg transition-all duration-200 ease-out
           ${
             isActive
-              ? "bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg shadow-purple-500/25"
-              : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 hover:shadow-md"
+              ? "bg-blue-100 text-blue-600 border border-blue-200"
+              : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
           }
-          ${isActive ? "ring-2 ring-purple-300 ring-offset-2" : ""}
         `}
         style={{ paddingLeft: `${level * 16 + 16}px` }}
       >
         <div className="flex items-center gap-3">
           <div
-            className={`p-2 rounded-lg transition-all duration-300 ${
-              isActive ? "bg-white/20" : "bg-gray-100 group-hover:bg-gray-200"
+            className={`p-1 rounded-md transition-all duration-200 ${
+              isActive
+                ? "bg-blue-200"
+                : "bg-transparent group-hover:bg-gray-100"
             }`}
           >
             <link.icon
-              size={18}
-              className="transition-transform group-hover:scale-110"
+              size={20}
+              className={`transition-transform group-hover:scale-105 ${
+                isActive ? "text-blue-600" : "text-gray-600"
+              }`}
             />
           </div>
           <div className="flex flex-col items-start">
-            <span className="font-medium text-sm">{link.name}</span>
+            <span
+              className={`font-medium text-sm ${
+                isActive ? "text-blue-600" : "text-gray-700"
+              }`}
+            >
+              {link.name}
+            </span>
             {link.description && (
-              <span className="text-xs opacity-70">{link.description}</span>
+              <span
+                className={`text-xs ${
+                  isActive ? "text-blue-500" : "text-gray-500"
+                }`}
+              >
+                {link.description}
+              </span>
             )}
           </div>
         </div>
@@ -191,14 +196,14 @@ const SidebarItem = ({
           {link.badge && (
             <Badge
               variant={isActive ? "secondary" : "default"}
-              className="h-6 px-2 text-xs"
+              className="h-5 px-2 text-xs bg-blue-100 text-blue-600"
             >
               {link.badge}
             </Badge>
           )}
           {hasChildren && (
             <div
-              className={`transition-transform duration-300 ${
+              className={`transition-transform duration-200 ${
                 isSubmenuOpen ? "rotate-180" : ""
               }`}
             >
@@ -274,27 +279,35 @@ const AppSidebar = () => {
 
   return (
     <section
-      className={`lg:flex hidden h-screen flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-500 ease-out ${
-        isOpen ? "w-80" : "w-16"
+      className={`lg:flex hidden h-screen flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-500 ease-out flex-shrink-0 ${
+        isOpen ? "w-64" : "w-16"
       }`}
+      style={{
+        width: isOpen ? "256px" : "64px",
+        minWidth: isOpen ? "256px" : "64px",
+        maxWidth: isOpen ? "256px" : "64px",
+      }}
     >
       {/* Header */}
       <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
         {isOpen ? (
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
               <Sparkles size={20} className="text-white" />
             </div>
             <div>
-              <h1 className="font-bold text-lg bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
-                Word Map
+              <h1
+                className="font-bold text-lg text-green-600"
+                style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}
+              >
+                wordmap
               </h1>
               <p className="text-xs text-gray-500">Aprenda idiomas</p>
             </div>
           </div>
         ) : (
           <div className="flex flex-col items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-pink-500 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center">
               <Sparkles size={20} className="text-white" />
             </div>
             <div className="text-center">
@@ -315,27 +328,10 @@ const AppSidebar = () => {
         </button> */}
       </div>
 
-      {/* Search Bar (only when open) */}
-      {isOpen && (
-        <div className="p-4 border-b border-gray-200 dark:border-gray-800">
-          <div className="relative">
-            <Search
-              size={16}
-              className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
-            />
-            <input
-              type="text"
-              placeholder="Buscar..."
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all duration-300"
-            />
-          </div>
-        </div>
-      )}
-
       {/* Navigation */}
-      <div className="flex-1 overflow-y-auto py-4">
-        <nav className="px-4">
-          <ul className="space-y-1">
+      <div className="flex-1 overflow-y-auto py-2">
+        <nav className="px-3">
+          <ul className="space-y-0.5">
             {links.map((link) => (
               <SidebarItem
                 key={link.path}
@@ -351,37 +347,27 @@ const AppSidebar = () => {
       </div>
 
       {/* Footer */}
-      <div className="p-4 border-t border-gray-200 dark:border-gray-800 space-y-3">
+      <div className="p-3 border-t border-gray-200 dark:border-gray-800">
         {isOpen && (
-          <>
+          <div className="flex items-center justify-between">
             <Button
-              variant="outline"
-              className="w-full justify-start gap-3 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border-blue-200"
+              variant="ghost"
+              size="sm"
+              onClick={toggleTheme}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800"
             >
-              <Plus size={18} />
-              Criar Novo
+              {isDark ? <Sun size={18} /> : <Moon size={18} />}
             </Button>
 
-            <div className="flex items-center justify-between">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={toggleTheme}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800"
-              >
-                {isDark ? <Sun size={18} /> : <Moon size={18} />}
-              </Button>
-
-              <Button
-                variant="ghost"
-                size="sm"
-                className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 relative"
-              >
-                <Bell size={18} />
-                <NotificationBadge count={3} className="h-4 w-4" />
-              </Button>
-            </div>
-          </>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 relative"
+            >
+              <Bell size={18} />
+              <NotificationBadge count={3} className="h-4 w-4" />
+            </Button>
+          </div>
         )}
 
         {!isOpen && (

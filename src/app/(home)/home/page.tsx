@@ -218,7 +218,7 @@ function HomePageContent() {
   }
 
   return (
-    <div className="space-y-6 px-12 pt-6">
+    <div className="space-y-6 px-6 pt-6 max-w-full overflow-x-hidden">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
@@ -407,10 +407,10 @@ function HomePageContent() {
         {stats.map((stat) => (
           <div
             key={stat.title}
-            className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-sm border"
+            className="bg-white dark:bg-gray-800 rounded-2xl p-6 border-[2px] text-[#4b4b4b] border-[#e5e5e5]"
           >
             <div className="flex items-center">
-              <div className={`p-2 rounded-lg ${stat.bgColor}`}>
+              <div className={`p-2 rounded-2xl ${stat.bgColor}`}>
                 <stat.icon className={`h-6 w-6 ${stat.color}`} />
               </div>
               <div className="ml-4">
