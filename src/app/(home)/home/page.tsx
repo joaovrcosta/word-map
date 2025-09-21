@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
-import { Plus, BookOpen, Target, Trophy } from "lucide-react";
+import { Plus, BookOpen, Target, Trophy, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/tables/words-table/data-table";
 import { columns } from "@/components/tables/words-table/columns";
@@ -25,12 +25,14 @@ import {
 import { createWord } from "@/actions/actions";
 import { SearchWord } from "@/components/search-word";
 import { ImportExportWords } from "@/components/import-export-words";
+import { SentenceBuilder } from "@/components/sentence-builder";
 import { translateToPortuguese } from "@/lib/translate";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useWords, useVaults } from "@/hooks/use-words";
 import { useQueryClient } from "@tanstack/react-query";
 
 function HomePageContent() {
+  const [activeTab, setActiveTab] = useState<"words" | "sentences">("words");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newWord, setNewWord] = useState({
     name: "",
@@ -401,72 +403,107 @@ function HomePageContent() {
         </div>
       </div>
 
-      <SearchWord />
-
-      {/* Estatísticas */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        {stats.map((stat) => (
-          <div
-            key={stat.title}
-            className="bg-white dark:bg-gray-800 rounded-2xl p-6 border-[2px] text-[#4b4b4b] border-[#e5e5e5]"
+      {/* Abas de Navegação */}
+      <div className="border-b border-gray-200 dark:border-gray-700">
+        <nav className="-mb-px flex space-x-8">
+          <button
+            onClick={() => setActiveTab("words")}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === "words"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
           >
-            <div className="flex items-center">
-              <div className={`p-2 rounded-2xl ${stat.bgColor}`}>
-                <stat.icon className={`h-6 w-6 ${stat.color}`} />
+            <BookOpen size={16} className="inline mr-2" />
+            Palavras
+          </button>
+          <button
+            onClick={() => setActiveTab("sentences")}
+            className={`py-2 px-1 border-b-2 font-medium text-sm ${
+              activeTab === "sentences"
+                ? "border-blue-500 text-blue-600 dark:text-blue-400"
+                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
+            }`}
+          >
+            <FileText size={16} className="inline mr-2" />
+            Construtor de Frases
+          </button>
+        </nav>
+      </div>
+
+      {/* Conteúdo das Abas */}
+      {activeTab === "words" ? (
+        <>
+          <SearchWord />
+
+          {/* Estatísticas */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {stats.map((stat) => (
+              <div
+                key={stat.title}
+                className="bg-white dark:bg-gray-800 rounded-2xl p-6 border-[2px] text-[#4b4b4b] border-[#e5e5e5]"
+              >
+                <div className="flex items-center">
+                  <div className={`p-2 rounded-2xl ${stat.bgColor}`}>
+                    <stat.icon className={`h-6 w-6 ${stat.color}`} />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                      {stat.title}
+                    </p>
+                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                      {stat.value}
+                      {stat.suffix || ""}
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                  {stat.title}
-                </p>
-                <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                  {stat.value}
-                  {stat.suffix || ""}
-                </p>
-              </div>
+            ))}
+          </div>
+
+          {/* Tabela de Palavras */}
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Palavras do Vault
+              </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                {currentWords.length} palavra
+                {currentWords.length !== 1 ? "s" : ""} encontrada
+                {currentWords.length !== 1 ? "s" : ""}
+              </p>
+            </div>
+            <div className="p-6">
+              {currentWords.length > 0 ? (
+                <DataTable<Word>
+                  columns={columns}
+                  data={currentWords}
+                  isLoading={isTableUpdating}
+                />
+              ) : (
+                <div className="text-center py-12">
+                  <BookOpen className="mx-auto h-12 w-12 text-gray-400" />
+                  <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">
+                    Nenhuma palavra encontrada
+                  </h3>
+                  <p className="mt-2 text-gray-600 dark:text-gray-400">
+                    Comece adicionando sua primeira palavra ao vault.
+                  </p>
+                  <Button
+                    className="mt-4"
+                    onClick={() => setIsCreateDialogOpen(true)}
+                  >
+                    <Plus size={20} className="mr-2" />
+                    Adicionar Primeira Palavra
+                  </Button>
+                </div>
+              )}
             </div>
           </div>
-        ))}
-      </div>
-
-      {/* Tabela de Palavras */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border">
-        <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            Palavras do Vault
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            {currentWords.length} palavra{currentWords.length !== 1 ? "s" : ""}{" "}
-            encontrada
-            {currentWords.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-        <div className="p-6">
-          {currentWords.length > 0 ? (
-            <DataTable<Word>
-              columns={columns}
-              data={currentWords}
-              isLoading={isTableUpdating}
-            />
-          ) : (
-            <div className="text-center py-12">
-              <BookOpen className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">
-                Nenhuma palavra encontrada
-              </h3>
-              <p className="mt-2 text-gray-600 dark:text-gray-400">
-                Comece adicionando sua primeira palavra ao vault.
-              </p>
-              <Button
-                className="mt-4"
-                onClick={() => setIsCreateDialogOpen(true)}
-              >
-                <Plus size={20} className="mr-2" />
-                Adicionar Primeira Palavra
-              </Button>
-            </div>
-          )}
-        </div>
-      </div>
+        </>
+      ) : (
+        <SentenceBuilder />
+      )}
     </div>
   );
 }
