@@ -1,7 +1,15 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { Search, Plus, Trash2, Save, BookOpen, Globe } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Trash2,
+  Save,
+  BookOpen,
+  Globe,
+  GripVertical,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -45,6 +53,8 @@ export function SentenceBuilder() {
   const [selectedSentence, setSelectedSentence] = useState<Sentence | null>(
     null
   );
+  const [draggedWord, setDraggedWord] = useState<WordItem | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 
   const { words, isLoading } = useWords();
   const dropZoneRef = useRef<HTMLDivElement>(null);
@@ -184,6 +194,64 @@ export function SentenceBuilder() {
     setSentenceWords(sentence.words);
     setNotes(sentence.notes);
     setSelectedSentence(sentence);
+  };
+
+  // Funções de drag and drop
+  const handleDragStart = (e: React.DragEvent, wordItem: WordItem) => {
+    setDraggedWord(wordItem);
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/html", wordItem.id);
+  };
+
+  const handleDragOver = (e: React.DragEvent, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
+    setDragOverIndex(index);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverIndex(null);
+  };
+
+  const handleDrop = (e: React.DragEvent, dropIndex: number) => {
+    e.preventDefault();
+
+    if (!draggedWord) return;
+
+    setSentenceWords((prev) => {
+      const sortedWords = [...prev].sort((a, b) => a.position - b.position);
+      const draggedIndex = sortedWords.findIndex(
+        (w) => w.id === draggedWord.id
+      );
+
+      if (draggedIndex === -1) return prev;
+
+      // Remove o item arrastado
+      const [draggedItem] = sortedWords.splice(draggedIndex, 1);
+
+      // Insere na nova posição
+      sortedWords.splice(dropIndex, 0, draggedItem);
+
+      // Reordena as posições
+      return sortedWords.map((word, index) => ({
+        ...word,
+        position: index,
+      }));
+    });
+
+    setDraggedWord(null);
+    setDragOverIndex(null);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedWord(null);
+    setDragOverIndex(null);
+  };
+
+  // Função para lidar com clique direito
+  const handleRightClick = (e: React.MouseEvent, wordId: string) => {
+    e.preventDefault();
+    removeWordFromSentence(wordId);
   };
 
   // Gerar texto da frase
@@ -354,23 +422,50 @@ export function SentenceBuilder() {
                   <BookOpen size={32} className="mx-auto mb-2 opacity-50" />
                   <p>
                     Arraste palavras aqui ou clique nelas para construir sua
-                    frase
+                    frase.
+                    <br />
+                    <span className="text-sm opacity-75">
+                      Você pode arrastar e reordenar as palavras na frase
+                    </span>
+                    <br />
+                    <span className="text-sm opacity-75">
+                      Clique com botão direito para remover palavras
+                    </span>
                   </p>
                 </div>
               ) : (
                 <div className="flex flex-wrap gap-2">
                   {sentenceWords
                     .sort((a, b) => a.position - b.position)
-                    .map((wordItem) => (
-                      <Badge
+                    .map((wordItem, index) => (
+                      <div
                         key={wordItem.id}
-                        variant="secondary"
-                        className="px-3 !h-12 py-1 cursor-pointer text-lg bg-white border-b-[4px] border-[##e5e5e5] !rounded-[12px] transition-colors"
-                        onClick={() => removeWordFromSentence(wordItem.id)}
+                        className={`relative ${
+                          dragOverIndex === index
+                            ? "ring-2 ring-blue-500 ring-opacity-50"
+                            : ""
+                        }`}
+                        onDragOver={(e) => handleDragOver(e, index)}
+                        onDragLeave={handleDragLeave}
+                        onDrop={(e) => handleDrop(e, index)}
                       >
-                        {wordItem.word.name}
-                        <Trash2 size={12} className="ml-2" />
-                      </Badge>
+                        <Badge
+                          variant="secondary"
+                          className="px-3 !h-12 py-1 text-lg bg-white border-b-[4px] border-[#e5e5e5] !rounded-[12px] transition-colors hover:shadow-md"
+                          draggable
+                          onDragStart={(e) => handleDragStart(e, wordItem)}
+                          onDragEnd={handleDragEnd}
+                          onContextMenu={(e) =>
+                            handleRightClick(e, wordItem.id)
+                          }
+                        >
+                          <GripVertical
+                            size={12}
+                            className="mr-1 text-gray-400"
+                          />
+                          {wordItem.word.name}
+                        </Badge>
+                      </div>
                     ))}
                 </div>
               )}
@@ -406,20 +501,34 @@ export function SentenceBuilder() {
                 <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Palavras na frase:
                 </h4>
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {sentenceWords
                     .sort((a, b) => a.position - b.position)
                     .map((wordItem) => (
-                      <div key={wordItem.id} className="text-sm">
-                        <span className="font-medium text-gray-900 dark:text-white">
-                          {wordItem.word.name}
-                        </span>
-                        <span className="text-gray-600 dark:text-gray-400 ml-2">
-                          - {wordItem.word.translations.join(", ")}
-                        </span>
-                        <span className="text-xs text-gray-500 ml-2">
-                          ({wordItem.word.grammaticalClass})
-                        </span>
+                      <div
+                        key={wordItem.id}
+                        className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        onContextMenu={(e) => handleRightClick(e, wordItem.id)}
+                      >
+                        <div className="text-sm flex-1">
+                          <span className="font-medium text-gray-900 dark:text-white">
+                            {wordItem.word.name}
+                          </span>
+                          <span className="text-gray-600 dark:text-gray-400 ml-2">
+                            - {wordItem.word.translations.join(", ")}
+                          </span>
+                          <span className="text-xs text-gray-500 ml-2">
+                            ({wordItem.word.grammaticalClass})
+                          </span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeWordFromSentence(wordItem.id)}
+                          className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900"
+                        >
+                          <Trash2 size={12} />
+                        </Button>
                       </div>
                     ))}
                 </div>
