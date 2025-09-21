@@ -74,8 +74,19 @@ export function SentenceBuilder() {
     y: number;
   } | null>(null);
 
+  // Estados para sistema de menções
+  const [isEditingNotes, setIsEditingNotes] = useState(false);
+  const [showMentionDropdown, setShowMentionDropdown] = useState(false);
+  const [mentionPosition, setMentionPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [cursorPosition, setCursorPosition] = useState(0);
+
   const { words, isLoading } = useWords();
   const dropZoneRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Cores predefinidas para destacar palavras
   const highlightColors = [
@@ -126,6 +137,28 @@ export function SentenceBuilder() {
       return () => document.removeEventListener("click", handleClickOutside);
     }
   }, [contextMenuWordId]);
+
+  // Fechar menu de contexto e dropdown de menção ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setContextMenuWordId(null);
+      setContextMenuPosition(null);
+      setShowMentionDropdown(false);
+    };
+
+    if (contextMenuWordId || showMentionDropdown) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [contextMenuWordId, showMentionDropdown]);
+
+  // Fechar dropdown quando sair do modo de edição
+  useEffect(() => {
+    if (!isEditingNotes) {
+      setShowMentionDropdown(false);
+      setMentionQuery("");
+    }
+  }, [isEditingNotes]);
 
   // Filtrar palavras baseado na pesquisa
   useEffect(() => {
@@ -255,6 +288,139 @@ export function SentenceBuilder() {
 
     setSavedSentences((prev) => [newSentence, ...prev]);
     clearSentence();
+  };
+
+  // Função para renderizar texto com menções destacadas
+  const renderTextWithMentions = (text: string) => {
+    if (!text) return [];
+
+    // Regex para encontrar @palavra
+    const regex = /@(\w+)/g;
+    const parts = text.split(regex);
+
+    return parts.map((part, index) => {
+      if (index % 2 === 1) {
+        // É uma palavra após @
+        return {
+          type: "mention",
+          content: part,
+          key: index,
+        };
+      }
+      return {
+        type: "text",
+        content: part,
+        key: index,
+      };
+    });
+  };
+
+  // Função para calcular posição do dropdown de menção
+  const calculateMentionPosition = (
+    textarea: HTMLTextAreaElement,
+    cursorPosition: number,
+    notes: string
+  ) => {
+    const rect = textarea.getBoundingClientRect();
+    const lines = notes.substring(0, cursorPosition).split("\n").length - 1;
+    const LINE_HEIGHT = 20;
+
+    return {
+      x: rect.left,
+      y: rect.top + lines * LINE_HEIGHT + LINE_HEIGHT,
+    };
+  };
+
+  // Função para preparar dados para o dropdown de menção
+  const getMentionOptions = (mentionQuery: string) => {
+    return sentenceWords
+      .sort((a, b) => a.position - b.position)
+      .filter((wordItem) =>
+        wordItem.word.name.toLowerCase().includes(mentionQuery.toLowerCase())
+      )
+      .map((wordItem) => ({
+        name: wordItem.word.name,
+        translations: wordItem.word.translations.join(", "),
+      }));
+  };
+
+  // Função para lidar com mudanças no textarea
+  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const value = e.target.value;
+    const cursorPos = e.target.selectionStart;
+
+    setNotes(value);
+    setCursorPosition(cursorPos);
+
+    // Verificar se acabou de digitar "@"
+    if (cursorPos > 0 && value[cursorPos - 1] === "@") {
+      // Verificar se é início de linha ou após espaço
+      if (cursorPos === 1 || value[cursorPos - 2] === " ") {
+        const position = calculateMentionPosition(e.target, cursorPos, notes);
+        setMentionPosition(position);
+        setMentionQuery("");
+        setShowMentionDropdown(true);
+      }
+    } else if (showMentionDropdown) {
+      // Se já está mostrando dropdown, verificar se ainda está digitando após @
+      const textBeforeCursor = value.substring(0, cursorPos);
+      const lastAtIndex = textBeforeCursor.lastIndexOf("@");
+
+      if (lastAtIndex !== -1) {
+        const textAfterAt = textBeforeCursor.substring(lastAtIndex + 1);
+        if (!textAfterAt.includes(" ") && !textAfterAt.includes("\n")) {
+          setMentionQuery(textAfterAt);
+          const position = calculateMentionPosition(
+            e.target,
+            lastAtIndex,
+            notes
+          );
+          setMentionPosition(position);
+        } else {
+          setShowMentionDropdown(false);
+        }
+      } else {
+        setShowMentionDropdown(false);
+      }
+    }
+  };
+
+  // Função para inserir menção
+  const handleInsertMention = (wordName: string) => {
+    const beforeCursor = notes.substring(0, cursorPosition);
+    const afterCursor = notes.substring(cursorPosition);
+
+    // Encontrar a posição do último @
+    const lastAtIndex = beforeCursor.lastIndexOf("@");
+    if (lastAtIndex === -1) return;
+
+    const beforeAt = beforeCursor.substring(0, lastAtIndex);
+    const newText = beforeAt + `@${wordName} ` + afterCursor;
+
+    setNotes(newText);
+    setShowMentionDropdown(false);
+    setMentionQuery("");
+
+    // Focar no textarea novamente
+    setTimeout(() => {
+      if (textareaRef.current) {
+        const newCursorPos = beforeAt.length + wordName.length + 2; // +2 para incluir @ e espaço
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
+      }
+    }, 0);
+  };
+
+  // Função para lidar com teclas pressionadas
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Escape") {
+      if (showMentionDropdown) {
+        setShowMentionDropdown(false);
+        setMentionQuery("");
+      } else if (isEditingNotes) {
+        setIsEditingNotes(false);
+      }
+    }
   };
 
   // Carregar frase salva
@@ -585,12 +751,88 @@ export function SentenceBuilder() {
               Anotações
             </h3>
 
-            <Textarea
-              placeholder="Faça suas anotações sobre esta frase..."
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              className="min-h-64 resize-none"
-            />
+            {/* Sistema de anotações com modo de edição */}
+            <div className="space-y-2">
+              {isEditingNotes ? (
+                // Modo de edição - mostra textarea
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Editando anotações:
+                    </h4>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setIsEditingNotes(false)}
+                      className="text-xs"
+                    >
+                      Salvar
+                    </Button>
+                  </div>
+                  <Textarea
+                    ref={textareaRef}
+                    placeholder="Faça suas anotações sobre esta frase... Digite @ para referenciar palavras"
+                    value={notes}
+                    onChange={handleNotesChange}
+                    onKeyDown={handleKeyDown}
+                    className="min-h-64 resize-none"
+                  />
+                </div>
+              ) : (
+                // Modo de visualização - mostra preview
+                <div
+                  className="min-h-64 p-3 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+                  onClick={() => setIsEditingNotes(true)}
+                >
+                  {notes ? (
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                          Anotações:
+                        </h4>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIsEditingNotes(true);
+                          }}
+                          className="text-xs"
+                        >
+                          Editar
+                        </Button>
+                      </div>
+                      <div className="text-sm leading-6 whitespace-pre-wrap break-words">
+                        {renderTextWithMentions(notes).map((part) => {
+                          if (part.type === "mention") {
+                            return (
+                              <span
+                                key={part.key}
+                                className="px-1 py-0.5 rounded bg-blue-500 text-white font-medium"
+                              >
+                                @{part.content}
+                              </span>
+                            );
+                          }
+                          return part.content;
+                        })}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+                      <div className="text-center">
+                        <p className="text-sm">
+                          Clique para adicionar anotações
+                        </p>
+                        <p className="text-xs mt-1">
+                          Digite @ para referenciar palavras
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
             {sentenceWords.length > 0 && (
               <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
@@ -678,6 +920,39 @@ export function SentenceBuilder() {
             <Trash2 size={14} />
             Excluir palavra
           </button>
+        </div>
+      )}
+
+      {/* Dropdown de menção */}
+      {showMentionDropdown && mentionPosition && (
+        <div
+          className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[200px] max-h-48 overflow-y-auto"
+          style={{
+            left: mentionPosition.x,
+            top: mentionPosition.y,
+          }}
+        >
+          <div className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+            Selecionar palavra:
+          </div>
+          {getMentionOptions(mentionQuery).length > 0 ? (
+            getMentionOptions(mentionQuery).map((option, index) => (
+              <button
+                key={index}
+                onClick={() => handleInsertMention(option.name)}
+                className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+              >
+                <span className="font-medium">{option.name}</span>
+                <span className="text-xs text-gray-500">
+                  - {option.translations}
+                </span>
+              </button>
+            ))
+          ) : (
+            <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">
+              Nenhuma palavra encontrada
+            </div>
+          )}
         </div>
       )}
     </div>
