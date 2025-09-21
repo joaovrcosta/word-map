@@ -194,6 +194,12 @@ export async function getCurrentUser(): Promise<User | null> {
     });
 
     if (!user) {
+      // Usuário não existe mais no banco, limpar cookie
+      console.log(
+        "Usuário não encontrado no banco, limpando cookie de autenticação"
+      );
+      const cookieStore = await cookies();
+      cookieStore.delete("auth-token");
       return null;
     }
 
