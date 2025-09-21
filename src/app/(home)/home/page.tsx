@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createWord } from "@/actions/actions";
+import { createWord, createVault } from "@/actions/actions";
 import { SearchWord } from "@/components/search-word";
 import { ImportExportWords } from "@/components/import-export-words";
 import { SentenceBuilder } from "@/components/sentence-builder";
@@ -30,10 +30,12 @@ import { translateToPortuguese } from "@/lib/translate";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useWords, useVaults } from "@/hooks/use-words";
 import { useQueryClient } from "@tanstack/react-query";
+import { CreateVaultForm } from "./vault/create-vault-form";
 
 function HomePageContent() {
   const [activeTab, setActiveTab] = useState<"words" | "sentences">("words");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isCreateVaultDialogOpen, setIsCreateVaultDialogOpen] = useState(false);
   const [newWord, setNewWord] = useState({
     name: "",
     grammaticalClass: "",
@@ -172,6 +174,13 @@ function HomePageContent() {
     });
   }, []);
 
+  // Handler para quando um vault é criado com sucesso
+  const handleVaultCreated = useCallback(() => {
+    setIsCreateVaultDialogOpen(false);
+    // Invalidar cache para atualizar a lista de vaults
+    queryClient.invalidateQueries({ queryKey: ["vaults"] });
+  }, [queryClient]);
+
   // Estatísticas calculadas
   const stats = useMemo(
     () => [
@@ -214,6 +223,101 @@ function HomePageContent() {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Carregando vaults...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Estado vazio quando não há vaults
+  if (!vaults || vaults.length === 0) {
+    return (
+      <div className="space-y-6 px-6 pt-6 max-w-full overflow-x-hidden">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Bem-vindo ao Word Map
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              Comece criando seu primeiro vault para organizar suas palavras
+            </p>
+          </div>
+        </div>
+
+        {/* Estado vazio com instruções */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border">
+          <div className="p-12 text-center">
+            <BookOpen className="mx-auto h-16 w-16 text-gray-400 mb-6" />
+            <h2 className="text-2xl font-semibold text-gray-900 dark:text-white mb-4">
+              Crie seu primeiro Vault
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-8 max-w-2xl mx-auto">
+              Os vaults são como pastas onde você pode organizar suas palavras por tema, 
+              nível de dificuldade ou qualquer critério que preferir. Comece criando seu 
+              primeiro vault para começar a construir seu vocabulário!
+            </p>
+            
+            {/* Instruções */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-6 mb-8 max-w-3xl mx-auto">
+              <h3 className="text-lg font-medium text-blue-900 dark:text-blue-100 mb-4">
+                Como funciona:
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-left">
+                <div className="flex items-start space-x-3">
+                  <div className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">
+                    1
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-blue-900 dark:text-blue-100">Crie um Vault</h4>
+                    <p className="text-sm text-blue-700 dark:text-blue-200">
+                      Dê um nome ao seu vault (ex: "Vocabulário Básico")
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <div className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">
+                    2
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-blue-900 dark:text-blue-100">Adicione Palavras</h4>
+                    <p className="text-sm text-blue-700 dark:text-blue-200">
+                      Use a busca ou adicione manualmente suas palavras
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start space-x-3">
+                  <div className="bg-blue-500 text-white rounded-full w-6 h-6 flex items-center justify-center text-sm font-bold flex-shrink-0 mt-0.5">
+                    3
+                  </div>
+                  <div>
+                    <h4 className="font-medium text-blue-900 dark:text-blue-100">Organize e Estude</h4>
+                    <p className="text-sm text-blue-700 dark:text-blue-200">
+                      Use flashcards e construa frases para praticar
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Botão para criar vault */}
+            <Dialog open={isCreateVaultDialogOpen} onOpenChange={setIsCreateVaultDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="lg" className="px-8 py-3">
+                  <Plus size={20} className="mr-2" />
+                  Criar Meu Primeiro Vault
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Criar Novo Vault</DialogTitle>
+                </DialogHeader>
+                <CreateVaultForm
+                  onSuccess={handleVaultCreated}
+                  onCancel={() => setIsCreateVaultDialogOpen(false)}
+                />
+              </DialogContent>
+            </Dialog>
+          </div>
         </div>
       </div>
     );
