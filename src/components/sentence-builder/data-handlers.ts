@@ -15,7 +15,7 @@ export const addWordToSentence = async (
     try {
       const translation = await translateToPortuguese(word.name);
       wordToAdd = {
-        id: parseInt(word.id.replace("external-", "")),
+        id: word.id as any, // Manter como string para palavras externas
         name: word.name,
         translations: [translation],
         grammaticalClass: word.grammaticalClass,
@@ -30,7 +30,7 @@ export const addWordToSentence = async (
       console.warn("Erro ao traduzir palavra:", error);
       // Usar palavra sem tradução se falhar
       wordToAdd = {
-        id: parseInt(word.id.replace("external-", "")),
+        id: word.id as any, // Manter como string para palavras externas
         name: word.name,
         translations: [],
         grammaticalClass: word.grammaticalClass,

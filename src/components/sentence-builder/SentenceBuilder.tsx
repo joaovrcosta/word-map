@@ -49,6 +49,8 @@ export function SentenceBuilder() {
     setSavedSentences,
     selectedSentence,
     setSelectedSentence,
+    isLoadingSentences,
+    isSavingSentence,
 
     // Estados para drag and drop
     draggedWord,
@@ -83,6 +85,12 @@ export function SentenceBuilder() {
     // Refs
     dropZoneRef,
     textareaRef,
+
+    // Funções do banco de dados
+    loadSavedSentences,
+    saveCurrentSentence,
+    loadSentence,
+    deleteSavedSentence,
   } = useSentenceBuilder();
 
   // Filtrar palavras baseado na pesquisa
@@ -303,25 +311,20 @@ export function SentenceBuilder() {
   };
 
   // Função para salvar frase atual
-  const handleSaveCurrentSentence = () => {
+  const handleSaveCurrentSentence = async () => {
     if (sentenceWords.length === 0) return;
 
-    const newSentence = {
-      id: `sentence-${Date.now()}`,
-      words: [...sentenceWords],
-      notes,
-      createdAt: new Date(),
-    };
-
-    setSavedSentences((prev) => [newSentence, ...prev]);
-    handleClearCurrentSentence();
+    try {
+      await saveCurrentSentence();
+    } catch (error) {
+      console.error("Erro ao salvar frase:", error);
+      // Aqui você pode adicionar um toast de erro se necessário
+    }
   };
 
   // Função para carregar uma frase salva
   const handleLoadSentence = (sentence: any) => {
-    setSentenceWords(sentence.words);
-    setNotes(sentence.notes);
-    setSelectedSentence(sentence);
+    loadSentence(sentence);
   };
 
   // Gerar texto da frase
@@ -354,10 +357,10 @@ export function SentenceBuilder() {
           </Button>
           <Button
             onClick={handleSaveCurrentSentence}
-            disabled={sentenceWords.length === 0}
+            disabled={sentenceWords.length === 0 || isSavingSentence}
           >
             <Save size={16} className="mr-2" />
-            Salvar Frase
+            {isSavingSentence ? "Salvando..." : "Salvar Frase"}
           </Button>
         </div>
       </div>
@@ -377,7 +380,9 @@ export function SentenceBuilder() {
           {/* Frases Salvas */}
           <SavedSentences
             savedSentences={savedSentences}
+            isLoadingSentences={isLoadingSentences}
             onLoadSentence={handleLoadSentence}
+            onDeleteSentence={deleteSavedSentence}
           />
         </div>
 

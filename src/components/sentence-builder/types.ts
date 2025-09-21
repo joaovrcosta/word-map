@@ -38,6 +38,11 @@ export interface ContextMenuPosition {
 }
 
 // Importar e re-exportar o tipo Word do actions
-import { type Word } from "@/actions/actions";
+import { type Word as BaseWord } from "@/actions/actions";
 
-export type { Word };
+// Criar um tipo Word que aceita ID como string ou number
+export interface Word extends Omit<BaseWord, "id"> {
+  id: string | number;
+}
+
+export type { BaseWord };

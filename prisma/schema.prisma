@@ -21,6 +21,7 @@ model User {
   texts            Text[]
   settings         UserSettings?
   semanticConnections SemanticConnection[]
+  sentences        Sentence[]
 }
 
 model UserSettings {
@@ -61,6 +62,7 @@ model Word {
   Word_A           Word[]        @relation("RelatedWords")
   Word_B           Word[]        @relation("RelatedWords")
   semanticConnections SemanticConnectionWord[]
+  sentenceWords    SentenceWord[]
 }
 
 model WordHistory {
@@ -106,4 +108,28 @@ model SemanticConnectionWord {
   word        Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
   
   @@unique([connectionId, wordId])
+}
+
+model Sentence {
+  id        Int      @id @default(autoincrement())
+  title     String?  // Título opcional da frase
+  notes     String?  @db.Text // Anotações da frase
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  words     SentenceWord[]
+}
+
+model SentenceWord {
+  id         Int      @id @default(autoincrement())
+  sentenceId Int
+  wordId     Int
+  position   Int      // Posição da palavra na frase
+  highlightColor String? // Cor de destaque da palavra
+  createdAt  DateTime @default(now())
+  sentence   Sentence @relation(fields: [sentenceId], references: [id], onDelete: Cascade)
+  word       Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+  
+  @@unique([sentenceId, wordId])
 }
