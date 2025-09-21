@@ -9,12 +9,21 @@ import {
   BookOpen,
   Globe,
   GripVertical,
+  Palette,
+  MoreVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { useWords } from "@/hooks/use-words";
 import { type Word } from "@/actions/actions";
 import { translateToPortuguese } from "@/lib/translate";
@@ -23,6 +32,7 @@ interface WordItem {
   id: string;
   word: Word;
   position: number;
+  highlightColor?: string;
 }
 
 interface ExternalWord {
@@ -55,9 +65,67 @@ export function SentenceBuilder() {
   );
   const [draggedWord, setDraggedWord] = useState<WordItem | null>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+  const [editingWordId, setEditingWordId] = useState<string | null>(null);
+  const [contextMenuWordId, setContextMenuWordId] = useState<string | null>(
+    null
+  );
+  const [contextMenuPosition, setContextMenuPosition] = useState<{
+    x: number;
+    y: number;
+  } | null>(null);
 
   const { words, isLoading } = useWords();
   const dropZoneRef = useRef<HTMLDivElement>(null);
+
+  // Cores predefinidas para destacar palavras
+  const highlightColors = [
+    { name: "Padrão", value: "", bg: "bg-gray-100", text: "text-gray-800" },
+    { name: "Vermelho", value: "red", bg: "bg-red-100", text: "text-red-800" },
+    { name: "Azul", value: "blue", bg: "bg-blue-100", text: "text-blue-800" },
+    {
+      name: "Verde",
+      value: "green",
+      bg: "bg-green-100",
+      text: "text-green-800",
+    },
+    {
+      name: "Amarelo",
+      value: "yellow",
+      bg: "bg-yellow-100",
+      text: "text-yellow-800",
+    },
+    {
+      name: "Roxo",
+      value: "purple",
+      bg: "bg-purple-100",
+      text: "text-purple-800",
+    },
+    { name: "Rosa", value: "pink", bg: "bg-pink-100", text: "text-pink-800" },
+    {
+      name: "Laranja",
+      value: "orange",
+      bg: "bg-orange-100",
+      text: "text-orange-800",
+    },
+  ];
+
+  // Função para fechar menu de contexto
+  const closeContextMenu = () => {
+    setContextMenuWordId(null);
+    setContextMenuPosition(null);
+  };
+
+  // Fechar menu de contexto ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = () => {
+      closeContextMenu();
+    };
+
+    if (contextMenuWordId) {
+      document.addEventListener("click", handleClickOutside);
+      return () => document.removeEventListener("click", handleClickOutside);
+    }
+  }, [contextMenuWordId]);
 
   // Filtrar palavras baseado na pesquisa
   useEffect(() => {
@@ -251,7 +319,33 @@ export function SentenceBuilder() {
   // Função para lidar com clique direito
   const handleRightClick = (e: React.MouseEvent, wordId: string) => {
     e.preventDefault();
+    setContextMenuWordId(wordId);
+    setContextMenuPosition({ x: e.clientX, y: e.clientY });
+  };
+
+  // Função para remover palavra (com fechamento do menu)
+  const removeWordWithMenu = (wordId: string) => {
     removeWordFromSentence(wordId);
+    closeContextMenu();
+  };
+
+  // Função para alterar cor de destaque
+  const changeWordColor = (wordId: string, color: string) => {
+    setSentenceWords((prev) =>
+      prev.map((word) =>
+        word.id === wordId ? { ...word, highlightColor: color } : word
+      )
+    );
+    setEditingWordId(null);
+    closeContextMenu();
+  };
+
+  // Função para obter classes CSS da cor
+  const getColorClasses = (color: string) => {
+    const colorConfig = highlightColors.find((c) => c.value === color);
+    return colorConfig
+      ? `${colorConfig.bg} ${colorConfig.text}`
+      : "bg-gray-100 text-gray-800";
   };
 
   // Gerar texto da frase
@@ -429,7 +523,7 @@ export function SentenceBuilder() {
                     </span>
                     <br />
                     <span className="text-sm opacity-75">
-                      Clique com botão direito para remover palavras
+                      Clique com botão direito para opções
                     </span>
                   </p>
                 </div>
@@ -451,7 +545,9 @@ export function SentenceBuilder() {
                       >
                         <Badge
                           variant="secondary"
-                          className="px-3 !h-12 py-1 text-lg bg-white border-b-[4px] border-[#e5e5e5] !rounded-[12px] transition-colors hover:shadow-md"
+                          className={`px-3 !h-12 py-1 text-lg border-b-[4px] border-[#e5e5e5] !rounded-[12px] transition-colors hover:shadow-md ${getColorClasses(
+                            wordItem.highlightColor || ""
+                          )}`}
                           draggable
                           onDragStart={(e) => handleDragStart(e, wordItem)}
                           onDragEnd={handleDragEnd}
@@ -507,7 +603,9 @@ export function SentenceBuilder() {
                     .map((wordItem) => (
                       <div
                         key={wordItem.id}
-                        className="flex items-center justify-between p-2 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors"
+                        className={`flex items-center justify-between p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors ${getColorClasses(
+                          wordItem.highlightColor || ""
+                        )}`}
                         onContextMenu={(e) => handleRightClick(e, wordItem.id)}
                       >
                         <div className="text-sm flex-1">
@@ -521,14 +619,9 @@ export function SentenceBuilder() {
                             ({wordItem.word.grammaticalClass})
                           </span>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeWordFromSentence(wordItem.id)}
-                          className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-100 dark:hover:bg-red-900"
-                        >
-                          <Trash2 size={12} />
-                        </Button>
+                        <div className="text-xs text-gray-500">
+                          Clique direito para opções
+                        </div>
                       </div>
                     ))}
                 </div>
@@ -537,6 +630,56 @@ export function SentenceBuilder() {
           </Card>
         </div>
       </div>
+
+      {/* Menu de Contexto */}
+      {contextMenuWordId && contextMenuPosition && (
+        <div
+          className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[200px]"
+          style={{
+            left: contextMenuPosition.x,
+            top: contextMenuPosition.y,
+          }}
+        >
+          <div className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+            Opções da palavra
+          </div>
+
+          {/* Opções de cores */}
+          <div className="px-3 py-2">
+            <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+              Destacar com cor:
+            </div>
+            <div className="flex flex-wrap gap-1">
+              {highlightColors.map((color) => (
+                <button
+                  key={color.value}
+                  onClick={() =>
+                    changeWordColor(contextMenuWordId, color.value)
+                  }
+                  className={`w-6 h-6 rounded-full border-2 ${
+                    sentenceWords.find((w) => w.id === contextMenuWordId)
+                      ?.highlightColor === color.value
+                      ? "border-gray-800"
+                      : "border-gray-300"
+                  } ${color.bg}`}
+                  title={color.name}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="border-t border-gray-200 dark:border-gray-700"></div>
+
+          {/* Opção de excluir */}
+          <button
+            onClick={() => removeWordWithMenu(contextMenuWordId)}
+            className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+          >
+            <Trash2 size={14} />
+            Excluir palavra
+          </button>
+        </div>
+      )}
     </div>
   );
 }
