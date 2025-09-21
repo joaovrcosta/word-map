@@ -223,7 +223,7 @@ function HomePageContent() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            Dashboard
+            {selectedVault?.name || "Dashboard"}
           </h1>
           <p className="text-gray-600 dark:text-gray-400">
             Gerencie suas palavras e acompanhe seu progresso

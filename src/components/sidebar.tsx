@@ -44,9 +44,14 @@ type SidebarLink = {
 
 const links: SidebarLink[] = [
   {
-    name: "APRENDER",
+    name: "HOME",
     path: "/home",
     icon: Home,
+  },
+  {
+    name: "COFRES",
+    path: "/home/vault",
+    icon: VaultIcon,
   },
   {
     name: "TEXTOS",
