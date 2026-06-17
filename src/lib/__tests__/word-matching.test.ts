@@ -1,10 +1,12 @@
 import {
+  lemmatizeWord,
+  getLemmaForms,
+  matchTextToVaultWords,
+} from "../word-matching.server";
+import {
   createHighlightMarker,
   escapeRegExp,
   extractTextTokens,
-  getLemmaForms,
-  lemmatizeWord,
-  matchTextToVaultWords,
   normalizeToken,
   parseHighlightMarker,
   splitHighlightParts,

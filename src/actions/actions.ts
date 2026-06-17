@@ -4,7 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/actions/auth";
 import { translateDefinitions } from "@/lib/translate";
-import { matchTextToVaultWords } from "@/lib/word-matching";
+import { matchTextToVaultWords } from "@/lib/word-matching.server";
 
 export interface Vault {
   id: number;

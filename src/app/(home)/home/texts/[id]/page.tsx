@@ -129,7 +129,7 @@ const WordDropdown = memo(
                             size="sm"
                             className="h-6 w-6 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
                             onClick={() =>
-                              onRemoveWordFromVault(word, vault.id)
+                              onRemoveWordFromVault(vaultWord.name, vault.id)
                             }
                             disabled={isAddingWord}
                             title="Remover do vault"
