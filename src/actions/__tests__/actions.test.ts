@@ -821,6 +821,69 @@ describe("Actions", () => {
     });
   });
 
+  describe("checkTextWords", () => {
+    it("deve encontrar palavras flexionadas via lemmatização", async () => {
+      const mockVaults = [
+        {
+          id: 1,
+          name: "English",
+          userId: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          words: [
+            {
+              id: 10,
+              name: "run",
+              grammaticalClass: "verb",
+              category: null,
+              translations: ["correr"],
+              confidence: 1,
+              isSaved: true,
+              frequency: 0,
+              vaultId: 1,
+              createdAt: new Date(),
+            },
+          ],
+        },
+      ];
+
+      mockPrisma.vault.findMany.mockResolvedValue(mockVaults);
+
+      const result = await checkTextWords("She is running fast");
+
+      expect(mockPrisma.vault.findMany).toHaveBeenCalledWith({
+        where: { userId: 1 },
+        include: {
+          words: {
+            select: {
+              id: true,
+              name: true,
+              grammaticalClass: true,
+              category: true,
+              translations: true,
+              confidence: true,
+              isSaved: true,
+              frequency: true,
+              vaultId: true,
+              createdAt: true,
+            },
+          },
+        },
+      });
+      expect(result).toHaveLength(1);
+      expect(result[0].word).toBe("running");
+      expect(result[0].vaultInfo[0].words[0].name).toBe("run");
+    });
+
+    it("deve falhar se usuário não estiver autenticado", async () => {
+      mockGetCurrentUser.mockResolvedValue(null);
+
+      await expect(checkTextWords("hello")).rejects.toThrow(
+        "Usuário não autenticado"
+      );
+    });
+  });
+
   describe("exportVaultWords", () => {
     it("deve exportar palavras do vault com sucesso", async () => {
       const mockVault = {

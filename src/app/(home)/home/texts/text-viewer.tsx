@@ -41,6 +41,13 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { translateDefinitions } from "@/lib/translate";
+import {
+  createHighlightMarker,
+  escapeRegExp,
+  normalizeToken,
+  parseHighlightMarker,
+  splitHighlightParts,
+} from "@/lib/word-matching";
 
 interface TextViewerProps {
   text: Text;
@@ -415,15 +422,6 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
     setIsEditing(false);
   };
 
-  // Função para limpar palavra removendo caracteres especiais e pontuação
-  const cleanWord = (word: string): string => {
-    return word
-      .replace(/[^\w\s]/g, "") // Remove tudo exceto letras, números e espaços
-      .trim()
-      .toLowerCase();
-  };
-
-  // Função para renderizar o texto com highlights interativos e palavras clicáveis
   // Função para buscar informações da palavra da API
   const fetchWordInfo = useCallback(async (word: string) => {
     try {
@@ -632,19 +630,20 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
   // Função para renderizar um pedaço de texto
   const renderTextChunk = useCallback(
     (content: string, chunkIndex: number = 0) => {
-      // Marcar palavras encontradas
-      foundWords.forEach(({ word }) => {
-        const regex = new RegExp(`\\b${word}\\b`, "gi");
-        content = content.replace(regex, `__HIGHLIGHT_${word}__`);
-      });
+      [...foundWords]
+        .sort((a, b) => b.word.length - a.word.length)
+        .forEach(({ word }) => {
+          const regex = new RegExp(`\\b${escapeRegExp(word)}\\b`, "gi");
+          content = content.replace(regex, createHighlightMarker(word));
+        });
 
-      const parts = content.split(/(__HIGHLIGHT_\w+__)/);
+      const parts = splitHighlightParts(content);
 
       return parts.map((part, index) => {
-        if (part.startsWith("__HIGHLIGHT_") && part.endsWith("__")) {
-          const word = part.replace(/__HIGHLIGHT_|__/g, "");
+        const highlightedWord = parseHighlightMarker(part);
+        if (highlightedWord) {
           const wordData = foundWords.find(
-            (fw) => fw.word.toLowerCase() === word.toLowerCase()
+            (fw) => fw.word.toLowerCase() === highlightedWord.toLowerCase()
           );
 
           if (wordData) {
@@ -665,7 +664,7 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
           const words = part.split(/(\s+)/);
           return words.map((word, wordIndex) => {
             if (word.trim() && word.length > 2) {
-              const cleanWordText = cleanWord(word);
+              const cleanWordText = normalizeToken(word);
               if (cleanWordText.length >= 3) {
                 const wordInfo = wordInfoMap[cleanWordText];
                 const isLoadingInfo = loadingWords.has(cleanWordText);

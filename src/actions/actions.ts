@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/actions/auth";
 import { translateDefinitions } from "@/lib/translate";
+import { matchTextToVaultWords } from "@/lib/word-matching";
 
 export interface Vault {
   id: number;
@@ -1355,12 +1356,6 @@ export async function checkTextWords(
     const userId = user.id;
     console.log("Verificando palavras do texto para usuário:", userId);
 
-    // Extrair palavras únicas do texto (apenas palavras em inglês)
-    const words = content.toLowerCase().match(/\b[a-z]+\b/g) || [];
-
-    const uniqueWords = [...new Set(words)];
-
-    // Buscar todas as palavras dos vaults do usuário
     const userVaults = await prisma.vault.findMany({
       where: { userId: userId },
       include: {
@@ -1381,34 +1376,7 @@ export async function checkTextWords(
       },
     });
 
-    // Mapear palavras encontradas com seus vaults
-    const foundWords = uniqueWords
-      .map((word) => {
-        const matchingVaults = userVaults.filter((vault) =>
-          vault.words.some(
-            (vaultWord) => vaultWord.name.toLowerCase() === word.toLowerCase()
-          )
-        );
-
-        if (matchingVaults.length > 0) {
-          return {
-            word,
-            vaultInfo: matchingVaults.map((vault) => ({
-              id: vault.id,
-              name: vault.name,
-              words: vault.words.filter(
-                (vaultWord) =>
-                  vaultWord.name.toLowerCase() === word.toLowerCase()
-              ),
-            })),
-          };
-        }
-        return null;
-      })
-      .filter((item) => item !== null) as Array<{
-      word: string;
-      vaultInfo: Vault[];
-    }>;
+    const foundWords = matchTextToVaultWords(content, userVaults);
 
     console.log("Palavras encontradas nos vaults:", foundWords.length);
     console.log("=== FIM checkTextWords - SUCESSO ===");
