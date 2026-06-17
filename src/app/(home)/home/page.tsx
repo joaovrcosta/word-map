@@ -411,6 +411,7 @@ function HomePageContent() {
                       <SelectItem value="conjuncao">Conjunção</SelectItem>
                       <SelectItem value="interjeicao">Interjeição</SelectItem>
                       <SelectItem value="phrasal-verb">Phrasal Verb</SelectItem>
+                      <SelectItem value="frase">Frase</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>

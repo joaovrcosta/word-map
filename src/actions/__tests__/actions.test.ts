@@ -875,6 +875,40 @@ describe("Actions", () => {
       expect(result[0].vaultInfo[0].words[0].name).toBe("run");
     });
 
+    it("deve encontrar phrasal verbs adjacentes", async () => {
+      const mockVaults = [
+        {
+          id: 2,
+          name: "Phrasal",
+          userId: 1,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+          words: [
+            {
+              id: 11,
+              name: "look up",
+              grammaticalClass: "phrasal-verb",
+              category: null,
+              translations: ["consultar"],
+              confidence: 1,
+              isSaved: true,
+              frequency: 0,
+              vaultId: 2,
+              createdAt: new Date(),
+            },
+          ],
+        },
+      ];
+
+      mockPrisma.vault.findMany.mockResolvedValue(mockVaults);
+
+      const result = await checkTextWords("He looked up the definition");
+
+      expect(result).toHaveLength(1);
+      expect(result[0].word).toBe("looked up");
+      expect(result[0].vaultInfo[0].words[0].name).toBe("look up");
+    });
+
     it("deve falhar se usuário não estiver autenticado", async () => {
       mockGetCurrentUser.mockResolvedValue(null);
 

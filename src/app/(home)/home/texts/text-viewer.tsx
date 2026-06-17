@@ -50,6 +50,8 @@ import {
   parseHighlightMarker,
   splitHighlightParts,
 } from "@/lib/word-matching";
+import { useTextSelection } from "@/hooks/use-text-selection";
+import { TextSelectionPopover } from "@/components/text-selection-popover";
 
 interface TextViewerProps {
   text: Text;
@@ -360,6 +362,8 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
   const autoTranslateWordPreview = useUserSettingsStore(
     (state) => state.settings.autoTranslateWordPreview
   );
+  const { containerRef: selectionContainerRef, selection, clearSelection } =
+    useTextSelection();
 
   useEffect(() => {
     const loadData = async () => {
@@ -859,7 +863,11 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
                   Preview com Highlights:
                 </h4>
                 <div className="prose prose-sm max-w-none dark:prose-invert">
-                  <div className="leading-relaxed text-gray-900 dark:text-gray-100">
+                  <div
+                    ref={selectionContainerRef}
+                    data-text-selection-container
+                    className="leading-relaxed text-gray-900 dark:text-gray-100 select-text"
+                  >
                     {renderInteractiveText}
                   </div>
                 </div>
@@ -867,7 +875,11 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
             </div>
           ) : (
             <div className="prose prose-sm max-w-none dark:prose-invert">
-              <div className="leading-relaxed text-gray-900 dark:text-gray-100">
+              <div
+                ref={selectionContainerRef}
+                data-text-selection-container
+                className="leading-relaxed text-gray-900 dark:text-gray-100 select-text"
+              >
                 {renderInteractiveText}
               </div>
             </div>
@@ -972,7 +984,7 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
               <Input
                 value={editGrammaticalClass}
                 onChange={(e) => setEditGrammaticalClass(e.target.value)}
-                placeholder="ex: substantivo, verbo, adjetivo"
+                placeholder="ex: substantivo, verbo, adjetivo, frase, phrasal-verb"
                 className="mt-1"
               />
             </div>
@@ -1002,6 +1014,17 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      {selection && (
+        <TextSelectionPopover
+          selection={selection}
+          userVaults={userVaults}
+          isAddingWord={isAddingWord}
+          autoTranslateWordPreview={autoTranslateWordPreview}
+          onSave={handleAddWordToVault}
+          onClose={clearSelection}
+        />
+      )}
     </div>
   );
 }

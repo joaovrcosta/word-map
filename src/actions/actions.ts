@@ -4,7 +4,13 @@ import { prisma } from "@/lib/prisma";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/actions/auth";
 import { translateDefinitions } from "@/lib/translate";
-import { matchTextToVaultWords } from "@/lib/word-matching.server";
+import {
+  getPhrasalCanonicalPreview,
+  matchTextToVaultWords,
+  resolveSelectionForSave,
+  type ResolvedSelection,
+  type SelectionSaveType,
+} from "@/lib/word-matching.server";
 
 export interface Vault {
   id: number;
@@ -1391,6 +1397,21 @@ export async function checkTextWords(
       }`
     );
   }
+}
+
+export type { ResolvedSelection, SelectionSaveType };
+
+export async function resolveSelectionSave(
+  selectedText: string,
+  saveType: SelectionSaveType
+): Promise<ResolvedSelection> {
+  return resolveSelectionForSave(selectedText, saveType);
+}
+
+export async function previewPhrasalCanonical(
+  selectedText: string
+): Promise<string | null> {
+  return getPhrasalCanonicalPreview(selectedText);
 }
 
 // Editar nome do vault

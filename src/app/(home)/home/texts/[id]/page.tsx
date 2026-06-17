@@ -54,6 +54,8 @@ import {
   parseHighlightMarker,
   splitHighlightParts,
 } from "@/lib/word-matching";
+import { useTextSelection } from "@/hooks/use-text-selection";
+import { TextSelectionPopover } from "@/components/text-selection-popover";
 
 interface FoundWord {
   word: string;
@@ -407,7 +409,7 @@ const EditWordDialog = memo(
                   value={editGrammaticalClass}
                   onChange={(e) => onGrammaticalClassChange(e.target.value)}
                   className="mt-1"
-                  placeholder="Ex: substantivo, verbo, adjetivo"
+                  placeholder="Ex: substantivo, verbo, adjetivo, frase, phrasal-verb"
                 />
               </div>
 
@@ -567,6 +569,8 @@ export default function TextPage() {
   const [editTranslations, setEditTranslations] = useState("");
   const [editGrammaticalClass, setEditGrammaticalClass] = useState("");
   const [editConfidence, setEditConfidence] = useState(1);
+  const { containerRef: selectionContainerRef, selection, clearSelection } =
+    useTextSelection();
 
   // Usar chunks apenas para textos muito longos (>5000 caracteres)
   const shouldUseChunks = editContent.length > 5000;
@@ -1198,7 +1202,11 @@ export default function TextPage() {
                   Preview com highlights:
                 </h3>
                 <div className="bg-white dark:bg-gray-800 p-6 rounded-lg border">
-                  <div className="leading-relaxed text-gray-900 dark:text-gray-100">
+                  <div
+                    ref={selectionContainerRef}
+                    data-text-selection-container
+                    className="leading-relaxed text-gray-900 dark:text-gray-100 select-text"
+                  >
                     {renderInteractiveText}
                   </div>
                 </div>
@@ -1215,7 +1223,13 @@ export default function TextPage() {
                     : undefined
                 }
               >
-                {renderInteractiveText}
+                <div
+                  ref={selectionContainerRef}
+                  data-text-selection-container
+                  className="select-text"
+                >
+                  {renderInteractiveText}
+                </div>
                 {shouldUseChunks && chunksLoading && (
                   <div className="text-center py-4">
                     <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-600 mx-auto"></div>
@@ -1280,6 +1294,16 @@ export default function TextPage() {
         )}
 
         {/* Modal de Edição de Palavra */}
+        {selection && (
+          <TextSelectionPopover
+            selection={selection}
+            userVaults={userVaults}
+            isAddingWord={isAddingWord}
+            autoTranslateWordPreview={autoTranslateWordPreview}
+            onSave={handleAddWordToVault}
+            onClose={clearSelection}
+          />
+        )}
         <EditWordDialog
           isOpen={isEditDialogOpen}
           onOpenChange={handleDialogOpenChange}
