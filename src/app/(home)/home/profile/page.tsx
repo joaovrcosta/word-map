@@ -90,11 +90,13 @@ export default function ProfilePage() {
         if (userSettings) {
           updateSettings({
             useAllVaultsForLinks: userSettings.useAllVaultsForLinks,
+            autoTranslateWordPreview: userSettings.autoTranslateWordPreview,
           });
         } else {
           // Se não há configurações, usar padrão
           updateSettings({
             useAllVaultsForLinks: false,
+            autoTranslateWordPreview: false,
           });
         }
 
@@ -167,16 +169,37 @@ export default function ProfilePage() {
     };
   };
 
-  const handleSettingChange = async (useAllVaults: boolean) => {
+  const handleUseAllVaultsChange = async (useAllVaults: boolean) => {
     setSaving(true);
     try {
       console.log("Iniciando mudança de configuração:", useAllVaults);
-      const result = await upsertUserSettings(useAllVaults);
+      const result = await upsertUserSettings({
+        useAllVaultsForLinks: useAllVaults,
+      });
       console.log("Configuração salva com sucesso:", result);
       updateSettings({ useAllVaultsForLinks: useAllVaults });
     } catch (error) {
       console.error("Erro ao salvar configuração:", error);
-      // Mostrar erro mais específico
+      if (error instanceof Error) {
+        alert(`Erro ao salvar configuração: ${error.message}`);
+      } else {
+        alert("Erro desconhecido ao salvar configuração");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleAutoTranslateChange = async (autoTranslate: boolean) => {
+    setSaving(true);
+    try {
+      const result = await upsertUserSettings({
+        autoTranslateWordPreview: autoTranslate,
+      });
+      console.log("Configuração salva com sucesso:", result);
+      updateSettings({ autoTranslateWordPreview: autoTranslate });
+    } catch (error) {
+      console.error("Erro ao salvar configuração:", error);
       if (error instanceof Error) {
         alert(`Erro ao salvar configuração: ${error.message}`);
       } else {
@@ -510,7 +533,31 @@ export default function ProfilePage() {
                   <Switch
                     id="use-all-vaults"
                     checked={settings.useAllVaultsForLinks}
-                    onCheckedChange={handleSettingChange}
+                    onCheckedChange={handleUseAllVaultsChange}
+                    disabled={saving}
+                  />
+                </div>
+
+                <Separator />
+
+                <div className="flex items-center justify-between">
+                  <div className="space-y-0.5">
+                    <Label
+                      htmlFor="auto-translate-preview"
+                      className="text-base font-medium"
+                    >
+                      Traduzir preview de palavras
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      {settings.autoTranslateWordPreview
+                        ? "Definições e exemplos aparecem em português ao clicar em palavras nos textos"
+                        : "Definições e exemplos aparecem em inglês ao clicar em palavras nos textos"}
+                    </p>
+                  </div>
+                  <Switch
+                    id="auto-translate-preview"
+                    checked={settings.autoTranslateWordPreview}
+                    onCheckedChange={handleAutoTranslateChange}
                     disabled={saving}
                   />
                 </div>

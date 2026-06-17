@@ -28,7 +28,8 @@ model UserSettings {
   id                    Int      @id @default(autoincrement())
   userId                Int      @unique
   user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  useAllVaultsForLinks  Boolean  @default(false) 
+  useAllVaultsForLinks  Boolean  @default(false)
+  autoTranslateWordPreview Boolean @default(false)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
 }

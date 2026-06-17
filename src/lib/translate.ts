@@ -149,3 +149,67 @@ export async function translateDefinitions(
     return definitions;
   }
 }
+
+export interface DictionaryWordInfo {
+  word?: string;
+  phonetic?: string;
+  meanings?: Array<{
+    partOfSpeech: string;
+    definitions: Array<{
+      definition: string;
+      example?: string;
+    }>;
+  }>;
+}
+
+/**
+ * Traduz definições e exemplos do preview do dicionário para português
+ */
+export async function translateWordInfoPreview(
+  wordInfo: DictionaryWordInfo
+): Promise<DictionaryWordInfo> {
+  if (!wordInfo?.meanings?.length) {
+    return wordInfo;
+  }
+
+  const textsToTranslate: string[] = [];
+  const paths: Array<{
+    meaningIndex: number;
+    defIndex: number;
+    field: "definition" | "example";
+  }> = [];
+
+  wordInfo.meanings.slice(0, 2).forEach((meaning, meaningIndex) => {
+    meaning.definitions.slice(0, 2).forEach((definition, defIndex) => {
+      if (definition.definition?.trim()) {
+        textsToTranslate.push(definition.definition);
+        paths.push({ meaningIndex, defIndex, field: "definition" });
+      }
+      if (definition.example?.trim()) {
+        textsToTranslate.push(definition.example);
+        paths.push({ meaningIndex, defIndex, field: "example" });
+      }
+    });
+  });
+
+  if (textsToTranslate.length === 0) {
+    return wordInfo;
+  }
+
+  const translatedTexts = await translateArrayToPortuguese(textsToTranslate);
+  const translatedWordInfo: DictionaryWordInfo = {
+    ...wordInfo,
+    meanings: wordInfo.meanings.map((meaning) => ({
+      ...meaning,
+      definitions: meaning.definitions.map((definition) => ({ ...definition })),
+    })),
+  };
+
+  paths.forEach((path, index) => {
+    const definition =
+      translatedWordInfo.meanings![path.meaningIndex].definitions[path.defIndex];
+    definition[path.field] = translatedTexts[index];
+  });
+
+  return translatedWordInfo;
+}

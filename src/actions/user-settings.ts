@@ -8,9 +8,14 @@ export interface UserSettings {
   id: number;
   userId: number;
   useAllVaultsForLinks: boolean;
+  autoTranslateWordPreview: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
+
+export type UserSettingsUpdate = Partial<
+  Pick<UserSettings, "useAllVaultsForLinks" | "autoTranslateWordPreview">
+>;
 
 // Buscar configurações do usuário
 export async function getUserSettings(): Promise<UserSettings | null> {
@@ -37,7 +42,7 @@ export async function getUserSettings(): Promise<UserSettings | null> {
 
 // Criar ou atualizar configurações do usuário
 export async function upsertUserSettings(
-  useAllVaultsForLinks: boolean
+  updates: UserSettingsUpdate
 ): Promise<UserSettings> {
   try {
     console.log("Iniciando upsert de configurações do usuário...");
@@ -64,14 +69,15 @@ export async function upsertUserSettings(
       console.log("Atualizando configurações existentes...");
       settings = await prisma.userSettings.update({
         where: { userId: user.id },
-        data: { useAllVaultsForLinks },
+        data: updates,
       });
     } else {
       console.log("Criando novas configurações...");
       settings = await prisma.userSettings.create({
         data: {
           userId: user.id,
-          useAllVaultsForLinks,
+          useAllVaultsForLinks: updates.useAllVaultsForLinks ?? false,
+          autoTranslateWordPreview: updates.autoTranslateWordPreview ?? false,
         },
       });
     }

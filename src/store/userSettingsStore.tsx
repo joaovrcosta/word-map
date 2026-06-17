@@ -4,6 +4,7 @@ import { create } from "zustand";
 
 interface UserSettings {
   useAllVaultsForLinks: boolean;
+  autoTranslateWordPreview: boolean;
 }
 
 interface UserSettingsStore {
@@ -15,6 +16,7 @@ interface UserSettingsStore {
 const useUserSettingsStore = create<UserSettingsStore>((set) => ({
   settings: {
     useAllVaultsForLinks: false,
+    autoTranslateWordPreview: false,
   },
   updateSettings: (newSettings) =>
     set((state) => ({

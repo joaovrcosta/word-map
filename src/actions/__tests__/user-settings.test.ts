@@ -68,6 +68,7 @@ describe("User Settings Actions", () => {
         id: 1,
         userId: 1,
         useAllVaultsForLinks: true,
+        autoTranslateWordPreview: false,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -116,6 +117,7 @@ describe("User Settings Actions", () => {
         id: 1,
         userId: 1,
         useAllVaultsForLinks: true,
+        autoTranslateWordPreview: false,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -123,7 +125,7 @@ describe("User Settings Actions", () => {
       mockPrisma.userSettings.findUnique.mockResolvedValue(null);
       mockPrisma.userSettings.create.mockResolvedValue(mockSettings);
 
-      const result = await upsertUserSettings(true);
+      const result = await upsertUserSettings({ useAllVaultsForLinks: true });
 
       expect(mockGetCurrentUser).toHaveBeenCalled();
       expect(mockPrisma.userSettings.findUnique).toHaveBeenCalledWith({
@@ -133,6 +135,7 @@ describe("User Settings Actions", () => {
         data: {
           userId: 1,
           useAllVaultsForLinks: true,
+          autoTranslateWordPreview: false,
         },
       });
       expect(mockRevalidatePath).toHaveBeenCalledWith("/home/profile");
@@ -144,6 +147,7 @@ describe("User Settings Actions", () => {
         id: 1,
         userId: 1,
         useAllVaultsForLinks: false,
+        autoTranslateWordPreview: false,
         createdAt: new Date(),
         updatedAt: new Date(),
       };
@@ -157,7 +161,7 @@ describe("User Settings Actions", () => {
       mockPrisma.userSettings.findUnique.mockResolvedValue(existingSettings);
       mockPrisma.userSettings.update.mockResolvedValue(updatedSettings);
 
-      const result = await upsertUserSettings(true);
+      const result = await upsertUserSettings({ useAllVaultsForLinks: true });
 
       expect(mockGetCurrentUser).toHaveBeenCalled();
       expect(mockPrisma.userSettings.findUnique).toHaveBeenCalledWith({
@@ -174,7 +178,9 @@ describe("User Settings Actions", () => {
     it("deve falhar se usuário não estiver autenticado", async () => {
       mockGetCurrentUser.mockResolvedValue(null);
 
-      await expect(upsertUserSettings(true)).rejects.toThrow(
+      await expect(
+        upsertUserSettings({ useAllVaultsForLinks: true })
+      ).rejects.toThrow(
         "Usuário não autenticado"
       );
     });
@@ -186,7 +192,9 @@ describe("User Settings Actions", () => {
       mockPrisma.userSettings.findUnique.mockResolvedValue(null);
       mockPrisma.userSettings.create.mockRejectedValue(error);
 
-      await expect(upsertUserSettings(true)).rejects.toThrow(
+      await expect(
+        upsertUserSettings({ useAllVaultsForLinks: true })
+      ).rejects.toThrow(
         "Configurações já existem para este usuário"
       );
     });
@@ -198,7 +206,9 @@ describe("User Settings Actions", () => {
       mockPrisma.userSettings.findUnique.mockResolvedValue(null);
       mockPrisma.userSettings.create.mockRejectedValue(error);
 
-      await expect(upsertUserSettings(true)).rejects.toThrow(
+      await expect(
+        upsertUserSettings({ useAllVaultsForLinks: true })
+      ).rejects.toThrow(
         "Usuário não encontrado"
       );
     });
@@ -210,7 +220,9 @@ describe("User Settings Actions", () => {
       mockPrisma.userSettings.findUnique.mockResolvedValue(null);
       mockPrisma.userSettings.create.mockRejectedValue(error);
 
-      await expect(upsertUserSettings(true)).rejects.toThrow(
+      await expect(
+        upsertUserSettings({ useAllVaultsForLinks: true })
+      ).rejects.toThrow(
         "Erro de conexão com o banco de dados"
       );
     });
@@ -221,7 +233,9 @@ describe("User Settings Actions", () => {
       mockPrisma.userSettings.findUnique.mockResolvedValue(null);
       mockPrisma.userSettings.create.mockRejectedValue(error);
 
-      await expect(upsertUserSettings(true)).rejects.toThrow(
+      await expect(
+        upsertUserSettings({ useAllVaultsForLinks: true })
+      ).rejects.toThrow(
         "Erro ao salvar configurações: Generic error"
       );
     });

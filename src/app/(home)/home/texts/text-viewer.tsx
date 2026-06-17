@@ -40,7 +40,9 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { translateDefinitions } from "@/lib/translate";
+import { translateDefinitions, translateWordInfoPreview } from "@/lib/translate";
+import { useLoadUserSettings } from "@/hooks/use-user-settings";
+import useUserSettingsStore from "@/store/userSettingsStore";
 import {
   createHighlightMarker,
   escapeRegExp,
@@ -354,6 +356,10 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
   const [editGrammaticalClass, setEditGrammaticalClass] = useState("");
   const [editConfidence, setEditConfidence] = useState(1);
   const { toast } = useToast();
+  useLoadUserSettings();
+  const autoTranslateWordPreview = useUserSettingsStore(
+    (state) => state.settings.autoTranslateWordPreview
+  );
 
   useEffect(() => {
     const loadData = async () => {
@@ -444,7 +450,16 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
       setLoadingWords((prev) => new Set(prev).add(word));
       try {
         const info = await fetchWordInfo(word);
-        setWordInfoMap((prev) => ({ ...prev, [word]: info }));
+        if (!info) {
+          setWordInfoMap((prev) => ({ ...prev, [word]: info }));
+          return;
+        }
+
+        const displayInfo = autoTranslateWordPreview
+          ? await translateWordInfoPreview(info)
+          : info;
+
+        setWordInfoMap((prev) => ({ ...prev, [word]: displayInfo }));
       } catch (error) {
         console.error("Erro ao buscar informações da palavra:", error);
       } finally {
@@ -455,7 +470,7 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
         });
       }
     },
-    [wordInfoMap, loadingWords, fetchWordInfo]
+    [wordInfoMap, loadingWords, fetchWordInfo, autoTranslateWordPreview]
   );
 
   const handleAddToVault = useCallback(

@@ -44,7 +44,9 @@ import {
   updateWord,
 } from "@/actions/actions";
 import { Vault } from "@/actions/actions";
-import { translateDefinitions } from "@/lib/translate";
+import { translateDefinitions, translateWordInfoPreview } from "@/lib/translate";
+import { useLoadUserSettings } from "@/hooks/use-user-settings";
+import useUserSettingsStore from "@/store/userSettingsStore";
 import {
   createHighlightMarker,
   escapeRegExp,
@@ -537,6 +539,10 @@ export default function TextPage() {
   const params = useParams();
   const router = useRouter();
   const { toast } = useToast();
+  useLoadUserSettings();
+  const autoTranslateWordPreview = useUserSettingsStore(
+    (state) => state.settings.autoTranslateWordPreview
+  );
 
   const [text, setText] = useState<Text | null>(null);
   const [foundWords, setFoundWords] = useState<FoundWord[]>([]);
@@ -807,15 +813,17 @@ export default function TextPage() {
 
         // Traduzir as definições para português
         let translatedDefinitions = originalTranslations;
-        try {
-          translatedDefinitions = await translateDefinitions(
-            originalTranslations
-          );
-          console.log("Traduções originais:", originalTranslations);
-          console.log("Traduções traduzidas:", translatedDefinitions);
-        } catch (error) {
-          console.warn("Erro ao traduzir definições, usando originais:", error);
-          // Manter traduções originais em caso de erro
+        if (!autoTranslateWordPreview) {
+          try {
+            translatedDefinitions = await translateDefinitions(
+              originalTranslations
+            );
+          } catch (error) {
+            console.warn(
+              "Erro ao traduzir definições, usando originais:",
+              error
+            );
+          }
         }
 
         // Preparar dados da palavra
@@ -849,7 +857,7 @@ export default function TextPage() {
         setIsAddingWord(false);
       }
     },
-    [editContent, toast, wordInfoMap, fetchWordInfo]
+    [editContent, toast, wordInfoMap, fetchWordInfo, autoTranslateWordPreview]
   );
 
   const handleAddWordToVault = useCallback(
@@ -865,13 +873,15 @@ export default function TextPage() {
 
         // Traduzir as definições para português
         let translatedDefinitions = translations;
-        try {
-          translatedDefinitions = await translateDefinitions(translations);
-          console.log("Traduções originais:", translations);
-          console.log("Traduções traduzidas:", translatedDefinitions);
-        } catch (error) {
-          console.warn("Erro ao traduzir definições, usando originais:", error);
-          // Manter traduções originais em caso de erro
+        if (!autoTranslateWordPreview) {
+          try {
+            translatedDefinitions = await translateDefinitions(translations);
+          } catch (error) {
+            console.warn(
+              "Erro ao traduzir definições, usando originais:",
+              error
+            );
+          }
         }
 
         const wordData = {
@@ -902,7 +912,7 @@ export default function TextPage() {
         setIsAddingWord(false);
       }
     },
-    [editContent, toast]
+    [editContent, toast, autoTranslateWordPreview]
   );
 
   const handleFetchWordInfo = useCallback(
@@ -912,7 +922,16 @@ export default function TextPage() {
       setLoadingWords((prev) => new Set(prev).add(word));
       try {
         const info = await fetchWordInfo(word);
-        setWordInfoMap((prev) => ({ ...prev, [word]: info }));
+        if (!info) {
+          setWordInfoMap((prev) => ({ ...prev, [word]: info }));
+          return;
+        }
+
+        const displayInfo = autoTranslateWordPreview
+          ? await translateWordInfoPreview(info)
+          : info;
+
+        setWordInfoMap((prev) => ({ ...prev, [word]: displayInfo }));
       } catch (error) {
         console.error("Erro ao buscar informações da palavra:", error);
       } finally {
@@ -923,7 +942,7 @@ export default function TextPage() {
         });
       }
     },
-    [wordInfoMap, loadingWords, fetchWordInfo]
+    [wordInfoMap, loadingWords, fetchWordInfo, autoTranslateWordPreview]
   );
 
   // Função para renderizar um pedaço de texto
