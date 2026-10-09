@@ -41,6 +41,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { translateDefinitions, translateWordInfoPreview } from "@/lib/translate";
+import { lookupWordInfo } from "@/lib/dictionary-client";
 import { useLoadUserSettings } from "@/hooks/use-user-settings";
 import useUserSettingsStore from "@/store/userSettingsStore";
 import {
@@ -215,7 +216,13 @@ const AddWordDropdown = memo(
               </div>
             )}
 
-            {wordInfo && (
+            {!isLoadingInfo && wordInfo && !wordInfo.meanings?.length && (
+              <p className="mb-3 text-sm text-gray-500">
+                Não encontramos uma definição. Você ainda pode salvar a palavra.
+              </p>
+            )}
+
+            {wordInfo && wordInfo.meanings?.length > 0 && (
               <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
                 <div className="text-sm text-gray-700 dark:text-gray-300 space-y-2">
                   {wordInfo.phonetic && (
@@ -308,7 +315,7 @@ const AddWordDropdown = memo(
                       confidence
                     );
                   }}
-                  disabled={isAddingWord || !wordInfo}
+                  disabled={isAddingWord}
                   className="flex items-center gap-2 p-2 rounded hover:bg-gray-100 dark:hover:bg-gray-800"
                 >
                   <BookOpen className="w-4 h-4 text-blue-600" />
@@ -443,19 +450,8 @@ export function TextViewer({
     setIsEditing(false);
   };
 
-  // Função para buscar informações da palavra da API
   const fetchWordInfo = useCallback(async (word: string) => {
-    try {
-      const response = await fetch(
-        `https://api.dictionaryapi.dev/api/v2/entries/en/${word.toLowerCase()}`
-      );
-      if (!response.ok) return null;
-      const data = await response.json();
-      return data[0];
-    } catch (error) {
-      console.error("Erro ao buscar palavra:", error);
-      return null;
-    }
+    return lookupWordInfo(word);
   }, []);
 
   const handleFetchWordInfo = useCallback(
@@ -466,7 +462,10 @@ export function TextViewer({
       try {
         const info = await fetchWordInfo(word);
         if (!info) {
-          setWordInfoMap((prev) => ({ ...prev, [word]: info }));
+          setWordInfoMap((prev) => ({
+            ...prev,
+            [word]: { word, meanings: [] },
+          }));
           return;
         }
 

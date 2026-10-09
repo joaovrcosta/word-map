@@ -24,6 +24,7 @@ import {
 import { useDebounce } from "@/hooks/use-debounce";
 import { useToast } from "@/hooks/use-toast";
 import { translateDefinitions } from "@/lib/translate";
+import { lookupWordEntries } from "@/lib/dictionary-client";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -130,19 +131,8 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
 
   // Buscar palavra na API pública
   const searchWordInApi = async (word: string): Promise<ApiWordResult[]> => {
-    try {
-      const response = await fetch(
-        `https://api.dictionaryapi.dev/api/v2/entries/en/${word}`
-      );
-      if (!response.ok) {
-        return [];
-      }
-      const data = await response.json();
-      return Array.isArray(data) ? data : [];
-    } catch (error) {
-      console.error("Erro ao buscar na API:", error);
-      return [];
-    }
+    const data = await lookupWordEntries(word);
+    return data as ApiWordResult[];
   };
 
   useEffect(() => {

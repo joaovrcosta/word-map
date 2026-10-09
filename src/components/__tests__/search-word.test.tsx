@@ -140,7 +140,10 @@ describe("SearchWord Component", () => {
 
     mockFetch.mockResolvedValue({
       ok: true,
-      json: async () => mockApiResults,
+      json: async () => ({
+        entries: mockApiResults,
+        entry: mockApiResults[0],
+      }),
     } as Response);
   });
 
@@ -210,9 +213,7 @@ describe("SearchWord Component", () => {
     fireEvent.change(input, { target: { value: "hello" } });
 
     await waitFor(() => {
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.dictionaryapi.dev/api/v2/entries/en/hello"
-      );
+      expect(mockFetch).toHaveBeenCalledWith("/api/dictionary?word=hello");
     });
   });
 
