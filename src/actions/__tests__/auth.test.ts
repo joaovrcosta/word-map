@@ -101,6 +101,7 @@ describe("Auth Actions", () => {
           name: "João Silva",
           email: "joao@example.com",
           password: "hashedPassword",
+          role: "USER",
         },
       });
       expect(result).toEqual({
@@ -111,6 +112,7 @@ describe("Auth Actions", () => {
           email: "joao@example.com",
           createdAt: mockUser.createdAt,
           updatedAt: mockUser.updatedAt,
+          role: "USER",
         },
       });
     });
@@ -210,6 +212,7 @@ describe("Auth Actions", () => {
           email: "joao@example.com",
           createdAt: mockUser.createdAt,
           updatedAt: mockUser.updatedAt,
+          role: "USER",
         },
       });
     });

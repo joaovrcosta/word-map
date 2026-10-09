@@ -19,12 +19,62 @@ export type AuthActionResult =
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key";
 
+export type UserRole = "USER" | "ADMIN";
+
 export interface User {
   id: number;
   name: string;
   email: string;
   createdAt: Date;
   updatedAt: Date;
+  role: UserRole;
+}
+
+function adminEmails(): string[] {
+  return (process.env.ADMIN_EMAIL || "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isAdminEmail(email: string): boolean {
+  return adminEmails().includes(email.toLowerCase());
+}
+
+function toPublicUser(user: {
+  id: number;
+  name: string;
+  email: string;
+  createdAt: Date;
+  updatedAt: Date;
+  role?: UserRole | null;
+}): User {
+  return {
+    id: user.id,
+    name: user.name,
+    email: user.email,
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+    role: user.role === "ADMIN" ? "ADMIN" : "USER",
+  };
+}
+
+async function ensureAdminRole(user: {
+  id: number;
+  name: string;
+  email: string;
+  createdAt: Date;
+  updatedAt: Date;
+  role?: UserRole | null;
+}) {
+  if (!isAdminEmail(user.email) || user.role === "ADMIN") {
+    return user;
+  }
+
+  return prisma.user.update({
+    where: { id: user.id },
+    data: { role: "ADMIN" },
+  });
 }
 
 export interface LoginData {
@@ -71,11 +121,13 @@ export async function registerUser(data: RegisterData): Promise<AuthActionResult
     const hashedPassword = await hash(data.password, 12);
 
     // Criar usuário
+    const email = data.email.toLowerCase().trim();
     const user = await prisma.user.create({
       data: {
         name: data.name.trim(),
-        email: data.email.toLowerCase().trim(),
+        email,
         password: hashedPassword,
+        role: isAdminEmail(email) ? "ADMIN" : "USER",
       } as any,
     });
 
@@ -83,13 +135,7 @@ export async function registerUser(data: RegisterData): Promise<AuthActionResult
 
     return {
       success: true,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      },
+      user: toPublicUser(user),
     };
   } catch (error) {
     console.error("Erro ao registrar usuário:", error);
@@ -136,14 +182,16 @@ export async function loginUser(data: LoginData): Promise<AuthActionResult> {
       return { success: false, error: "Email ou senha inválidos" };
     }
 
+    const currentUser = await ensureAdminRole(user);
+
     console.log("Senha válida, gerando JWT...");
 
     // Gerar JWT
     const token = sign(
       {
-        userId: user.id,
-        email: user.email,
-        name: user.name,
+        userId: currentUser.id,
+        email: currentUser.email,
+        name: currentUser.name,
       },
       JWT_SECRET,
       { expiresIn: "7d" }
@@ -160,17 +208,11 @@ export async function loginUser(data: LoginData): Promise<AuthActionResult> {
       maxAge: 7 * 24 * 60 * 60, // 7 dias
     });
 
-    console.log("Cookie salvo, login concluído para usuário:", user.id);
+    console.log("Cookie salvo, login concluído para usuário:", currentUser.id);
 
     return {
       success: true,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-      },
+      user: toPublicUser(currentUser),
     };
   } catch (error) {
     console.error("Erro ao fazer login:", error);
@@ -229,13 +271,9 @@ export async function getCurrentUser(): Promise<User | null> {
       return null;
     }
 
-    return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-    };
+    const currentUser = await ensureAdminRole(user);
+
+    return toPublicUser(currentUser);
   } catch (error) {
     console.error("Erro ao verificar usuário:", error);
     return null;

@@ -7,6 +7,11 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum UserRole {
+  USER
+  ADMIN
+}
+
 model User {
   id               Int           @id @default(autoincrement())
   name             String
@@ -16,12 +21,15 @@ model User {
   password         String
   resetCode        String?
   resetCodeExpires DateTime?
+  role             UserRole      @default(USER)
   vaults           Vault[]
   wordHistory      WordHistory[]
   texts            Text[]
   settings         UserSettings?
   semanticConnections SemanticConnection[]
   sentences        Sentence[]
+  books            Book[]
+  library          UserLibrary[]
 }
 
 model UserSettings {
@@ -83,6 +91,41 @@ model Text {
   updatedAt DateTime @updatedAt
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
+}
+
+model Book {
+  id          Int      @id @default(autoincrement())
+  title       String
+  description String?  @db.Text
+  isOfficial  Boolean  @default(false)
+  ownerId     Int
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  chapters    Chapter[]
+  library     UserLibrary[]
+}
+
+model Chapter {
+  id        Int      @id @default(autoincrement())
+  bookId    Int
+  title     String
+  content   String   @db.Text
+  order     Int      @default(0)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+}
+
+model UserLibrary {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  bookId    Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, bookId])
 }
 
 model SemanticConnection {

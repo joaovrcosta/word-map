@@ -56,6 +56,8 @@ import { TextSelectionPopover } from "@/components/text-selection-popover";
 interface TextViewerProps {
   text: Text;
   onTextUpdated?: () => void;
+  onSave?: (title: string, content: string) => Promise<void>;
+  canEdit?: boolean;
 }
 
 interface FoundWord {
@@ -335,7 +337,12 @@ const AddWordDropdown = memo(
 
 AddWordDropdown.displayName = "AddWordDropdown";
 
-export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
+export function TextViewer({
+  text,
+  onTextUpdated,
+  onSave,
+  canEdit = true,
+}: TextViewerProps) {
   const [foundWords, setFoundWords] = useState<FoundWord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [userVaults, setUserVaults] = useState<Vault[]>([]);
@@ -392,7 +399,11 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
     try {
       setIsSaving(true);
 
-      await updateText(text.id, editTitle, editContent);
+      if (onSave) {
+        await onSave(editTitle, editContent);
+      } else {
+        await updateText(text.id, editTitle, editContent);
+      }
 
       toast({
         title: "Texto atualizado!",
@@ -781,7 +792,7 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
                 Cancelar
               </Button>
             </>
-          ) : (
+          ) : canEdit ? (
             <Button
               onClick={() => setIsEditing(true)}
               size="sm"
@@ -790,7 +801,7 @@ export function TextViewer({ text, onTextUpdated }: TextViewerProps) {
               <Edit2 className="w-4 h-4" />
               Editar
             </Button>
-          )}
+          ) : null}
         </div>
       </div>
 

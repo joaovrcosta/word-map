@@ -5,6 +5,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
   ChevronLeft,
   ChevronRight,
+  BookOpen,
   FileText,
   Lightbulb,
   Lock,
@@ -56,6 +57,11 @@ const menuLinks = [
     name: "Textos",
     path: "/home/texts",
     icon: FileText,
+  },
+  {
+    name: "Livros",
+    path: "/home/books",
+    icon: BookOpen,
   },
   {
     name: "Flashcards",
