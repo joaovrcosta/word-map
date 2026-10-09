@@ -171,7 +171,7 @@ export const EditableTranslationsCell = memo(function EditableTranslationsCell({
             return (
               <span
                 key={index}
-                className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-600 border border-gray-200 lowercase cursor-default"
+                className="px-2.5 py-1 text-xs font-bold rounded-full bg-[#ddf4ff] text-[#1cb0f6] lowercase cursor-default"
                 title={isLong ? translation : undefined}
               >
                 {displayText}

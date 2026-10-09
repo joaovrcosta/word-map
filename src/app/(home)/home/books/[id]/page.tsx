@@ -109,7 +109,7 @@ export default function BookPage() {
           )}
         </div>
 
-        <ol className="mt-8 space-y-3">
+        <ol className="mt-10 space-y-4">
           {book.chapters.length === 0 ? (
             <li className="rounded-2xl border-2 border-dashed border-[#e5e5e5] p-8 text-center text-[#777]">
               {book.canEdit
@@ -120,7 +120,7 @@ export default function BookPage() {
             book.chapters.map((chapter, index) => (
               <li
                 key={chapter.id}
-                className="flex items-center justify-between gap-3 rounded-2xl border-2 border-[#e5e5e5] p-4 hover:border-[#1cb0f6]/40"
+                className="flex items-center justify-between gap-4 rounded-2xl border-2 border-[#e5e5e5] px-5 py-4 hover:border-[#1cb0f6]/40"
               >
                 <button
                   type="button"

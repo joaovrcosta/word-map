@@ -180,8 +180,41 @@ export function extractDictionaryTranslations(
   return definitions.length > 0 ? definitions : [fallback];
 }
 
+const POS_TO_APP_CLASS: Record<string, string> = {
+  noun: "substantivo",
+  substantivo: "substantivo",
+  verb: "verbo",
+  verbo: "verbo",
+  adjective: "adjetivo",
+  adjetivo: "adjetivo",
+  adverb: "adverbio",
+  adverbio: "adverbio",
+  pronoun: "pronome",
+  pronome: "pronome",
+  preposition: "preposicao",
+  preposicao: "preposicao",
+  conjunction: "conjuncao",
+  conjuncao: "conjuncao",
+  interjection: "interjeicao",
+  interjeicao: "interjeicao",
+  "phrasal verb": "phrasal-verb",
+  "phrasal-verb": "phrasal-verb",
+  phrase: "frase",
+  frase: "frase",
+};
+
+export function normalizeGrammaticalClass(partOfSpeech?: string | null): string {
+  if (!partOfSpeech) return "substantivo";
+  const key = partOfSpeech.trim().toLowerCase().replace(/_/g, " ");
+  return (
+    POS_TO_APP_CLASS[key] ||
+    POS_TO_APP_CLASS[key.replace(/\s+/g, "-")] ||
+    "substantivo"
+  );
+}
+
 export function extractDictionaryGrammaticalClass(
   entry: DictionaryEntry | null
 ): string {
-  return entry?.meanings?.[0]?.partOfSpeech ?? "substantivo";
+  return normalizeGrammaticalClass(entry?.meanings?.[0]?.partOfSpeech);
 }

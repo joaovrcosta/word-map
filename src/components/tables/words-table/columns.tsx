@@ -103,7 +103,7 @@ function SavedCell({ word }: { word: Word }) {
               <CheckCircleIcon
                 weight={word.isSaved ? "fill" : "regular"}
                 className={`!h-5 !w-5 ${
-                  word.isSaved ? "text-green-500" : "text-gray-600"
+                  word.isSaved ? "text-[#58cc02]" : "text-[#afafaf]"
                 }`}
               />
             </Button>
@@ -203,8 +203,8 @@ function RelatedWordsCell({ word }: { word: Word }) {
     <div className="space-y-1">
       {relatedWords.slice(0, 3).map((relatedWord) => (
         <div key={relatedWord.id} className="flex items-center gap-2 text-sm">
-          <div className="w-2 h-2 bg-purple-500 rounded-full"></div>
-          <span className="font-medium text-gray-900 dark:text-white">
+          <div className="w-2 h-2 bg-[#1cb0f6] rounded-full"></div>
+          <span className="font-extrabold text-[#3c3c3c] dark:text-white">
             {relatedWord.name}
           </span>
           <span className="text-gray-500 dark:text-gray-400 truncate max-w-xs">
@@ -275,7 +275,7 @@ function FrequencyCell({ word }: { word: Word }) {
   return (
     <div className="flex items-center gap-2">
       <div className="flex items-center gap-1">
-        <span className="text-lg font-semibold text-gray-900 dark:text-white min-w-[2rem] text-center">
+        <span className="text-lg font-extrabold text-[#3c3c3c] dark:text-white min-w-[2rem] text-center">
           {localFrequency}
         </span>
         <Button
@@ -339,7 +339,7 @@ export const columns: ColumnDef<Word>[] = [
             variant="outline"
             size="icon-sm"
             title={`Ouvir pronúncia de "${wordName}"`}
-            className="!h-8 !w-8"
+            className="!h-9 !w-9 rounded-full border-2 border-[#e5e5e5] bg-[#ddf4ff] text-[#1cb0f6] hover:bg-[#1cb0f6] hover:text-white"
           >
             <svg
               className="w-4 h-4"
@@ -403,7 +403,11 @@ export const columns: ColumnDef<Word>[] = [
     header: "Categoria gramatical",
     cell: ({ row }) => {
       const grammaticalClass = row.getValue("grammaticalClass") as string;
-      return <span className="capitalize">{grammaticalClass}</span>;
+      return (
+        <span className="inline-flex rounded-full bg-[#ddf4ff] px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-[#1cb0f6]">
+          {grammaticalClass}
+        </span>
+      );
     },
   },
   {
@@ -418,7 +422,14 @@ export const columns: ColumnDef<Word>[] = [
     header: "Categoria",
     cell: ({ row }) => {
       const category = row.getValue("category") as string;
-      return <span className="capitalize">{category}</span>;
+      if (!category) {
+        return <span className="text-xs font-bold text-[#afafaf]">—</span>;
+      }
+      return (
+        <span className="inline-flex rounded-full bg-[#f7f7f7] px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-[#777]">
+          {category}
+        </span>
+      );
     },
   },
   {
@@ -534,7 +545,7 @@ export const columns: ColumnDef<Word>[] = [
       });
 
       return (
-        <div className="text-sm text-gray-600 dark:text-gray-400">
+        <div className="text-xs font-bold uppercase tracking-wide text-[#afafaf]">
           {formattedDate}
         </div>
       );

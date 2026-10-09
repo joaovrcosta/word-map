@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, memo, useMemo } from "react";
+import { useState, useMemo } from "react";
 import {
   ColumnDef,
   flexRender,
@@ -18,14 +18,57 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { ChevronLeft, ChevronRight, Loader2, Search } from "lucide-react";
 
 interface DataTableProps<TData, TValue = unknown> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   isLoading?: boolean;
+}
+
+function Pager({
+  pageIndex,
+  pageCount,
+  canPrevious,
+  canNext,
+  onPrevious,
+  onNext,
+}: {
+  pageIndex: number;
+  pageCount: number;
+  canPrevious: boolean;
+  canNext: boolean;
+  onPrevious: () => void;
+  onNext: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <button
+        type="button"
+        onClick={onPrevious}
+        disabled={!canPrevious}
+        className="flex size-10 items-center justify-center rounded-full border-2 border-[#e5e5e5] text-[#1cb0f6] hover:bg-[#ddf4ff] disabled:opacity-40 disabled:hover:bg-transparent"
+        aria-label="Página anterior"
+      >
+        <ChevronLeft className="h-4 w-4" />
+      </button>
+      <p className="text-[13px] font-extrabold uppercase tracking-wide text-[#afafaf]">
+        Página{" "}
+        <span className="text-[#3c3c3c]">
+          {pageIndex + 1} / {Math.max(pageCount, 1)}
+        </span>
+      </p>
+      <button
+        type="button"
+        onClick={onNext}
+        disabled={!canNext}
+        className="flex size-10 items-center justify-center rounded-full border-2 border-[#e5e5e5] text-[#1cb0f6] hover:bg-[#ddf4ff] disabled:opacity-40 disabled:hover:bg-transparent"
+        aria-label="Próxima página"
+      >
+        <ChevronRight className="h-4 w-4" />
+      </button>
+    </div>
+  );
 }
 
 export function DataTable<TData, TValue = unknown>({
@@ -36,7 +79,6 @@ export function DataTable<TData, TValue = unknown>({
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
   const [globalFilter, setGlobalFilter] = useState("");
 
-  // Memoizar a configuração da tabela para evitar recriações desnecessárias
   const tableConfig = useMemo(
     () => ({
       data,
@@ -53,7 +95,7 @@ export function DataTable<TData, TValue = unknown>({
       },
       initialState: {
         pagination: {
-          pageSize: 40, // 40 resultados por página
+          pageSize: 40,
         },
       },
     }),
@@ -62,103 +104,48 @@ export function DataTable<TData, TValue = unknown>({
 
   const table = useReactTable(tableConfig);
 
-  // Mostrar loading spinner quando isLoading for true
-  if (isLoading) {
-    return (
-      <div className="w-full">
-        {/* Header com search e paginação */}
-        <div className="flex items-center justify-between py-4">
-          <Input
+  const pager = (
+    <Pager
+      pageIndex={table.getState().pagination.pageIndex}
+      pageCount={table.getPageCount()}
+      canPrevious={table.getCanPreviousPage()}
+      canNext={table.getCanNextPage()}
+      onPrevious={() => table.previousPage()}
+      onNext={() => table.nextPage()}
+    />
+  );
+
+  return (
+    <div className="w-full">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-5">
+        <div className="relative w-full max-w-sm">
+          <Search className="pointer-events-none absolute left-4 top-1/2 size-4 -translate-y-1/2 text-[#afafaf]" />
+          <input
             placeholder="Buscar palavras..."
             value={globalFilter}
             onChange={(event) => setGlobalFilter(event.target.value)}
-            className="max-w-sm"
+            className="h-12 w-full rounded-2xl border-2 border-[#e5e5e5] bg-white pl-11 pr-4 text-sm font-bold text-[#3c3c3c] outline-none placeholder:text-[#afafaf] focus:border-[#1cb0f6]"
           />
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.previousPage()}
-              disabled={!table.getCanPreviousPage()}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-            <div className="flex items-center gap-1 text-sm text-muted-foreground">
-              <span>Página</span>
-              <strong>
-                {table.getState().pagination.pageIndex + 1} de{" "}
-                {table.getPageCount()}
-              </strong>
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => table.nextPage()}
-              disabled={!table.getCanNextPage()}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
+        {pager}
+      </div>
 
-        {/* Loading spinner */}
-        <div className="flex items-center justify-center py-12">
+      {isLoading ? (
+        <div className="flex items-center justify-center py-16">
           <div className="flex flex-col items-center gap-4">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
-            <p className="text-sm text-muted-foreground">
+            <Loader2 className="h-8 w-8 animate-spin text-[#1cb0f6]" />
+            <p className="text-sm font-bold text-[#afafaf]">
               Atualizando tabela...
             </p>
           </div>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="w-full">
-      {/* Header com search e paginação */}
-      <div className="flex items-center justify-between py-4">
-        <Input
-          placeholder="Buscar palavras..."
-          value={globalFilter}
-          onChange={(event) => setGlobalFilter(event.target.value)}
-          className="max-w-sm"
-        />
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.previousPage()}
-            disabled={!table.getCanPreviousPage()}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-            <span>Página</span>
-            <strong>
-              {table.getState().pagination.pageIndex + 1} de{" "}
-              {table.getPageCount()}
-            </strong>
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => table.nextPage()}
-            disabled={!table.getCanNextPage()}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
-        </div>
-      </div>
-
-      {/* Tabela */}
-      <div className="rounded-md border overflow-x-auto">
-        <Table className="min-w-full">
-          <TableHeader>
-            {table.getHeaderGroups().map((headerGroup) => (
-              <TableRow key={headerGroup.id}>
-                {headerGroup.headers.map((header) => {
-                  return (
+      ) : (
+        <div className="rounded-2xl border-2 border-[#e5e5e5] overflow-hidden">
+          <Table className="min-w-full">
+            <TableHeader>
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id} className="hover:bg-transparent">
+                  {headerGroup.headers.map((header) => (
                     <TableHead key={header.id}>
                       {header.isPlaceholder
                         ? null
@@ -167,68 +154,43 @@ export function DataTable<TData, TValue = unknown>({
                             header.getContext()
                           )}
                     </TableHead>
-                  );
-                })}
-              </TableRow>
-            ))}
-          </TableHeader>
-          <TableBody>
-            {table.getRowModel().rows?.length ? (
-              table.getRowModel().rows.map((row) => (
-                <TableRow
-                  key={row.id}
-                  data-state={row.getIsSelected() && "selected"}
-                >
-                  {row.getVisibleCells().map((cell) => (
-                    <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
-                    </TableCell>
                   ))}
                 </TableRow>
-              ))
-            ) : (
-              <TableRow>
-                <TableCell
-                  colSpan={columns.length}
-                  className="h-24 text-center"
-                >
-                  Nenhum resultado encontrado.
-                </TableCell>
-              </TableRow>
-            )}
-          </TableBody>
-        </Table>
-      </div>
-
-      {/* Paginação inferior */}
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.previousPage()}
-          disabled={!table.getCanPreviousPage()}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </Button>
-        <div className="flex items-center gap-1 text-sm text-muted-foreground">
-          <span>Página</span>
-          <strong>
-            {table.getState().pagination.pageIndex + 1} de{" "}
-            {table.getPageCount()}
-          </strong>
+              ))}
+            </TableHeader>
+            <TableBody>
+              {table.getRowModel().rows?.length ? (
+                table.getRowModel().rows.map((row) => (
+                  <TableRow
+                    key={row.id}
+                    data-state={row.getIsSelected() && "selected"}
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <TableCell key={cell.id}>
+                        {flexRender(
+                          cell.column.columnDef.cell,
+                          cell.getContext()
+                        )}
+                      </TableCell>
+                    ))}
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow className="hover:bg-transparent">
+                  <TableCell
+                    colSpan={columns.length}
+                    className="h-28 text-center text-sm font-bold text-[#afafaf]"
+                  >
+                    Nenhum resultado encontrado.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
         </div>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => table.nextPage()}
-          disabled={!table.getCanNextPage()}
-        >
-          <ChevronRight className="h-4 w-4" />
-        </Button>
-      </div>
+      )}
+
+      <div className="flex items-center justify-end pt-5">{pager}</div>
     </div>
   );
 }

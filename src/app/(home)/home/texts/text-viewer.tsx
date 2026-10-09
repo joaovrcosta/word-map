@@ -42,6 +42,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { translateDefinitions, translateWordInfoPreview } from "@/lib/translate";
 import { lookupWordInfo } from "@/lib/dictionary-client";
+import { normalizeGrammaticalClass } from "@/lib/dictionary";
 import { useLoadUserSettings } from "@/hooks/use-user-settings";
 import useUserSettingsStore from "@/store/userSettingsStore";
 import {
@@ -86,7 +87,7 @@ const WordDropdown = memo(
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <span className="word-found bg-yellow-200 dark:bg-yellow-800 px-1 rounded cursor-pointer hover:bg-yellow-300 dark:hover:bg-yellow-700 transition-colors inline-flex items-center gap-1">
+          <span className="word-found bg-yellow-200 dark:bg-yellow-800 px-1.5 py-0.5 mx-[1px] rounded cursor-pointer hover:bg-yellow-300 dark:hover:bg-yellow-700 transition-colors inline-flex items-center gap-1">
             {word}
             <ChevronDown className="w-3 h-3" />
           </span>
@@ -199,7 +200,7 @@ const AddWordDropdown = memo(
     return (
       <DropdownMenu onOpenChange={handleOpenChange}>
         <DropdownMenuTrigger asChild>
-          <span className="word-clickable text-gray-900 dark:text-gray-100 px-1 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+          <span className="word-clickable text-gray-900 dark:text-gray-100 px-1.5 py-0.5 rounded cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
             {originalWord}
           </span>
         </DropdownMenuTrigger>
@@ -278,7 +279,9 @@ const AddWordDropdown = memo(
                   <div className="text-xs space-y-1">
                     <div>
                       <span className="font-medium">Classe:</span>{" "}
-                      {wordInfo.meanings?.[0]?.partOfSpeech || "substantivo"}
+                      {normalizeGrammaticalClass(
+                        wordInfo.meanings?.[0]?.partOfSpeech
+                      )}
                     </div>
                     <div>
                       <span className="font-medium">Significado:</span>{" "}
@@ -304,8 +307,9 @@ const AddWordDropdown = memo(
                     const translations = wordInfo?.meanings?.[0]?.definitions
                       ?.slice(0, 2)
                       ?.map((def: any) => def.definition) || [originalWord];
-                    const grammaticalClass =
-                      wordInfo?.meanings?.[0]?.partOfSpeech || "substantivo";
+                    const grammaticalClass = normalizeGrammaticalClass(
+                      wordInfo?.meanings?.[0]?.partOfSpeech
+                    );
                     const confidence = 1;
                     onAddToVault(
                       vault.id,
@@ -504,8 +508,9 @@ export function TextViewer({
         // Preparar dados da palavra
         const wordData = {
           name: word,
-          grammaticalClass:
-            wordInfo?.meanings?.[0]?.partOfSpeech || "substantivo",
+          grammaticalClass: normalizeGrammaticalClass(
+            wordInfo?.meanings?.[0]?.partOfSpeech
+          ),
           translations: wordInfo?.meanings?.[0]?.definitions
             ?.slice(0, 2)
             ?.map((def: any) => def.definition) || [word],
@@ -745,34 +750,31 @@ export function TextViewer({
   }
 
   return (
-    <div className="space-y-4 max-h-[calc(90vh-120px)] overflow-y-auto pr-2">
-      {/* Cabeçalho com Título e Botão de Edição */}
-      <div className="flex items-center justify-between sticky top-0 bg-white dark:bg-gray-950 pt-2 pb-4 z-10">
-        <div className="flex-1">
+    <div className="space-y-6 pb-10">
+      <div className="flex items-start justify-between gap-6">
+        <div className="min-w-0 flex-1">
           {isEditing ? (
             <Input
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
-              className="text-2xl font-bold border-2 border-blue-300 focus:border-blue-500"
+              className="text-2xl font-bold border-2 border-blue-300 focus:border-blue-500 h-12"
               placeholder="Título do texto"
             />
           ) : (
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-                {text.title}
-              </h1>
-            </div>
+            <h1 className="text-[28px] leading-tight font-extrabold text-[#3c3c3c] dark:text-white">
+              {text.title}
+            </h1>
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3 shrink-0 pt-1">
           {isEditing ? (
             <>
               <Button
                 onClick={handleSaveEdit}
                 disabled={isSaving}
                 size="sm"
-                className="bg-green-600 hover:bg-green-700"
+                className="gap-2 bg-green-600 hover:bg-green-700"
               >
                 {isSaving ? (
                   <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -786,6 +788,7 @@ export function TextViewer({
                 disabled={isSaving}
                 size="sm"
                 variant="outline"
+                className="gap-2"
               >
                 <X className="w-4 h-4" />
                 Cancelar
@@ -796,6 +799,7 @@ export function TextViewer({
               onClick={() => setIsEditing(true)}
               size="sm"
               variant="outline"
+              className="gap-2 rounded-full px-4"
             >
               <Edit2 className="w-4 h-4" />
               Editar
@@ -804,102 +808,95 @@ export function TextViewer({
         </div>
       </div>
 
-      {/* Estatísticas */}
-      <div className="flex gap-3">
-        <Card className="p-3 flex-1">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+        <Card className="p-5 rounded-2xl border-2">
           <div className="text-center">
-            <div className="text-2xl font-bold text-gray-900 dark:text-white">
+            <div className="text-3xl font-extrabold text-[#3c3c3c] dark:text-white">
               {editContent.split(" ").length}
             </div>
-            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+            <div className="text-xs font-bold uppercase tracking-wide text-[#afafaf] mt-2">
               Total de Palavras
             </div>
           </div>
         </Card>
 
-        <Card className="p-3 flex-1">
+        <Card className="p-5 rounded-2xl border-2">
           <div className="text-center">
-            <div className="text-2xl font-bold text-green-600">
+            <div className="text-3xl font-extrabold text-[#58cc02]">
               {foundWords.length}
             </div>
-            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+            <div className="text-xs font-bold uppercase tracking-wide text-[#afafaf] mt-2">
               Palavras nos Vaults
             </div>
           </div>
         </Card>
 
-        <Card className="p-3 flex-1">
+        <Card className="p-5 rounded-2xl border-2">
           <div className="text-center">
-            <div className="text-2xl font-bold text-blue-600">
+            <div className="text-3xl font-extrabold text-[#1cb0f6]">
               {
                 new Set(
                   foundWords.flatMap((fw) => fw.vaultInfo.map((v) => v.id))
                 ).size
               }
             </div>
-            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
+            <div className="text-xs font-bold uppercase tracking-wide text-[#afafaf] mt-2">
               Vaults diferentes encontrados
             </div>
           </div>
         </Card>
       </div>
 
-      {/* Texto com Highlights Interativos e Palavras Clicáveis */}
-      <Card>
-        <CardHeader className="pb-3">
+      <Card className="rounded-2xl border-2">
+        <CardHeader className="px-6 pt-6 pb-4 space-y-2">
           <CardTitle className="flex items-center gap-2 text-lg">
             <Target className="w-5 h-5 text-yellow-600" />
             Texto Interativo
           </CardTitle>
-          <p className="text-sm text-gray-600 dark:text-gray-400 font-normal">
+          <p className="text-sm text-[#777] dark:text-gray-400 font-normal leading-relaxed">
             {isEditing
               ? "Edite o texto abaixo. As palavras continuarão sendo destacadas e clicáveis."
               : "Clique nas palavras destacadas para ver detalhes ou nas outras palavras para adicioná-las aos vaults"}
           </p>
         </CardHeader>
-        <CardContent className="max-h-[400px] overflow-y-auto">
+        <CardContent className="px-6 pb-8 pt-2">
           {isEditing ? (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <Textarea
                 value={editContent}
                 onChange={(e) => setEditContent(e.target.value)}
-                className="min-h-64 text-sm leading-relaxed resize-none"
+                className="min-h-64 text-base leading-8 resize-none"
                 placeholder="Digite ou cole o texto aqui..."
               />
 
-              {/* Preview do texto com highlights */}
-              <div className="border-t pt-4">
-                <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">
+              <div className="border-t pt-6">
+                <h4 className="text-sm font-medium text-gray-600 dark:text-gray-400 mb-4">
                   Preview com Highlights:
                 </h4>
-                <div className="prose prose-sm max-w-none dark:prose-invert">
-                  <div
-                    ref={selectionContainerRef}
-                    data-text-selection-container
-                    className="leading-relaxed text-gray-900 dark:text-gray-100 select-text"
-                  >
-                    {renderInteractiveText}
-                  </div>
+                <div
+                  ref={selectionContainerRef}
+                  data-text-selection-container
+                  className="text-[18px] leading-9 text-gray-900 dark:text-gray-100 select-text"
+                >
+                  {renderInteractiveText}
                 </div>
               </div>
             </div>
           ) : (
-            <div className="prose prose-sm max-w-none dark:prose-invert">
-              <div
-                ref={selectionContainerRef}
-                data-text-selection-container
-                className="leading-relaxed text-gray-900 dark:text-gray-100 select-text"
-              >
-                {renderInteractiveText}
-              </div>
+            <div
+              ref={selectionContainerRef}
+              data-text-selection-container
+              className="text-[18px] leading-9 text-gray-900 dark:text-gray-100 select-text"
+            >
+              {renderInteractiveText}
             </div>
           )}
 
           {foundWords.length === 0 && (
-            <div className="text-center py-8 text-gray-500 dark:text-gray-400">
-              <Info className="w-8 h-8 mx-auto mb-2" />
+            <div className="text-center mt-8 pt-8 border-t border-[#e5e5e5] text-[#777] dark:text-gray-400">
+              <Info className="w-8 h-8 mx-auto mb-3" />
               <p>Nenhuma palavra dos seus vaults foi encontrada neste texto.</p>
-              <p className="text-sm">
+              <p className="text-sm mt-2">
                 Clique em qualquer palavra para adicioná-la aos seus vaults!
               </p>
             </div>

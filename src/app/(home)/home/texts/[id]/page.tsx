@@ -46,6 +46,7 @@ import {
 import { Vault } from "@/actions/actions";
 import { translateDefinitions, translateWordInfoPreview } from "@/lib/translate";
 import { lookupWordInfo } from "@/lib/dictionary-client";
+import { normalizeGrammaticalClass } from "@/lib/dictionary";
 import { useLoadUserSettings } from "@/hooks/use-user-settings";
 import useUserSettingsStore from "@/store/userSettingsStore";
 import {
@@ -275,7 +276,9 @@ const AddWordDropdown = memo(
                   <div className="text-xs space-y-1">
                     <div>
                       <span className="font-medium">Classe:</span>{" "}
-                      {wordInfo.meanings?.[0]?.partOfSpeech || "substantivo"}
+                      {normalizeGrammaticalClass(
+                        wordInfo.meanings?.[0]?.partOfSpeech
+                      )}
                     </div>
                     <div>
                       <span className="font-medium">Significado:</span>{" "}
@@ -301,8 +304,9 @@ const AddWordDropdown = memo(
                     const translations = wordInfo?.meanings?.[0]?.definitions
                       ?.slice(0, 2)
                       ?.map((def: any) => def.definition) || [originalWord];
-                    const grammaticalClass =
-                      wordInfo?.meanings?.[0]?.partOfSpeech || "substantivo";
+                    const grammaticalClass = normalizeGrammaticalClass(
+                      wordInfo?.meanings?.[0]?.partOfSpeech
+                    );
                     const confidence = 1;
                     onAddToVault(
                       vault.id,
@@ -831,7 +835,7 @@ export default function TextPage() {
         const wordData = {
           name: word,
           grammaticalClass:
-            wordInfo?.meanings?.[0]?.partOfSpeech || "substantivo",
+            normalizeGrammaticalClass(wordInfo?.meanings?.[0]?.partOfSpeech),
           translations: translatedDefinitions,
           confidence: 1,
           vaultId: vaultId,

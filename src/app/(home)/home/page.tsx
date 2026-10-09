@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
-import { Plus, BookOpen, Target, Trophy } from "lucide-react";
+import { Plus, BookOpen, Sparkles, Target, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/tables/words-table/data-table";
 import { columns } from "@/components/tables/words-table/columns";
@@ -32,6 +32,22 @@ import { useWords, useVaults } from "@/hooks/use-words";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+import { useDebounce } from "@/hooks/use-debounce";
+import { lookupWordInfo } from "@/lib/dictionary-client";
+import { normalizeGrammaticalClass } from "@/lib/dictionary";
+
+const GRAMMATICAL_CLASS_LABELS: Record<string, string> = {
+  substantivo: "Substantivo",
+  verbo: "Verbo",
+  adjetivo: "Adjetivo",
+  adverbio: "Advérbio",
+  pronome: "Pronome",
+  preposicao: "Preposição",
+  conjuncao: "Conjunção",
+  interjeicao: "Interjeição",
+  "phrasal-verb": "Phrasal Verb",
+  frase: "Frase",
+};
 
 function HomePageContent() {
   const [activeTab, setActiveTab] = useState<"words" | "report" | "settings">(
@@ -48,6 +64,10 @@ function HomePageContent() {
   });
   const [isCreatingWord, setIsCreatingWord] = useState(false);
   const [isTableUpdating, setIsTableUpdating] = useState(false);
+  const [classChosenByUser, setClassChosenByUser] = useState(false);
+  const [isSuggestingClass, setIsSuggestingClass] = useState(false);
+  const [suggestedClass, setSuggestedClass] = useState("");
+  const debouncedWordName = useDebounce(newWord.name, 400);
   const searchParams = useSearchParams();
   const router = useRouter();
   const queryClient = useQueryClient();
@@ -93,6 +113,50 @@ function HomePageContent() {
     },
     [router]
   );
+
+  useEffect(() => {
+    if (!isCreateDialogOpen) return;
+
+    const name = debouncedWordName.trim();
+    if (name.length < 2) {
+      setSuggestedClass("");
+      setIsSuggestingClass(false);
+      return;
+    }
+
+    const tokens = name.split(/\s+/).filter(Boolean);
+    if (tokens.length >= 3) {
+      const suggested = "frase";
+      setSuggestedClass(suggested);
+      setIsSuggestingClass(false);
+      if (!classChosenByUser) {
+        setNewWord((prev) => ({ ...prev, grammaticalClass: suggested }));
+      }
+      return;
+    }
+
+    let cancelled = false;
+    setIsSuggestingClass(true);
+
+    lookupWordInfo(name)
+      .then((entry) => {
+        if (cancelled) return;
+        const suggested = normalizeGrammaticalClass(
+          entry?.meanings?.[0]?.partOfSpeech
+        );
+        setSuggestedClass(suggested);
+        if (!classChosenByUser) {
+          setNewWord((prev) => ({ ...prev, grammaticalClass: suggested }));
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsSuggestingClass(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debouncedWordName, isCreateDialogOpen, classChosenByUser]);
 
   // Handler para criar palavra otimizado
   const handleCreateWord = useCallback(async () => {
@@ -148,6 +212,8 @@ function HomePageContent() {
         translations: "",
         confidence: 1,
       });
+      setClassChosenByUser(false);
+      setSuggestedClass("");
 
       // Fechar dialog
       setIsCreateDialogOpen(false);
@@ -183,6 +249,8 @@ function HomePageContent() {
       translations: "",
       confidence: 1,
     });
+    setClassChosenByUser(false);
+    setSuggestedClass("");
   }, []);
 
   // Estatísticas calculadas
@@ -378,18 +446,17 @@ function HomePageContent() {
                 </Button>
               </div>
               <SearchWord />
-              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border">
-                <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              <div className="rounded-2xl border-2 border-[#e5e5e5] bg-white overflow-hidden">
+                <div className="px-6 py-5 border-b-2 border-[#e5e5e5]">
+                  <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
                     Palavras do Vault
                   </h2>
-                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                  <p className="mt-1 text-[13px] font-extrabold uppercase tracking-wide text-[#afafaf]">
                     {currentWords.length} palavra
-                    {currentWords.length !== 1 ? "s" : ""} encontrada
                     {currentWords.length !== 1 ? "s" : ""}
                   </p>
                 </div>
-                <div className="p-6">
+                <div className="p-5">
                   <DataTable<Word>
                     columns={columns}
                     data={currentWords}
@@ -475,27 +542,50 @@ function HomePageContent() {
                   <Input
                     placeholder="Digite a palavra"
                     value={newWord.name}
-                    onChange={(e) =>
-                      setNewWord((prev) => ({ ...prev, name: e.target.value }))
-                    }
+                    onChange={(e) => {
+                      setClassChosenByUser(false);
+                      setNewWord((prev) => ({
+                        ...prev,
+                        name: e.target.value,
+                        grammaticalClass: "",
+                      }));
+                    }}
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Classe Gramatical
-                  </label>
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Classe Gramatical
+                    </label>
+                    {(isSuggestingClass ||
+                      (suggestedClass &&
+                        newWord.grammaticalClass === suggestedClass &&
+                        !classChosenByUser)) && (
+                      <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-violet-600 dark:bg-violet-950/40 dark:text-violet-300">
+                        <Sparkles className="size-3" />
+                        IA
+                      </span>
+                    )}
+                  </div>
                   <Select
-                    value={newWord.grammaticalClass}
-                    onValueChange={(value) =>
+                    value={newWord.grammaticalClass || undefined}
+                    onValueChange={(value) => {
+                      setClassChosenByUser(true);
                       setNewWord((prev) => ({
                         ...prev,
                         grammaticalClass: value,
-                      }))
-                    }
+                      }));
+                    }}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Selecione a classe" />
+                      <SelectValue
+                        placeholder={
+                          isSuggestingClass
+                            ? "Sugerindo classe..."
+                            : "Selecione a classe"
+                        }
+                      />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="substantivo">Substantivo</SelectItem>
@@ -510,6 +600,22 @@ function HomePageContent() {
                       <SelectItem value="frase">Frase</SelectItem>
                     </SelectContent>
                   </Select>
+                  {isSuggestingClass && (
+                    <p className="mt-1 inline-flex items-center gap-1 text-xs text-violet-500">
+                      <Sparkles className="size-3" />
+                      Buscando sugestão de IA...
+                    </p>
+                  )}
+                  {!isSuggestingClass &&
+                    suggestedClass &&
+                    newWord.grammaticalClass === suggestedClass &&
+                    !classChosenByUser && (
+                      <p className="mt-1 inline-flex items-center gap-1 text-xs text-violet-600 dark:text-violet-300">
+                        <Sparkles className="size-3 shrink-0" />
+                        Sugestão de IA:{" "}
+                        {GRAMMATICAL_CLASS_LABELS[suggestedClass]}
+                      </p>
+                    )}
                 </div>
 
                 <div>
