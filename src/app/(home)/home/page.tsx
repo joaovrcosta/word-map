@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
-import { Plus, BookOpen, Target, Trophy, FileText } from "lucide-react";
+import { Plus, BookOpen, Target, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DataTable } from "@/components/tables/words-table/data-table";
 import { columns } from "@/components/tables/words-table/columns";
@@ -12,7 +12,6 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import {
@@ -22,20 +21,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { createWord, createVault } from "@/actions/actions";
+import { createWord } from "@/actions/actions";
 import { SearchWord } from "@/components/search-word";
 import { ImportExportWords } from "@/components/import-export-words";
 import { SentenceBuilder } from "@/components/sentence-builder";
+import { VaultOnboarding } from "@/components/vault-onboarding";
 import { translateToPortuguese } from "@/lib/translate";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useWords, useVaults } from "@/hooks/use-words";
 import { useQueryClient } from "@tanstack/react-query";
-import { CreateVaultForm } from "./vault/create-vault-form";
+import Link from "next/link";
+import { cn } from "@/lib/utils";
 
 function HomePageContent() {
-  const [activeTab, setActiveTab] = useState<"words" | "sentences">("words");
+  const [activeTab, setActiveTab] = useState<"words" | "report" | "settings">(
+    "words"
+  );
+  const [firstName, setFirstName] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
-  const [isCreateVaultDialogOpen, setIsCreateVaultDialogOpen] = useState(false);
   const [newWord, setNewWord] = useState({
     name: "",
     grammaticalClass: "",
@@ -48,6 +51,14 @@ function HomePageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    getCurrentUser().then((user) => {
+      if (user?.name) {
+        setFirstName(user.name.split(" ")[0]);
+      }
+    });
+  }, []);
 
   // Usar hooks otimizados com cache
   const { vaults, currentVault, words, isLoading } = useWords();
@@ -174,13 +185,6 @@ function HomePageContent() {
     });
   }, []);
 
-  // Handler para quando um vault é criado com sucesso
-  const handleVaultCreated = useCallback(() => {
-    setIsCreateVaultDialogOpen(false);
-    // Invalidar cache para atualizar a lista de vaults
-    queryClient.invalidateQueries({ queryKey: ["vaults"] });
-  }, [queryClient]);
-
   // Estatísticas calculadas
   const stats = useMemo(
     () => [
@@ -299,74 +303,166 @@ function HomePageContent() {
               </div>
             </div>
 
-            {/* Botão para criar vault */}
-            <Dialog open={isCreateVaultDialogOpen} onOpenChange={setIsCreateVaultDialogOpen}>
-              <DialogTrigger asChild>
-                <Button size="lg" className="px-8 py-3">
-                  <Plus size={20} className="mr-2" />
-                  Criar Meu Primeiro Vault
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Criar Novo Vault</DialogTitle>
-                </DialogHeader>
-                <CreateVaultForm
-                  onSuccess={handleVaultCreated}
-                  onCancel={() => setIsCreateVaultDialogOpen(false)}
-                />
-              </DialogContent>
-            </Dialog>
+            <Button size="lg" className="px-8 py-3" asChild>
+              <Link href="/create-vault">
+                <Plus size={20} className="mr-2" />
+                Criar meu próprio vault
+              </Link>
+            </Button>
           </div>
         </div>
       </div>
     );
   }
 
+  const tabClass = (tab: typeof activeTab) =>
+    cn(
+      "py-3 text-[13px] font-extrabold uppercase tracking-wide border-b-4 transition-colors",
+      activeTab === tab
+        ? "border-[#1cb0f6] text-[#1cb0f6]"
+        : "border-transparent text-[#afafaf] hover:text-[#777]"
+    );
+
   return (
-    <div className="space-y-6 px-6 pt-6 max-w-full overflow-x-hidden">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
-            {selectedVault?.name || "Dashboard"}
+    <div className="min-h-full bg-white dark:bg-gray-950 max-w-full overflow-x-hidden">
+      <div className="px-8 pt-5">
+        <div className="flex items-center gap-3">
+          <span className="text-[26px] leading-none" aria-hidden="true">
+            📗
+          </span>
+          <h1 className="text-[26px] font-extrabold text-[#3c3c3c] dark:text-white">
+            {selectedVault?.name || "Vault"}
           </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Gerencie suas palavras e acompanhe seu progresso
-          </p>
         </div>
-
-        {/* Seleção de Vault */}
-        <div className="flex items-center gap-4">
-          {vaults && vaults.length > 0 && (
-            <Select
-              value={selectedVault?.id.toString() || ""}
-              onValueChange={handleVaultChange}
-            >
-              <SelectTrigger className="w-48">
-                <SelectValue placeholder="Selecione um vault" />
-              </SelectTrigger>
-              <SelectContent>
-                {vaults.map((vault) => (
-                  <SelectItem key={vault.id} value={vault.id.toString()}>
-                    {vault.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
-
-          {/* Botão de Criar Palavra */}
-          <Dialog
-            open={isCreateDialogOpen}
-            onOpenChange={setIsCreateDialogOpen}
+        <nav className="mt-4 flex gap-8 border-b border-[#e5e5e5] dark:border-gray-800">
+          <button
+            type="button"
+            onClick={() => setActiveTab("words")}
+            className={tabClass("words")}
           >
-            <DialogTrigger asChild>
-              <Button>
-                <Plus size={20} className="mr-2" />
-                Nova Palavra
-              </Button>
-            </DialogTrigger>
+            Palavras
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("report")}
+            className={tabClass("report")}
+          >
+            Relatório
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("settings")}
+            className={tabClass("settings")}
+          >
+            Configurações
+          </button>
+        </nav>
+      </div>
+
+      <div className="px-6">
+        {activeTab === "words" &&
+          (currentWords.length === 0 ? (
+            <VaultOnboarding
+              firstName={firstName}
+              onAddWords={() => setIsCreateDialogOpen(true)}
+              onCreateFlashcards={() =>
+                router.push(`/home/vault/${selectedVault?.id}/flashcards`)
+              }
+            />
+          ) : (
+            <div className="space-y-6 py-6">
+              <div className="flex justify-end">
+                <Button onClick={() => setIsCreateDialogOpen(true)}>
+                  <Plus size={20} className="mr-2" />
+                  Nova Palavra
+                </Button>
+              </div>
+              <SearchWord />
+              <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border">
+                <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+                  <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                    Palavras do Vault
+                  </h2>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                    {currentWords.length} palavra
+                    {currentWords.length !== 1 ? "s" : ""} encontrada
+                    {currentWords.length !== 1 ? "s" : ""}
+                  </p>
+                </div>
+                <div className="p-6">
+                  <DataTable<Word>
+                    columns={columns}
+                    data={currentWords}
+                    isLoading={isTableUpdating}
+                  />
+                </div>
+              </div>
+            </div>
+          ))}
+
+        {activeTab === "report" && (
+          <div className="space-y-6 py-8 max-w-4xl mx-auto">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {stats.map((stat) => (
+                <div
+                  key={stat.title}
+                  className="bg-white dark:bg-gray-800 rounded-2xl p-6 border-2 text-[#4b4b4b] border-[#e5e5e5]"
+                >
+                  <div className="flex items-center">
+                    <div className={`p-2 rounded-2xl ${stat.bgColor}`}>
+                      <stat.icon className={`h-6 w-6 ${stat.color}`} />
+                    </div>
+                    <div className="ml-4">
+                      <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
+                        {stat.title}
+                      </p>
+                      <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                        {stat.value}
+                        {stat.suffix || ""}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <SentenceBuilder />
+          </div>
+        )}
+
+        {activeTab === "settings" && selectedVault && (
+          <div className="max-w-xl mx-auto py-10 space-y-6">
+            {vaults && vaults.length > 1 && (
+              <div>
+                <p className="text-sm font-bold text-[#3c3c3c] dark:text-gray-200 mb-2">
+                  Vault atual
+                </p>
+                <Select
+                  value={selectedVault.id.toString()}
+                  onValueChange={handleVaultChange}
+                >
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="Selecione um vault" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {vaults.map((vault) => (
+                      <SelectItem key={vault.id} value={vault.id.toString()}>
+                        {vault.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <ImportExportWords
+              vaultId={selectedVault.id}
+              vaultName={selectedVault.name}
+              wordCount={currentWords.length}
+            />
+          </div>
+        )}
+      </div>
+
+      <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogContent className="max-w-md">
               <DialogHeader>
                 <DialogTitle>Adicionar Nova Palavra</DialogTitle>
@@ -495,120 +591,7 @@ function HomePageContent() {
                 </div>
               </div>
             </DialogContent>
-          </Dialog>
-
-          {/* Botão de Importar/Exportar */}
-          {selectedVault && (
-            <ImportExportWords
-              vaultId={selectedVault.id}
-              vaultName={selectedVault.name}
-              wordCount={currentWords.length}
-            />
-          )}
-        </div>
-      </div>
-
-      {/* Abas de Navegação */}
-      <div className="border-b border-gray-200 dark:border-gray-700">
-        <nav className="-mb-px flex space-x-8">
-          <button
-            onClick={() => setActiveTab("words")}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === "words"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            <BookOpen size={16} className="inline mr-2" />
-            Palavras
-          </button>
-          <button
-            onClick={() => setActiveTab("sentences")}
-            className={`py-2 px-1 border-b-2 font-medium text-sm ${
-              activeTab === "sentences"
-                ? "border-blue-500 text-blue-600 dark:text-blue-400"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300 dark:text-gray-400 dark:hover:text-gray-300"
-            }`}
-          >
-            <FileText size={16} className="inline mr-2" />
-            Construtor de Frases
-          </button>
-        </nav>
-      </div>
-
-      {/* Conteúdo das Abas */}
-      {activeTab === "words" ? (
-        <>
-          <SearchWord />
-
-          {/* Estatísticas */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {stats.map((stat) => (
-              <div
-                key={stat.title}
-                className="bg-white dark:bg-gray-800 rounded-2xl p-6 border-[2px] text-[#4b4b4b] border-[#e5e5e5]"
-              >
-                <div className="flex items-center">
-                  <div className={`p-2 rounded-2xl ${stat.bgColor}`}>
-                    <stat.icon className={`h-6 w-6 ${stat.color}`} />
-                  </div>
-                  <div className="ml-4">
-                    <p className="text-sm font-medium text-gray-600 dark:text-gray-400">
-                      {stat.title}
-                    </p>
-                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
-                      {stat.value}
-                      {stat.suffix || ""}
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Tabela de Palavras */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border">
-            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Palavras do Vault
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-                {currentWords.length} palavra
-                {currentWords.length !== 1 ? "s" : ""} encontrada
-                {currentWords.length !== 1 ? "s" : ""}
-              </p>
-            </div>
-            <div className="p-6">
-              {currentWords.length > 0 ? (
-                <DataTable<Word>
-                  columns={columns}
-                  data={currentWords}
-                  isLoading={isTableUpdating}
-                />
-              ) : (
-                <div className="text-center py-12">
-                  <BookOpen className="mx-auto h-12 w-12 text-gray-400" />
-                  <h3 className="mt-4 text-lg font-medium text-gray-900 dark:text-white">
-                    Nenhuma palavra encontrada
-                  </h3>
-                  <p className="mt-2 text-gray-600 dark:text-gray-400">
-                    Comece adicionando sua primeira palavra ao vault.
-                  </p>
-                  <Button
-                    className="mt-4"
-                    onClick={() => setIsCreateDialogOpen(true)}
-                  >
-                    <Plus size={20} className="mr-2" />
-                    Adicionar Primeira Palavra
-                  </Button>
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      ) : (
-        <SentenceBuilder />
-      )}
+      </Dialog>
     </div>
   );
 }

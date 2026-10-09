@@ -5,15 +5,46 @@ import { jwtVerify } from "jose";
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key";
 
 // Rotas que não precisam de autenticação
-const publicRoutes = ["/login", "/register", "/", "/reset-password"];
+const publicRoutes = ["/login", "/register", "/reset-password"];
+const authPages = ["/login", "/register"];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   console.log("Middleware executando para:", pathname);
 
+  const token = request.cookies.get("auth-token");
+
+  // A raiz deve ir para a home (se autenticado) ou para o login
+  if (pathname === "/") {
+    if (token) {
+      try {
+        const secret = new TextEncoder().encode(JWT_SECRET);
+        await jwtVerify(token.value, secret);
+        return NextResponse.redirect(new URL("/home", request.url));
+      } catch {
+        const response = NextResponse.redirect(new URL("/login", request.url));
+        response.cookies.delete("auth-token");
+        return response;
+      }
+    }
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
   // Verificar se é uma rota pública
   if (publicRoutes.includes(pathname)) {
+    // Usuário já autenticado não deve ficar na tela de login/cadastro
+    if (token && authPages.includes(pathname)) {
+      try {
+        const secret = new TextEncoder().encode(JWT_SECRET);
+        await jwtVerify(token.value, secret);
+        return NextResponse.redirect(new URL("/home", request.url));
+      } catch {
+        const response = NextResponse.next();
+        response.cookies.delete("auth-token");
+        return response;
+      }
+    }
     console.log("Rota pública, permitindo acesso");
     return NextResponse.next();
   }
@@ -25,13 +56,15 @@ export async function middleware(request: NextRequest) {
   }
 
   // Verificar se é uma rota de assets estáticos
-  if (pathname.startsWith("/_next/") || pathname.startsWith("/favicon.ico")) {
-    console.log("Asset estático, permitindo acesso");
+  if (
+    pathname.startsWith("/_next/") ||
+    pathname.startsWith("/favicon.ico") ||
+    /\.(?:svg|png|jpg|jpeg|gif|webp|ico)$/i.test(pathname)
+  ) {
     return NextResponse.next();
   }
 
   // Verificar token de autenticação
-  const token = request.cookies.get("auth-token");
   console.log("Token encontrado:", !!token);
 
   if (!token) {
@@ -74,6 +107,6 @@ export const config = {
      * - _next/image (image optimization files)
      * - favicon.ico (favicon file)
      */
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+    "/((?!api|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)",
   ],
 };

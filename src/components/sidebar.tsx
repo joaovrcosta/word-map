@@ -1,397 +1,232 @@
 "use client";
 
-import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import {
-  X,
-  ChevronDown,
+  ChevronLeft,
   ChevronRight,
-  Brain,
-  BookOpen,
+  FileText,
+  Lightbulb,
+  Lock,
   Network,
-  User,
-  Home,
-  FolderOpen,
-  Sparkles,
-  Settings,
-  Bell,
-  Search,
-  Sun,
-  Moon,
   Plus,
 } from "lucide-react";
-import { VaultIcon } from "@phosphor-icons/react/dist/ssr";
+import { getCurrentUser } from "@/actions/auth";
+import { useVaults } from "@/hooks/use-words";
 import useSidebarStore from "@/store/sidebarStore";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@/components/ui/tooltip";
-import { NotificationBadge } from "@/components/ui/notification-badge";
-import { ArticleIcon } from "@phosphor-icons/react";
 
-type SidebarLink = {
-  name: string;
-  path: string;
-  icon: React.ElementType;
-  badge?: number;
-  description?: string;
-  children?: SidebarLink[];
-};
+function ClassFlag() {
+  return (
+    <svg
+      viewBox="0 0 16 11"
+      className="w-[22px] h-[15px] shrink-0 rounded-[2px] overflow-hidden shadow-[0_0_0_1px_rgba(0,0,0,0.08)]"
+      aria-hidden="true"
+    >
+      <rect width="16" height="11" fill="#fff" />
+      <rect y="0" width="16" height="1.22" fill="#B22234" />
+      <rect y="2.44" width="16" height="1.22" fill="#B22234" />
+      <rect y="4.88" width="16" height="1.22" fill="#B22234" />
+      <rect y="7.32" width="16" height="1.22" fill="#B22234" />
+      <rect y="9.76" width="16" height="1.22" fill="#B22234" />
+      <rect width="7" height="6" fill="#3C3B6E" />
+    </svg>
+  );
+}
 
-const links: SidebarLink[] = [
+function OwlAvatar() {
+  return (
+    <svg viewBox="0 0 40 40" className="size-10 shrink-0" aria-hidden="true">
+      <circle cx="20" cy="20" r="20" fill="#58CC02" />
+      <circle cx="14" cy="18" r="6" fill="#fff" />
+      <circle cx="26" cy="18" r="6" fill="#fff" />
+      <circle cx="15" cy="19" r="2.4" fill="#4B4B4B" />
+      <circle cx="27" cy="19" r="2.4" fill="#4B4B4B" />
+      <path d="M18 25l4-2 4 2-4 3-4-3z" fill="#FFC800" />
+    </svg>
+  );
+}
+
+const menuLinks = [
   {
-    name: "HOME",
-    path: "/home",
-    icon: Home,
+    name: "Novo vault",
+    path: "/create-vault",
+    icon: Plus,
   },
   {
-    name: "COFRES",
-    path: "/home/vault",
-    icon: VaultIcon,
-  },
-  {
-    name: "TEXTOS",
+    name: "Textos",
     path: "/home/texts",
-    icon: ArticleIcon,
+    icon: FileText,
   },
   {
-    name: "FLASHCARDS",
+    name: "Flashcards",
     path: "/home/flashcards",
-    icon: Brain,
-    badge: 12,
+    icon: Lightbulb,
   },
   {
-    name: "CONEXÕES",
+    name: "Conexões",
     path: "/home/connections",
     icon: Network,
   },
   {
-    name: "PERFIL",
+    name: "Configurações",
     path: "/home/profile",
-    icon: User,
+    icon: Lock,
   },
 ];
 
-interface SidebarItemProps {
-  link: SidebarLink;
-  isOpen: boolean;
-  pathName: string;
-  openSubmenus: string[];
-  toggleSubmenu: (name: string) => void;
-  level?: number;
-}
-
-const SidebarItem = ({
-  link,
-  isOpen,
-  pathName,
-  openSubmenus,
-  toggleSubmenu,
-  level = 0,
-}: SidebarItemProps) => {
-  const router = useRouter();
-  const hasChildren = !!link.children?.length;
-  const isActive =
-    link.path === "/home"
-      ? pathName === "/home"
-      : pathName.startsWith(link.path);
-
-  const isSubmenuOpen = openSubmenus.includes(link.name);
-
-  const handleClick = () => {
-    if (hasChildren) {
-      toggleSubmenu(link.name);
-    } else {
-      router.push(link.path);
-    }
-  };
-
-  if (!isOpen) {
-    return (
-      <TooltipProvider>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <li>
-              <button
-                onClick={handleClick}
-                className={`relative group w-12 h-12 mx-auto mb-1 flex items-center justify-center rounded-lg transition-all duration-200 ease-out
-                  ${
-                    isActive
-                      ? "bg-blue-100 text-[#1cb0f6] border border-blue-200"
-                      : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-                  }
-                `}
-              >
-                <link.icon
-                  size={20}
-                  className={`transition-transform group-hover:scale-105 ${
-                    isActive ? "text-[#1cb0f6" : "text-gray-600"
-                  }`}
-                />
-                {link.badge && <NotificationBadge count={link.badge} />}
-              </button>
-            </li>
-          </TooltipTrigger>
-          <TooltipContent side="right" className="bg-gray-900 text-white">
-            <div className="text-center">
-              <p className="font-medium">{link.name}</p>
-              {link.description && (
-                <p className="text-xs text-gray-300 mt-1">{link.description}</p>
-              )}
-            </div>
-          </TooltipContent>
-        </Tooltip>
-      </TooltipProvider>
-    );
-  }
-
-  return (
-    <li key={link.path}>
-      <button
-        onClick={handleClick}
-        className={`relative group w-full h-12 px-4 mb-1 flex items-center justify-between rounded-2xl transition-all duration-200 ease-out
-          ${
-            isActive
-              ? "bg-blue-100 text-[#1cb0f6] border border-blue-200"
-              : "text-gray-600 hover:bg-gray-50 hover:text-gray-900"
-          }
-        `}
-        style={{ paddingLeft: `${level * 16 + 16}px` }}
-      >
-        <div className="flex items-center gap-3">
-          <div
-            className={`p-1 rounded-md transition-all duration-200 ${
-              isActive
-                ? "bg-blue-200"
-                : "bg-transparent group-hover:bg-gray-100"
-            }`}
-          >
-            <link.icon
-              size={20}
-              className={`transition-transform group-hover:scale-105 ${
-                isActive ? "text-[#1cb0f6]" : "text-gray-600"
-              }`}
-            />
-          </div>
-          <div className="flex flex-col items-start">
-            <span
-              className={`font-bold text-sm ${
-                isActive ? "text-[#1cb0f6]" : "text-gray-700"
-              }`}
-            >
-              {link.name}
-            </span>
-            {link.description && (
-              <span
-                className={`text-xs ${
-                  isActive ? "text-blue-500" : "text-gray-500"
-                }`}
-              >
-                {link.description}
-              </span>
-            )}
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {link.badge && (
-            <Badge
-              variant={isActive ? "secondary" : "default"}
-              className="h-5 px-2 text-xs bg-blue-100 text-blue-600"
-            >
-              {link.badge}
-            </Badge>
-          )}
-          {hasChildren && (
-            <div
-              className={`transition-transform duration-200 ${
-                isSubmenuOpen ? "rotate-180" : ""
-              }`}
-            >
-              <ChevronDown size={16} />
-            </div>
-          )}
-        </div>
-      </button>
-
-      {hasChildren && isSubmenuOpen && (
-        <ul className="mt-2 space-y-1 ml-4 border-l-2 border-gray-200 pl-4">
-          {link.children?.map((child) => (
-            <SidebarItem
-              key={child.path}
-              link={child}
-              isOpen={isOpen}
-              pathName={pathName}
-              openSubmenus={openSubmenus}
-              toggleSubmenu={toggleSubmenu}
-              level={level + 1}
-            />
-          ))}
-        </ul>
-      )}
-    </li>
-  );
-};
-
-const AppSidebar = () => {
+export default function AppSidebar() {
   const pathName = usePathname();
-  const { isOpen, closeSidebar, isPermanentlyClosed } = useSidebarStore();
-
-  const handleResetSidebar = () => {
-    // Reset do sidebar - apenas para casos especiais
-    if (
-      confirm(
-        "Tem certeza que deseja reabrir o sidebar? Esta ação não pode ser desfeita."
-      )
-    ) {
-      window.location.reload();
-    }
-  };
-  const [openSubmenus, setOpenSubmenus] = useState<string[]>([]);
-  const [isDark, setIsDark] = useState(false);
-
-  const toggleSubmenu = (name: string) => {
-    setOpenSubmenus((prev) =>
-      prev.includes(name) ? prev.filter((n) => n !== name) : [...prev, name]
-    );
-  };
-
-  const toggleTheme = () => {
-    setIsDark(!isDark);
-    // Aqui você pode implementar a lógica de tema
-  };
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const { isOpen, collapseSidebar, expandSidebar } = useSidebarStore();
+  const { data: vaults } = useVaults();
+  const [userLabel, setUserLabel] = useState("você");
 
   useEffect(() => {
-    if (!isOpen) setOpenSubmenus([]);
-  }, [isOpen]);
-
-  useEffect(() => {
-    links.forEach((link) => {
-      if (
-        link.path !== "/dashboard" &&
-        link.children?.some((child) => pathName.startsWith(child.path))
-      ) {
-        setOpenSubmenus((prev) =>
-          prev.includes(link.name) ? prev : [...prev, link.name]
-        );
-      }
+    getCurrentUser().then((user) => {
+      if (!user) return;
+      const fromEmail = user.email.split("@")[0];
+      setUserLabel(fromEmail || user.name.split(" ")[0] || "você");
     });
-  }, [pathName]);
+  }, []);
+
+  const vaultIdFromPath = pathName.match(/^\/home\/vault\/(\d+)/)?.[1];
+  const vaultIdFromQuery = searchParams.get("vaultId");
+  const selectedVaultId = vaultIdFromPath
+    ? Number(vaultIdFromPath)
+    : vaultIdFromQuery
+      ? Number(vaultIdFromQuery)
+      : pathName === "/home"
+        ? vaults?.[0]?.id
+        : undefined;
 
   return (
-    <section
-      className={`lg:flex hidden h-screen flex-col bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-800 transition-all duration-500 ease-out flex-shrink-0 ${
-        isOpen ? "w-64" : "w-16"
-      }`}
+    <aside
+      className="relative hidden lg:flex h-screen shrink-0 flex-col bg-[#f7f7f7] dark:bg-gray-900 border-r border-[#e5e5e5] dark:border-gray-800"
       style={{
-        width: isOpen ? "256px" : "64px",
-        minWidth: isOpen ? "256px" : "64px",
-        maxWidth: isOpen ? "256px" : "64px",
+        width: isOpen ? 300 : 72,
+        minWidth: isOpen ? 300 : 72,
+        maxWidth: isOpen ? 300 : 72,
       }}
     >
-      {/* Header */}
-      <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-gray-800">
+      <button
+        type="button"
+        onClick={isOpen ? collapseSidebar : expandSidebar}
+        className="absolute -right-3 top-[22px] z-20 flex size-6 items-center justify-center rounded-full bg-white border border-[#e5e5e5] text-[#afafaf] shadow-sm hover:text-[#777]"
+        aria-label={isOpen ? "Recolher menu" : "Expandir menu"}
+      >
         {isOpen ? (
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center">
-              <Sparkles size={20} className="text-white" />
-            </div>
-            <div>
-              <h1
-                className="font-bold text-lg text-green-600"
-                style={{ fontFamily: "system-ui, -apple-system, sans-serif" }}
-              >
-                wordmap
-              </h1>
-              <p className="text-xs text-gray-500">Aprenda idiomas</p>
-            </div>
-          </div>
+          <ChevronLeft className="size-3.5" strokeWidth={2.5} />
         ) : (
-          <div className="flex flex-col items-center gap-2">
-            <div className="w-8 h-8 bg-gradient-to-br from-green-500 to-green-600 rounded-2xl flex items-center justify-center">
-              <Sparkles size={20} className="text-white" />
-            </div>
-            <div className="text-center">
-              <p className="text-xs text-gray-500 font-medium">Fechado</p>
-              <p className="text-xs text-gray-400">Permanentemente</p>
-            </div>
-          </div>
+          <ChevronRight className="size-3.5" strokeWidth={2.5} />
         )}
+      </button>
 
-        {/* <button
-          onClick={closeSidebar}
-          className={`p-2 rounded-lg hover:bg-red-50 hover:text-red-600 hover:border-red-200 border border-transparent transition-all duration-300 ${
-            isOpen ? "opacity-100" : "opacity-0 pointer-events-none"
+      <div className={`pt-5 pb-4 ${isOpen ? "px-5" : "px-2"}`}>
+        {isOpen ? (
+          <button
+            type="button"
+            onClick={() => router.push("/home")}
+            className="text-left"
+          >
+            <span className="text-[22px] font-extrabold tracking-tight text-[#1cb0f6]">
+              wordmap
+            </span>{" "}
+            <span className="text-[22px] font-extrabold tracking-tight text-[#afafaf]">
+              learn
+            </span>
+          </button>
+        ) : (
+          <p className="text-center text-[#1cb0f6] font-extrabold text-lg">w</p>
+        )}
+      </div>
+
+      <nav className="flex-1 overflow-y-auto pt-1">
+        <ul>
+          {vaults?.map((vault) => {
+            const active = selectedVaultId === vault.id;
+            return (
+              <li key={vault.id}>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/home?vaultId=${vault.id}`)}
+                  className={`flex w-full items-center gap-3 h-12 text-left ${
+                    isOpen ? "px-5" : "justify-center px-0"
+                  } ${
+                    active
+                      ? "bg-[#ddf4ff] text-[#1cb0f6]"
+                      : "text-[#afafaf] hover:bg-black/[0.03]"
+                  }`}
+                >
+                  <ClassFlag />
+                  {isOpen && (
+                    <span className="truncate text-[13px] font-extrabold uppercase tracking-wide">
+                      {vault.name}
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+
+        <ul className="mt-2">
+          {menuLinks.map((link) => {
+            const Icon = link.icon;
+            const isCreate = link.path === "/create-vault";
+            const active =
+              !isCreate &&
+              (link.path === "/home"
+                ? pathName === "/home" && !selectedVaultId
+                : pathName.startsWith(link.path));
+
+            return (
+              <li key={link.path}>
+                <button
+                  type="button"
+                  onClick={() => router.push(link.path)}
+                  className={`flex w-full items-center gap-3 min-h-12 py-3 text-left ${
+                    isOpen ? "px-5" : "justify-center px-0"
+                  } ${
+                    active
+                      ? "bg-[#ddf4ff] text-[#1cb0f6]"
+                      : "text-[#afafaf] hover:bg-black/[0.03]"
+                  }`}
+                >
+                  <Icon className="size-5 shrink-0" strokeWidth={2} />
+                  {isOpen && (
+                    <span className="text-[13px] font-extrabold uppercase tracking-wide leading-tight">
+                      {link.name}
+                    </span>
+                  )}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+
+      <div className="mt-auto border-t border-[#e5e5e5] dark:border-gray-800">
+        <button
+          type="button"
+          onClick={() => router.push("/home/profile")}
+          className={`flex w-full items-center gap-3 py-4 text-left hover:bg-black/[0.03] ${
+            isOpen ? "px-5" : "justify-center px-0"
           }`}
-          title="Fechar sidebar permanentemente"
         >
-          <X size={20} />
-        </button> */}
+          <OwlAvatar />
+          {isOpen && (
+            <div className="min-w-0">
+              <p className="truncate text-[15px] font-bold text-[#777] leading-tight">
+                {userLabel}
+              </p>
+              <p className="text-[12px] font-extrabold uppercase tracking-wide text-[#1cb0f6]">
+                Editar
+              </p>
+            </div>
+          )}
+        </button>
       </div>
-
-      {/* Navigation */}
-      <div className="flex-1 overflow-y-auto py-2">
-        <nav className="px-3">
-          <ul className="space-y-0.5">
-            {links.map((link) => (
-              <SidebarItem
-                key={link.path}
-                link={link}
-                isOpen={isOpen}
-                pathName={pathName}
-                openSubmenus={openSubmenus}
-                toggleSubmenu={toggleSubmenu}
-              />
-            ))}
-          </ul>
-        </nav>
-      </div>
-
-      {/* Footer */}
-      <div className="p-3 border-t border-gray-200 dark:border-gray-800">
-        {isOpen && (
-          <div className="flex items-center justify-between">
-            <Button variant="ghost" size="icon-sm" onClick={toggleTheme}>
-              {isDark ? <Sun size={18} /> : <Moon size={18} />}
-            </Button>
-
-            <Button variant="ghost" size="icon-sm" className="relative">
-              <Bell size={18} />
-              <NotificationBadge count={3} className="h-4 w-4" />
-            </Button>
-          </div>
-        )}
-
-        {!isOpen && (
-          <div className="flex flex-col items-center space-y-2">
-            <Button variant="ghost" size="icon-sm" onClick={toggleTheme}>
-              {isDark ? <Sun size={18} /> : <Moon size={18} />}
-            </Button>
-
-            <Button variant="ghost" size="icon-sm" className="relative">
-              <Bell size={18} />
-              <NotificationBadge count={3} className="h-4 w-4" />
-            </Button>
-
-            {isPermanentlyClosed && (
-              <Button
-                variant="outline"
-                size="icon-sm"
-                onClick={handleResetSidebar}
-                title="Reabrir sidebar (requer confirmação)"
-              >
-                <Sparkles size={16} />
-              </Button>
-            )}
-          </div>
-        )}
-      </div>
-    </section>
+    </aside>
   );
-};
-
-export default AppSidebar;
+}

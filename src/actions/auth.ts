@@ -11,6 +11,11 @@ import {
   generateResetEmailHtml,
   generateResetEmailText,
 } from "@/lib/email";
+import { publicErrorMessage } from "@/lib/public-error";
+
+export type AuthActionResult =
+  | { success: true; user: User }
+  | { success: false; error: string };
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key";
 
@@ -34,7 +39,7 @@ export interface RegisterData {
 }
 
 // Registrar novo usuário
-export async function registerUser(data: RegisterData): Promise<User> {
+export async function registerUser(data: RegisterData): Promise<AuthActionResult> {
   try {
     console.log("Tentando registrar usuário:", {
       email: data.email,
@@ -43,11 +48,14 @@ export async function registerUser(data: RegisterData): Promise<User> {
 
     // Validar dados
     if (!data.name || !data.email || !data.password) {
-      throw new Error("Todos os campos são obrigatórios");
+      return { success: false, error: "Todos os campos são obrigatórios" };
     }
 
     if (data.password.length < 6) {
-      throw new Error("A senha deve ter pelo menos 6 caracteres");
+      return {
+        success: false,
+        error: "A senha deve ter pelo menos 6 caracteres",
+      };
     }
 
     // Verificar se o email já existe
@@ -56,7 +64,7 @@ export async function registerUser(data: RegisterData): Promise<User> {
     });
 
     if (existingUser) {
-      throw new Error("Este email já está em uso");
+      return { success: false, error: "Este email já está em uso" };
     }
 
     // Hash da senha
@@ -74,26 +82,35 @@ export async function registerUser(data: RegisterData): Promise<User> {
     console.log("Usuário registrado com sucesso:", user.id);
 
     return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
     };
   } catch (error) {
     console.error("Erro ao registrar usuário:", error);
-    throw error;
+    return {
+      success: false,
+      error: publicErrorMessage(
+        error,
+        "Não foi possível criar a conta. Tente novamente em instantes."
+      ),
+    };
   }
 }
 
 // Fazer login
-export async function loginUser(data: LoginData): Promise<User> {
+export async function loginUser(data: LoginData): Promise<AuthActionResult> {
   try {
     console.log("Tentando fazer login para:", data.email);
 
     // Validar dados
     if (!data.email || !data.password) {
-      throw new Error("Email e senha são obrigatórios");
+      return { success: false, error: "Email e senha são obrigatórios" };
     }
 
     // Buscar usuário
@@ -103,7 +120,7 @@ export async function loginUser(data: LoginData): Promise<User> {
 
     if (!user) {
       console.log("Usuário não encontrado para:", data.email);
-      throw new Error("Email ou senha inválidos");
+      return { success: false, error: "Email ou senha inválidos" };
     }
 
     console.log("Usuário encontrado:", user.id);
@@ -116,7 +133,7 @@ export async function loginUser(data: LoginData): Promise<User> {
 
     if (!isPasswordValid) {
       console.log("Senha inválida para usuário:", user.id);
-      throw new Error("Email ou senha inválidos");
+      return { success: false, error: "Email ou senha inválidos" };
     }
 
     console.log("Senha válida, gerando JWT...");
@@ -146,15 +163,24 @@ export async function loginUser(data: LoginData): Promise<User> {
     console.log("Cookie salvo, login concluído para usuário:", user.id);
 
     return {
-      id: user.id,
-      name: user.name,
-      email: user.email,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        createdAt: user.createdAt,
+        updatedAt: user.updatedAt,
+      },
     };
   } catch (error) {
     console.error("Erro ao fazer login:", error);
-    throw error;
+    return {
+      success: false,
+      error: publicErrorMessage(
+        error,
+        "Não foi possível entrar. Tente novamente em instantes."
+      ),
+    };
   }
 }
 

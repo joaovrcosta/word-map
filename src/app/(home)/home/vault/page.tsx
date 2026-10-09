@@ -5,13 +5,6 @@ import { Plus, FolderOpen, Trash, Pencil, Eye } from "@phosphor-icons/react";
 import { Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import {
   Card,
   CardContent,
   CardDescription,
@@ -20,16 +13,15 @@ import {
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import {
   deleteVault,
   updateVaultName,
   type Vault,
 } from "../../../../actions/actions";
-import { CreateVaultForm } from "./create-vault-form";
 import { useVaults } from "@/hooks/use-words";
 
 export default function VaultPage() {
-  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [editingVault, setEditingVault] = useState<{
     id: number;
     name: string;
@@ -99,12 +91,6 @@ export default function VaultPage() {
     [router]
   );
 
-  // Recarregar vaults após criação
-  const handleVaultCreated = useCallback(async () => {
-    setIsCreateDialogOpen(false);
-    refetch();
-  }, [refetch]);
-
   const formatDate = useCallback((date: Date) => {
     return new Intl.DateTimeFormat("pt-BR", {
       day: "2-digit",
@@ -137,23 +123,12 @@ export default function VaultPage() {
           </p>
         </div>
 
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
-              <Plus size={20} />
-              Novo Vault
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Criar Novo Vault</DialogTitle>
-            </DialogHeader>
-            <CreateVaultForm
-              onSuccess={handleVaultCreated}
-              onCancel={() => setIsCreateDialogOpen(false)}
-            />
-          </DialogContent>
-        </Dialog>
+        <Button className="flex items-center gap-2" asChild>
+          <Link href="/create-vault">
+            <Plus size={20} />
+            Criar meu próprio vault
+          </Link>
+        </Button>
       </div>
 
       {/* Lista de Vaults */}
@@ -166,9 +141,11 @@ export default function VaultPage() {
           <p className="text-gray-600 dark:text-gray-400 mb-4">
             Crie seu primeiro vault para começar a organizar suas palavras
           </p>
-          <Button onClick={() => setIsCreateDialogOpen(true)}>
-            <Plus size={20} className="mr-2" />
-            Criar Primeiro Vault
+          <Button asChild>
+            <Link href="/create-vault">
+              <Plus size={20} className="mr-2" />
+              Criar meu próprio vault
+            </Link>
           </Button>
         </div>
       ) : (

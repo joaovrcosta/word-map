@@ -104,28 +104,33 @@ describe("Auth Actions", () => {
         },
       });
       expect(result).toEqual({
-        id: 1,
-        name: "João Silva",
-        email: "joao@example.com",
-        createdAt: mockUser.createdAt,
-        updatedAt: mockUser.updatedAt,
+        success: true,
+        user: {
+          id: 1,
+          name: "João Silva",
+          email: "joao@example.com",
+          createdAt: mockUser.createdAt,
+          updatedAt: mockUser.updatedAt,
+        },
       });
     });
 
     it("deve falhar se todos os campos não forem fornecidos", async () => {
       const invalidData = { name: "", email: "", password: "" };
 
-      await expect(registerUser(invalidData as RegisterData)).rejects.toThrow(
-        "Todos os campos são obrigatórios"
-      );
+      await expect(registerUser(invalidData as RegisterData)).resolves.toEqual({
+        success: false,
+        error: "Todos os campos são obrigatórios",
+      });
     });
 
     it("deve falhar se a senha for muito curta", async () => {
       const invalidData = { ...validRegisterData, password: "123" };
 
-      await expect(registerUser(invalidData)).rejects.toThrow(
-        "A senha deve ter pelo menos 6 caracteres"
-      );
+      await expect(registerUser(invalidData)).resolves.toEqual({
+        success: false,
+        error: "A senha deve ter pelo menos 6 caracteres",
+      });
     });
 
     it("deve falhar se o email já existir", async () => {
@@ -140,9 +145,10 @@ describe("Auth Actions", () => {
 
       mockPrisma.user.findUnique.mockResolvedValue(existingUser);
 
-      await expect(registerUser(validRegisterData)).rejects.toThrow(
-        "Este email já está em uso"
-      );
+      await expect(registerUser(validRegisterData)).resolves.toEqual({
+        success: false,
+        error: "Este email já está em uso",
+      });
     });
   });
 
@@ -197,28 +203,33 @@ describe("Auth Actions", () => {
         }
       );
       expect(result).toEqual({
-        id: 1,
-        name: "João Silva",
-        email: "joao@example.com",
-        createdAt: mockUser.createdAt,
-        updatedAt: mockUser.updatedAt,
+        success: true,
+        user: {
+          id: 1,
+          name: "João Silva",
+          email: "joao@example.com",
+          createdAt: mockUser.createdAt,
+          updatedAt: mockUser.updatedAt,
+        },
       });
     });
 
     it("deve falhar se email ou senha não forem fornecidos", async () => {
       const invalidData = { email: "", password: "" };
 
-      await expect(loginUser(invalidData as LoginData)).rejects.toThrow(
-        "Email e senha são obrigatórios"
-      );
+      await expect(loginUser(invalidData as LoginData)).resolves.toEqual({
+        success: false,
+        error: "Email e senha são obrigatórios",
+      });
     });
 
     it("deve falhar se o usuário não for encontrado", async () => {
       mockPrisma.user.findUnique.mockResolvedValue(null);
 
-      await expect(loginUser(validLoginData)).rejects.toThrow(
-        "Email ou senha inválidos"
-      );
+      await expect(loginUser(validLoginData)).resolves.toEqual({
+        success: false,
+        error: "Email ou senha inválidos",
+      });
     });
 
     it("deve falhar se a senha estiver incorreta", async () => {
@@ -234,9 +245,23 @@ describe("Auth Actions", () => {
       mockPrisma.user.findUnique.mockResolvedValue(mockUser);
       mockCompare.mockResolvedValue(false);
 
-      await expect(loginUser(validLoginData)).rejects.toThrow(
-        "Email ou senha inválidos"
+      await expect(loginUser(validLoginData)).resolves.toEqual({
+        success: false,
+        error: "Email ou senha inválidos",
+      });
+    });
+
+    it("não deve expor erros internos do banco", async () => {
+      mockPrisma.user.findUnique.mockRejectedValue(
+        new Error(
+          "Invalid `prisma.user.findUnique()` invocation: Can't reach database server at `localhost:5432`"
+        )
       );
+
+      await expect(loginUser(validLoginData)).resolves.toEqual({
+        success: false,
+        error: "Não foi possível entrar. Tente novamente em instantes.",
+      });
     });
   });
 

@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { loginUser, type LoginData } from "@/actions/auth";
+import { publicErrorMessage } from "@/lib/public-error";
 import { Lock, Mail } from "lucide-react";
 
 function LoginForm() {
@@ -30,11 +31,19 @@ function LoginForm() {
 
     try {
       const result = await loginUser(formData);
-      console.log("Login bem-sucedido:", result);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
       router.push(redirect);
     } catch (error) {
       console.error("Erro no login:", error);
-      setError(error instanceof Error ? error.message : "Erro ao fazer login");
+      setError(
+        publicErrorMessage(
+          error,
+          "Não foi possível entrar. Tente novamente em instantes."
+        )
+      );
     } finally {
       setIsLoading(false);
     }

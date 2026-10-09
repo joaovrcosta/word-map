@@ -22,7 +22,7 @@ export function useVaults() {
     staleTime: 30 * 1000, // 30 segundos - dados ficam "frescos" por mais tempo
     gcTime: 10 * 60 * 1000, // 10 minutos - manter no cache por mais tempo
     refetchOnWindowFocus: false, // Não refetch ao focar na janela
-    refetchOnMount: false, // Não refetch ao montar se já temos dados
+    refetchOnMount: true,
     refetchOnReconnect: true, // Refetch quando reconectar à internet
     retry: 2, // Tentar novamente em caso de erro
     retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000), // Backoff exponencial

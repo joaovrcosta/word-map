@@ -126,7 +126,7 @@ export async function createVault(name: string): Promise<Vault> {
       },
     });
 
-    // Revalidar a página para mostrar o novo vault
+    revalidatePath("/home");
     revalidatePath("/home/vault");
 
     return newVault;

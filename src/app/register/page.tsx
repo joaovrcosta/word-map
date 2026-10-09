@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { registerUser, type RegisterData } from "@/actions/auth";
+import { publicErrorMessage } from "@/lib/public-error";
 import { User, Mail, Lock } from "lucide-react";
 
 export default function RegisterPage() {
@@ -23,12 +24,21 @@ export default function RegisterPage() {
     setIsLoading(true);
 
     try {
-      await registerUser(formData);
+      const result = await registerUser(formData);
+      if (!result.success) {
+        setError(result.error);
+        return;
+      }
       router.push(
         "/login?message=Conta criada com sucesso! Faça login para continuar."
       );
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Erro ao criar conta");
+      setError(
+        publicErrorMessage(
+          error,
+          "Não foi possível criar a conta. Tente novamente em instantes."
+        )
+      );
     } finally {
       setIsLoading(false);
     }
