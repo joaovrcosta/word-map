@@ -21,23 +21,27 @@ export function MentionDropdown({
 
   return (
     <div
-      className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[200px] max-h-48 overflow-y-auto"
+      className="fixed z-50 max-h-48 min-w-[200px] overflow-y-auto rounded-2xl border-2 border-[#e5e5e5] bg-white py-1 shadow-lg dark:bg-gray-950"
       style={{
         left: mentionPosition.x,
         top: mentionPosition.y,
       }}
     >
-      <div className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
-        Selecionar palavra:
+      <div className="px-3 py-2 text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf]">
+        Selecionar palavra
       </div>
       {mentionOptions.map((option, index) => (
         <button
           key={index}
           onClick={() => onInsertMention(option.name)}
-          className="w-full px-3 py-2 text-left text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 flex items-center gap-2"
+          className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[#ddf4ff]"
         >
-          <span className="font-medium">{option.name}</span>
-          <span className="text-xs text-gray-500">- {option.translations}</span>
+          <span className="text-sm font-extrabold text-[#3c3c3c]">
+            {option.name}
+          </span>
+          <span className="text-xs font-bold text-[#afafaf]">
+            {option.translations}
+          </span>
         </button>
       ))}
     </div>

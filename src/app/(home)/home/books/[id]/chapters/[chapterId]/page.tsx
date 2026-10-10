@@ -80,15 +80,17 @@ export default function ChapterPage() {
 
   return (
     <div className="min-h-full bg-white dark:bg-gray-950">
-      <div className="max-w-5xl mx-auto px-8 pt-6 pb-12">
-        <Button
-          variant="ghost"
-          onClick={() => router.push(`/home/books/${bookId}`)}
-          className="-ml-2 mb-5 gap-2 text-[#777] hover:text-[#3c3c3c]"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          {bookTitle || "Livro"}
-        </Button>
+      <div className="w-full pt-6 pb-12">
+        <div className="px-6 sm:px-8">
+          <Button
+            variant="ghost"
+            onClick={() => router.push(`/home/books/${bookId}`)}
+            className="mb-3 -ml-2"
+          >
+            <ArrowLeft className="w-4 h-4 mr-2" />
+            {bookTitle || "Livro"}
+          </Button>
+        </div>
         <TextViewer
           text={text}
           canEdit={canEdit}

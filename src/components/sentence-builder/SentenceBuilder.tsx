@@ -30,7 +30,11 @@ import {
 // Tipos
 import { WordItem, ExternalWord, Word } from "./types";
 
-export function SentenceBuilder() {
+export function SentenceBuilder({
+  embedded = false,
+}: {
+  embedded?: boolean;
+} = {}) {
   const {
     // Estados principais
     searchTerm,
@@ -335,37 +339,42 @@ export function SentenceBuilder() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
-            Construtor de Frases
-          </h2>
-          <p className="text-sm text-gray-600 dark:text-gray-400">
-            Pesquise palavras do vault ou digite palavras novas para construir
-            frases
-          </p>
-        </div>
-        <div className="flex gap-2">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {!embedded && (
+          <div className="flex items-center gap-3">
+            <span className="text-[26px] leading-none" aria-hidden="true">
+              ✏️
+            </span>
+            <div>
+              <h1 className="text-[26px] font-extrabold text-[#3c3c3c] dark:text-white">
+                Frases
+              </h1>
+              <p className="mt-1 text-sm font-bold text-[#afafaf]">
+                Monte frases com as palavras dos seus vaults
+              </p>
+            </div>
+          </div>
+        )}
+        <div className={`flex gap-2 ${embedded ? "ml-auto" : ""}`}>
           <Button
             variant="outline"
             onClick={handleClearCurrentSentence}
             disabled={sentenceWords.length === 0}
           >
-            <Trash2 size={16} className="mr-2" />
+            <Trash2 size={16} />
             Limpar
           </Button>
           <Button
             onClick={handleSaveCurrentSentence}
             disabled={sentenceWords.length === 0 || isSavingSentence}
           >
-            <Save size={16} className="mr-2" />
-            {isSavingSentence ? "Salvando..." : "Salvar Frase"}
+            <Save size={16} />
+            {isSavingSentence ? "Salvando..." : "Salvar frase"}
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
         {/* Coluna 1: Pesquisa de Palavras */}
         <div className="space-y-4">
           <WordSearch

@@ -1,8 +1,6 @@
 "use client";
 
 import { BookOpen, GripVertical } from "lucide-react";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { WordItem } from "./types";
 import { getColorClasses } from "./utils";
 
@@ -21,7 +19,7 @@ interface SentenceConstructionProps {
 
 export function SentenceConstruction({
   sentenceWords,
-  draggedWord,
+  draggedWord: _draggedWord,
   dragOverIndex,
   sentenceText,
   onDragStart,
@@ -32,26 +30,23 @@ export function SentenceConstruction({
   onRightClick,
 }: SentenceConstructionProps) {
   return (
-    <Card className="p-4">
-      <h3 className="font-medium text-gray-900 dark:text-white mb-3">
-        Sua Frase
+    <div className="rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 dark:bg-gray-950">
+      <h3 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
+        Sua frase
       </h3>
+      <p className="mt-1 text-sm font-bold text-[#afafaf]">
+        Clique, arraste e reordene as palavras
+      </p>
 
-      {/* Área de drop para palavras */}
-      <div className="min-h-32 p-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-800/50">
+      <div className="mt-4 min-h-32 rounded-2xl border-2 border-dashed border-[#e5e5e5] bg-[#f7f7f7] p-4">
         {sentenceWords.length === 0 ? (
-          <div className="text-center text-gray-500 py-8">
-            <BookOpen size={32} className="mx-auto mb-2 opacity-50" />
-            <p>
-              Arraste palavras aqui ou clique nelas para construir sua frase.
-              <br />
-              <span className="text-sm opacity-75">
-                Você pode arrastar e reordenar as palavras na frase
-              </span>
-              <br />
-              <span className="text-sm opacity-75">
-                Clique com botão direito para opções
-              </span>
+          <div className="py-8 text-center">
+            <BookOpen size={32} className="mx-auto mb-2 text-[#1cb0f6]" />
+            <p className="text-sm font-bold text-[#777]">
+              Arraste palavras aqui ou clique nelas para montar a frase.
+            </p>
+            <p className="mt-2 text-xs font-extrabold uppercase tracking-wide text-[#afafaf]">
+              Botão direito para opções
             </p>
           </div>
         ) : (
@@ -61,18 +56,18 @@ export function SentenceConstruction({
               .map((wordItem, index) => (
                 <div
                   key={wordItem.id}
-                  className={`relative ${
+                  className={
                     dragOverIndex === index
-                      ? "ring-2 ring-blue-500 ring-opacity-50"
+                      ? "rounded-2xl ring-2 ring-[#1cb0f6]"
                       : ""
-                  }`}
+                  }
                   onDragOver={(e) => onDragOver(e, index)}
                   onDragLeave={onDragLeave}
                   onDrop={(e) => onDrop(e, index)}
                 >
-                  <Badge
-                    variant="secondary"
-                    className={`px-3 !h-12 py-1 text-lg border-b-[4px] border-[#e5e5e5] !rounded-[12px] transition-colors hover:shadow-md ${getColorClasses(
+                  <button
+                    type="button"
+                    className={`inline-flex h-11 items-center rounded-2xl border-2 border-b-4 px-3 text-base font-extrabold ${getColorClasses(
                       wordItem.highlightColor || ""
                     )}`}
                     draggable
@@ -80,23 +75,22 @@ export function SentenceConstruction({
                     onDragEnd={onDragEnd}
                     onContextMenu={(e) => onRightClick(e, wordItem.id)}
                   >
-                    <GripVertical size={12} className="mr-1 text-gray-400" />
+                    <GripVertical size={12} className="mr-1 text-[#afafaf]" />
                     {wordItem.word.name}
-                  </Badge>
+                  </button>
                 </div>
               ))}
           </div>
         )}
       </div>
 
-      {/* Texto da frase */}
       {sentenceText && (
-        <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
-          <p className="text-lg font-medium text-blue-900 dark:text-blue-100">
-            "{sentenceText}"
+        <div className="mt-4 rounded-2xl bg-[#ddf4ff] p-4">
+          <p className="text-lg font-extrabold text-[#1cb0f6]">
+            &ldquo;{sentenceText}&rdquo;
           </p>
         </div>
       )}
-    </Card>
+    </div>
   );
 }

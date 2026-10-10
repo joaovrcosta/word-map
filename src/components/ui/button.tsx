@@ -18,7 +18,7 @@ const buttonVariants = cva(
         secondary:
           "bg-gray-100 text-gray-700 rounded-full shadow-sm hover:bg-gray-200 hover:shadow-md focus-visible:ring-gray-500/50 active:scale-[0.98]",
         ghost:
-          "text-gray-600 rounded-full hover:bg-gray-100 hover:text-gray-900 focus-visible:ring-gray-500/50 active:scale-[0.98]",
+          "text-gray-600 rounded-full hover:bg-gray-100 hover:text-gray-900 focus-visible:ring-gray-500/50 active:scale-[0.98] dark:text-zinc-300 dark:hover:bg-white/10 dark:hover:text-white",
         link: "text-[#1cb0f6] underline-offset-4 hover:underline rounded-none shadow-none",
         success:
           "bg-green-500 text-white rounded-full shadow-lg hover:bg-green-600 hover:shadow-xl focus-visible:ring-green-500/50 active:scale-[0.98]",

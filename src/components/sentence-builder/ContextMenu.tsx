@@ -25,31 +25,28 @@ export function ContextMenu({
 
   return (
     <div
-      className="fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg py-1 min-w-[200px]"
+      className="fixed z-50 min-w-[200px] rounded-2xl border-2 border-[#e5e5e5] bg-white py-2 shadow-lg dark:bg-gray-950"
       style={{
         left: contextMenuPosition.x,
         top: contextMenuPosition.y,
       }}
     >
-      <div className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 border-b border-gray-200 dark:border-gray-700">
+      <div className="px-3 py-2 text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf]">
         Opções da palavra
       </div>
 
-      {/* Opções de cores */}
       <div className="px-3 py-2">
-        <div className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-          Destacar com cor:
-        </div>
+        <div className="mb-2 text-xs font-bold text-[#777]">Destacar</div>
         <div className="flex flex-wrap gap-1">
           {HIGHLIGHT_COLORS.map((color) => (
             <button
               key={color.value}
               onClick={() => onChangeWordColor(contextMenuWordId, color.value)}
-              className={`w-6 h-6 rounded-full border-2 ${
+              className={`h-6 w-6 rounded-full border-2 ${
                 sentenceWords.find((w) => w.id === contextMenuWordId)
                   ?.highlightColor === color.value
-                  ? "border-gray-800"
-                  : "border-gray-300"
+                  ? "border-[#3c3c3c]"
+                  : "border-[#e5e5e5]"
               } ${color.bg}`}
               title={color.name}
             />
@@ -57,12 +54,11 @@ export function ContextMenu({
         </div>
       </div>
 
-      <div className="border-t border-gray-200 dark:border-gray-700"></div>
+      <div className="mx-3 border-t-2 border-[#e5e5e5]" />
 
-      {/* Opção de excluir */}
       <button
         onClick={() => onRemoveWord(contextMenuWordId)}
-        className="w-full px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 flex items-center gap-2"
+        className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm font-extrabold text-red-500 hover:bg-red-50"
       >
         <Trash2 size={14} />
         Excluir palavra

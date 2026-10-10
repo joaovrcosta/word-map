@@ -28,6 +28,7 @@ export interface Word {
   grammaticalClass: string;
   category: string | null; // Pode ser null no banco
   translations: string[];
+  notes?: string | null;
   confidence: number; // 1-4
   isSaved: boolean;
   frequency: number; // Contador de frequência
@@ -40,6 +41,7 @@ export interface CreateWordData {
   grammaticalClass: string;
   category?: string; // Opcional
   translations: string[];
+  notes?: string | null;
   confidence: number; // 1-4
   vaultId: number;
   isSaved?: boolean; // Opcional, padrão true
@@ -79,6 +81,7 @@ export async function getVaults(): Promise<Vault[]> {
             grammaticalClass: true,
             category: true,
             translations: true,
+            notes: true,
             confidence: true,
             isSaved: true,
             frequency: true,
@@ -289,6 +292,7 @@ export async function createWord(data: CreateWordData): Promise<Word> {
       grammaticalClass: data.grammaticalClass,
       category: data.category || null,
       translations: data.translations,
+      notes: data.notes ?? null,
       confidence: data.confidence,
       vaultId: data.vaultId,
       status: true,
@@ -318,6 +322,7 @@ export async function createWord(data: CreateWordData): Promise<Word> {
       grammaticalClass: newWord.grammaticalClass,
       category: newWord.category,
       translations: newWord.translations,
+      notes: newWord.notes ?? null,
       confidence: newWord.confidence,
       isSaved: newWord.isSaved,
       frequency: newWord.frequency,
@@ -403,6 +408,7 @@ export async function searchWordInVaults(
         grammaticalClass: word.grammaticalClass,
         category: word.category,
         translations: word.translations,
+        notes: word.notes ?? null,
         confidence: word.confidence,
         isSaved: word.isSaved,
         frequency: word.frequency,
@@ -499,6 +505,7 @@ export async function moveWordToVault(
       grammaticalClass: updatedWord.grammaticalClass,
       category: updatedWord.category,
       translations: updatedWord.translations,
+      notes: updatedWord.notes ?? null,
       confidence: updatedWord.confidence,
       isSaved: updatedWord.isSaved,
       frequency: updatedWord.frequency,
@@ -543,6 +550,7 @@ export async function unsaveWord(wordId: number): Promise<Word> {
       grammaticalClass: updatedWord.grammaticalClass,
       category: updatedWord.category,
       translations: updatedWord.translations,
+      notes: updatedWord.notes ?? null,
       confidence: updatedWord.confidence,
       isSaved: updatedWord.isSaved,
       frequency: updatedWord.frequency,
@@ -674,6 +682,7 @@ export async function updateWord(
     grammaticalClass?: string;
     category?: string | null;
     translations?: string[];
+    notes?: string | null;
     confidence?: number;
   }
 ): Promise<Word> {
@@ -716,6 +725,9 @@ export async function updateWord(
     if (data.translations !== undefined) {
       updateData.translations = data.translations;
     }
+    if (data.notes !== undefined) {
+      updateData.notes = data.notes;
+    }
     if (data.confidence !== undefined) {
       updateData.confidence = data.confidence;
     }
@@ -739,6 +751,7 @@ export async function updateWord(
       grammaticalClass: updatedWord.grammaticalClass,
       category: updatedWord.category,
       translations: updatedWord.translations,
+      notes: updatedWord.notes ?? null,
       confidence: updatedWord.confidence,
       isSaved: updatedWord.isSaved,
       frequency: updatedWord.frequency,
@@ -1738,6 +1751,7 @@ export async function incrementWordFrequency(wordId: number): Promise<Word> {
       grammaticalClass: updatedWord.grammaticalClass,
       category: updatedWord.category,
       translations: updatedWord.translations,
+      notes: updatedWord.notes ?? null,
       confidence: updatedWord.confidence,
       isSaved: updatedWord.isSaved,
       frequency: updatedWord.frequency,

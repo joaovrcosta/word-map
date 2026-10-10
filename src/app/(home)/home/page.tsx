@@ -446,7 +446,7 @@ function HomePageContent() {
                 </Button>
               </div>
               <SearchWord />
-              <div className="rounded-2xl border-2 border-[#e5e5e5] bg-white overflow-hidden">
+              <div className="overflow-hidden rounded-2xl border-2 border-[#e5e5e5] bg-white dark:border-[#373e47] dark:bg-[#2d333b]">
                 <div className="px-6 py-5 border-b-2 border-[#e5e5e5]">
                   <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
                     Palavras do Vault
@@ -492,7 +492,7 @@ function HomePageContent() {
                 </div>
               ))}
             </div>
-            <SentenceBuilder />
+            <SentenceBuilder embedded />
           </div>
         )}
 

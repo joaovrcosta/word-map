@@ -1,7 +1,12 @@
 import { HighlightColor } from "./types";
 
 export const HIGHLIGHT_COLORS: HighlightColor[] = [
-  { name: "Padrão", value: "", bg: "bg-gray-100", text: "text-gray-800" },
+  {
+    name: "Padrão",
+    value: "",
+    bg: "bg-[#ddf4ff]",
+    text: "text-[#1cb0f6]",
+  },
   { name: "Vermelho", value: "red", bg: "bg-red-100", text: "text-red-800" },
   { name: "Azul", value: "blue", bg: "bg-blue-100", text: "text-blue-800" },
   {

@@ -45,6 +45,7 @@
 }
 
 :root {
+  color-scheme: light;
   --radius: 0.625rem;
   --background: oklch(1 0 0);
   --foreground: oklch(0.145 0 0);
@@ -80,37 +81,46 @@
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
+  color-scheme: dark;
+  --background: #22272e;
+  --foreground: #e6edf3;
+  --card: #2d333b;
+  --card-foreground: #e6edf3;
+  --popover: #2d333b;
+  --popover-foreground: #e6edf3;
+  --primary: #e6edf3;
+  --primary-foreground: #1c2128;
+  --secondary: #2d333b;
+  --secondary-foreground: #e6edf3;
+  --muted: #2d333b;
+  --muted-foreground: #8b949e;
+  --accent: #2d333b;
+  --accent-foreground: #e6edf3;
   --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --border: #373e47;
+  --input: #373e47;
+  --ring: #444c56;
   --chart-1: oklch(0.488 0.243 264.376);
   --chart-2: oklch(0.696 0.17 162.48);
   --chart-3: oklch(0.769 0.188 70.08);
   --chart-4: oklch(0.627 0.265 303.9);
   --chart-5: oklch(0.645 0.246 16.439);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --sidebar: #1c2128;
+  --sidebar-foreground: #e6edf3;
+  --sidebar-primary: #58a6ff;
+  --sidebar-primary-foreground: #e6edf3;
+  --sidebar-accent: #2d333b;
+  --sidebar-accent-foreground: #e6edf3;
+  --sidebar-border: #373e47;
+  --sidebar-ring: #444c56;
+  --color-gray-950: #1c2128;
+  --color-gray-900: #22272e;
+  --color-gray-800: #2d333b;
+  --color-gray-700: #444c56;
+  --color-zinc-950: #1c2128;
+  --color-zinc-900: #22272e;
+  --color-zinc-800: #2d333b;
+  --color-zinc-700: #444c56;
 }
 
 @layer base {

@@ -163,3 +163,46 @@ export function splitHighlightParts(content: string): string[] {
   );
   return content.split(regex);
 }
+
+export function extractRelatedSentences(
+  content: string,
+  word: string,
+  limit = 8
+): string[] {
+  const needle = normalizeToken(word);
+  if (!needle || !content.trim()) return [];
+
+  const sentences = content
+    .split(/(?<=[.!?])\s+|\n+/)
+    .map((sentence) => sentence.replace(/\s+/g, " ").trim())
+    .filter(Boolean);
+
+  const fromSentences = sentences.filter((sentence) =>
+    extractTextTokens(sentence).includes(needle)
+  );
+
+  const windows: string[] = [];
+  const tokens = extractTextTokenStream(content);
+  tokens.forEach((token, index) => {
+    if (token.normalized !== needle) return;
+    const start = Math.max(0, index - 2);
+    const end = Math.min(tokens.length, index + 3);
+    const phrase = tokens
+      .slice(start, end)
+      .map((item) => item.surface)
+      .join(" ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (phrase) windows.push(phrase);
+  });
+
+  const unique: string[] = [];
+  for (const phrase of [...fromSentences, ...windows]) {
+    const key = phrase.toLowerCase();
+    if (unique.some((item) => item.toLowerCase() === key)) continue;
+    unique.push(phrase);
+    if (unique.length >= limit) break;
+  }
+
+  return unique;
+}

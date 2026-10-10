@@ -2,15 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import {
   ArrowLeft,
   BookOpen,
@@ -19,8 +11,6 @@ import {
   Target,
   Zap,
   Eye,
-  Edit,
-  Trash,
 } from "lucide-react";
 import Link from "next/link";
 import { getVaults, type Vault } from "@/actions/actions";
@@ -56,284 +46,192 @@ export default function VaultDetailPage() {
     }
   };
 
-  const handleDeleteVault = async () => {
-    if (
-      !confirm(
-        "Tem certeza que deseja excluir este vault? Esta ação não pode ser desfeita."
-      )
-    ) {
-      return;
-    }
-
-    try {
-      // Aqui você implementaria a lógica de deletar o vault
-      router.push("/home/vault");
-    } catch (error) {
-      console.error("Erro ao deletar vault:", error);
-    }
-  };
-
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1cb0f6] mx-auto"></div>
+          <p className="mt-4 text-gray-600">Carregando vault...</p>
+        </div>
       </div>
     );
   }
 
   if (error || !vault) {
     return (
-      <div className="container mx-auto p-6">
-        <Card className="text-center p-8">
-          <div className="text-red-500 mb-4">
-            <BookOpen className="h-16 w-16 mx-auto" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-600 mb-2">
-            Erro ao carregar vault
-          </h3>
-          <p className="text-gray-500 mb-4">
-            {error || "Vault não encontrado"}
-          </p>
+      <div className="px-8 py-12 text-center">
+        <BookOpen className="h-16 w-16 mx-auto text-[#1cb0f6] mb-4" />
+        <h1 className="text-2xl font-extrabold text-[#3c3c3c]">
+          Vault não encontrado
+        </h1>
+        <p className="mt-2 text-[#777]">{error}</p>
+        <Button className="mt-6" asChild>
           <Link href="/home/vault">
-            <Button variant="outline">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar aos Vaults
-            </Button>
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Voltar aos vaults
           </Link>
-        </Card>
+        </Button>
       </div>
     );
   }
 
-  return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Link href="/home/vault">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar aos Vaults
-            </Button>
-          </Link>
+  const stats = [
+    {
+      label: "Total de palavras",
+      value: vault.words.length,
+      color: "text-[#1cb0f6]",
+      icon: BookOpen,
+    },
+    {
+      label: "Bem conhecidas",
+      value: vault.words.filter((word) => word.confidence >= 3).length,
+      color: "text-[#58cc02]",
+      icon: Target,
+    },
+    {
+      label: "Para revisar",
+      value: vault.words.filter((word) => word.confidence <= 2).length,
+      color: "text-[#ffc800]",
+      icon: Zap,
+    },
+    {
+      label: "Novas",
+      value: vault.words.filter((word) => word.confidence === 1).length,
+      color: "text-[#1cb0f6]",
+      icon: Brain,
+    },
+  ];
 
+  return (
+    <div className="min-h-full bg-white dark:bg-gray-950">
+      <div className="px-8 pt-5 pb-10">
+        <Button
+          variant="ghost"
+          onClick={() => router.push("/home/vault")}
+          className="-ml-2 mb-5 gap-2 text-[#777] hover:text-[#3c3c3c]"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Vaults
+        </Button>
+
+        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+            <p className="text-xs font-extrabold uppercase tracking-wide text-[#1cb0f6]">
+              Vault
+            </p>
+            <h1 className="mt-1 text-[26px] font-extrabold text-[#3c3c3c] dark:text-white">
               {vault.name}
             </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Vault de vocabulário com {vault.words.length} palavras
+            <p className="mt-1 text-sm font-bold text-[#afafaf]">
+              {vault.words.length} palavra
+              {vault.words.length !== 1 ? "s" : ""} neste vault
             </p>
           </div>
-        </div>
-
-        <div className="flex gap-2">
-          <Button variant="outline" size="sm">
-            <Edit className="h-4 w-4 mr-2" />
-            Editar
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleDeleteVault}>
-            <Trash className="h-4 w-4 mr-2" />
-            Deletar
+          <Button onClick={() => router.push(`/home?vaultId=${vaultId}`)}>
+            <Plus size={20} className="mr-2" />
+            Nova palavra
           </Button>
         </div>
-      </div>
 
-      {/* Estatísticas do Vault */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-6 text-center">
-            <BookOpen className="h-8 w-8 mx-auto text-blue-600 mb-2" />
-            <div className="text-2xl font-bold text-blue-600">
-              {vault.words.length}
+        <div className="mt-8 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          {stats.map((stat) => (
+            <div
+              key={stat.label}
+              className="rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 text-center dark:border-[#373e47] dark:bg-[#2d333b]"
+            >
+              <stat.icon className={`mx-auto mb-2 h-6 w-6 ${stat.color}`} />
+              <p className={`text-3xl font-extrabold ${stat.color}`}>
+                {stat.value}
+              </p>
+              <p className="mt-2 text-xs font-extrabold uppercase tracking-wide text-[#afafaf]">
+                {stat.label}
+              </p>
             </div>
-            <div className="text-sm text-gray-600">Total de Palavras</div>
-          </CardContent>
-        </Card>
+          ))}
+        </div>
 
-        <Card>
-          <CardContent className="p-6 text-center">
-            <Target className="h-8 w-8 mx-auto text-green-600 mb-2" />
-            <div className="text-2xl font-bold text-green-600">
-              {vault.words.filter((w) => w.confidence >= 3).length}
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="rounded-2xl border-2 border-[#e5e5e5] p-6">
+            <div className="flex items-center gap-2">
+              <Brain className="h-5 w-5 text-[#1cb0f6]" />
+              <h2 className="text-lg font-extrabold text-[#3c3c3c]">
+                Flashcards
+              </h2>
             </div>
-            <div className="text-sm text-gray-600">Bem Conhecidas</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 text-center">
-            <Zap className="h-8 w-8 mx-auto text-orange-600 mb-2" />
-            <div className="text-2xl font-bold text-orange-600">
-              {vault.words.filter((w) => w.confidence <= 2).length}
-            </div>
-            <div className="text-sm text-gray-600">Para Revisar</div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 text-center">
-            <Brain className="h-8 w-8 mx-auto text-purple-600 mb-2" />
-            <div className="text-2xl font-bold text-purple-600">
-              {vault.words.filter((w) => w.confidence === 1).length}
-            </div>
-            <div className="text-sm text-gray-600">Novas</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Ações Principais */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Estudar com Flashcards */}
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Brain className="h-6 w-6 text-purple-600" />
-              Estudar com Flashcards
-            </CardTitle>
-            <CardDescription>
-              Sistema de repetição espaçada para memorização eficiente
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Target className="h-4 w-4 text-green-600" />
-                <span>Repetição espaçada inteligente</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Zap className="h-4 w-4 text-blue-600" />
-                <span>Progresso adaptativo</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <BookOpen className="h-4 w-4 text-purple-600" />
-                <span>Foco nas palavras difíceis</span>
-              </div>
-            </div>
-
-            <Link href={`/home/vault/${vaultId}/flashcards`}>
-              <Button className="w-full mt-4" size="lg">
+            <p className="mt-2 text-sm text-[#777]">
+              Estude com repetição espaçada e foque nas palavras mais difíceis.
+            </p>
+            <Button className="mt-5 w-full" asChild>
+              <Link href={`/home/vault/${vaultId}/flashcards`}>
                 <Brain className="h-5 w-5 mr-2" />
-                Iniciar Flashcards
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
+                Iniciar flashcards
+              </Link>
+            </Button>
+          </div>
 
-        {/* Visualizar Palavras */}
-        <Card className="hover:shadow-lg transition-shadow cursor-pointer">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Eye className="h-6 w-6 text-blue-600" />
-              Visualizar Palavras
-            </CardTitle>
-            <CardDescription>
-              Ver todas as palavras do vault e suas conexões
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <BookOpen className="h-4 w-4 text-green-600" />
-                <span>Lista completa de palavras</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Target className="h-4 w-4 text-blue-600" />
-                <span>Editar e organizar</span>
-              </div>
-              <div className="flex items-center gap-2 text-sm text-gray-600">
-                <Zap className="h-4 w-4 text-purple-600" />
-                <span>Gerenciar conexões</span>
-              </div>
+          <div className="rounded-2xl border-2 border-[#e5e5e5] p-6">
+            <div className="flex items-center gap-2">
+              <Eye className="h-5 w-5 text-[#58cc02]" />
+              <h2 className="text-lg font-extrabold text-[#3c3c3c]">
+                Palavras
+              </h2>
             </div>
-
+            <p className="mt-2 text-sm text-[#777]">
+              Veja, edite e organize todas as palavras deste vault.
+            </p>
             <Button
               variant="outline"
-              className="w-full mt-4"
-              size="lg"
+              className="mt-5 w-full"
               onClick={() => router.push(`/home?vaultId=${vaultId}`)}
             >
               <Eye className="h-5 w-5 mr-2" />
-              Ver Palavras
+              Ver palavras
             </Button>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </div>
 
-      {/* Lista Rápida de Palavras */}
-      {vault.words.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BookOpen className="h-5 w-5 text-gray-600" />
-              Palavras do Vault ({vault.words.length})
-            </CardTitle>
-            <CardDescription>
-              Visão geral das palavras armazenadas
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+        {vault.words.length > 0 && (
+          <div className="mt-6 rounded-2xl border-2 border-[#e5e5e5] p-6">
+            <h2 className="text-lg font-extrabold text-[#3c3c3c]">
+              Palavras do vault
+            </h2>
+            <p className="mt-1 text-[13px] font-extrabold uppercase tracking-wide text-[#afafaf]">
+              {vault.words.length} palavra
+              {vault.words.length !== 1 ? "s" : ""}
+            </p>
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
               {vault.words.slice(0, 12).map((word) => (
                 <div
                   key={word.id}
-                  className="p-3 border rounded-lg hover:bg-gray-50 transition-colors"
+                  className="rounded-2xl border-2 border-[#e5e5e5] p-4 hover:border-[#1cb0f6]/40 transition-colors"
                 >
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-medium text-gray-900">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-extrabold text-[#3c3c3c] truncate">
                       {word.name}
                     </span>
-                    <Badge
-                      variant="outline"
-                      className={`text-xs ${
-                        word.confidence === 1
-                          ? "bg-red-100 text-red-800 border-red-200"
-                          : word.confidence === 2
-                          ? "bg-orange-100 text-orange-800 border-orange-200"
-                          : word.confidence === 3
-                          ? "bg-green-100 text-green-800 border-green-200"
-                          : "bg-blue-100 text-blue-800 border-blue-200"
-                      }`}
-                    >
+                    <span className="shrink-0 rounded-full bg-[#ddf4ff] px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1cb0f6]">
                       Nível {word.confidence}
-                    </Badge>
+                    </span>
                   </div>
-                  <div className="text-sm text-gray-600">
+                  <p className="mt-2 text-sm text-[#777] truncate">
                     {word.grammaticalClass} •{" "}
                     {word.translations.slice(0, 2).join(", ")}
-                  </div>
+                  </p>
                 </div>
               ))}
-
               {vault.words.length > 12 && (
-                <div className="p-3 border rounded-lg bg-gray-50 text-center text-gray-500">
-                  +{vault.words.length - 12} mais palavras...
-                </div>
+                <button
+                  type="button"
+                  onClick={() => router.push(`/home?vaultId=${vaultId}`)}
+                  className="rounded-2xl border-2 border-dashed border-[#e5e5e5] p-4 text-center text-sm font-extrabold uppercase tracking-wide text-[#1cb0f6] hover:border-[#1cb0f6] hover:bg-[#ddf4ff]"
+                >
+                  +{vault.words.length - 12} mais
+                </button>
               )}
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Adicionar Nova Palavra */}
-      <Card>
-        <CardContent className="p-6 text-center">
-          <Plus className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-semibold text-gray-600 mb-2">
-            Adicionar Nova Palavra
-          </h3>
-          <p className="text-gray-500 mb-4">
-            Expanda seu vocabulário adicionando novas palavras ao vault
-          </p>
-          <Button
-            variant="outline"
-            onClick={() => router.push(`/home?vaultId=${vaultId}`)}
-          >
-            <Plus className="h-4 w-4 mr-2" />
-            Adicionar Palavra
-          </Button>
-        </CardContent>
-      </Card>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

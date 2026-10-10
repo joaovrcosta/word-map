@@ -143,7 +143,7 @@ export default function TextsPage() {
                 {texts.map((text) => (
                   <div
                     key={text.id}
-                    className="rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 hover:border-[#1cb0f6]/40 transition-colors"
+                    className="rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 transition-colors hover:border-[#1cb0f6]/40 dark:border-[#373e47] dark:bg-[#2d333b]"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
@@ -152,7 +152,7 @@ export default function TextsPage() {
                       <div className="flex items-center gap-1 shrink-0">
                         <button
                           type="button"
-                          className="size-8 rounded-full text-[#1cb0f6] hover:bg-[#ddf4ff]"
+                          className="size-8 rounded-full text-[#1cb0f6] hover:bg-[#ddf4ff] dark:hover:bg-[#1cb0f6]/15"
                           onClick={() =>
                             router.push(`/home/texts/${text.id}`)
                           }
@@ -162,7 +162,7 @@ export default function TextsPage() {
                         </button>
                         <button
                           type="button"
-                          className="size-8 rounded-full text-red-500 hover:bg-red-50"
+                          className="size-8 rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-500/15"
                           onClick={() => handleDeleteText(text.id)}
                           aria-label="Excluir texto"
                         >
@@ -170,7 +170,7 @@ export default function TextsPage() {
                         </button>
                       </div>
                     </div>
-                    <p className="mt-2 text-sm text-[#777] line-clamp-3">
+                    <p className="mt-2 line-clamp-3 text-sm text-[#777] dark:text-[#8b949e]">
                       {text.content}
                     </p>
                     <div className="mt-4 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-[#afafaf]">
@@ -188,15 +188,19 @@ export default function TextsPage() {
 
         {activeTab === "report" && (
           <div className="max-w-3xl mx-auto py-10 grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div className="rounded-2xl border-2 border-[#e5e5e5] p-6">
-              <p className="text-sm font-bold text-[#777]">Total de textos</p>
-              <p className="mt-1 text-3xl font-extrabold text-[#3c3c3c]">
+            <div className="rounded-2xl border-2 border-[#e5e5e5] p-6 dark:border-[#373e47] dark:bg-[#2d333b]">
+              <p className="text-sm font-bold text-[#777] dark:text-[#8b949e]">
+                Total de textos
+              </p>
+              <p className="mt-1 text-3xl font-extrabold text-[#3c3c3c] dark:text-white">
                 {texts.length}
               </p>
             </div>
-            <div className="rounded-2xl border-2 border-[#e5e5e5] p-6">
-              <p className="text-sm font-bold text-[#777]">Palavras salvas</p>
-              <p className="mt-1 text-3xl font-extrabold text-[#3c3c3c]">
+            <div className="rounded-2xl border-2 border-[#e5e5e5] p-6 dark:border-[#373e47] dark:bg-[#2d333b]">
+              <p className="text-sm font-bold text-[#777] dark:text-[#8b949e]">
+                Palavras salvas
+              </p>
+              <p className="mt-1 text-3xl font-extrabold text-[#3c3c3c] dark:text-white">
                 {totalWords}
               </p>
             </div>

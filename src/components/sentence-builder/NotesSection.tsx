@@ -2,8 +2,6 @@
 
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Card } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { WordItem } from "./types";
 import { getColorClasses, renderTextWithMentions } from "./utils";
 
@@ -31,26 +29,22 @@ export function NotesSection({
   onRightClick,
 }: NotesSectionProps) {
   return (
-    <Card className="p-4">
-      <h3 className="font-medium text-gray-900 dark:text-white mb-3">
+    <div className="rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 dark:bg-gray-950">
+      <h3 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
         Anotações
       </h3>
+      <p className="mt-1 text-sm font-bold text-[#afafaf]">
+        Use @ para citar palavras da frase
+      </p>
 
-      {/* Sistema de anotações com modo de edição */}
-      <div className="space-y-2">
+      <div className="mt-4">
         {isEditingNotes ? (
-          // Modo de edição - mostra textarea
-          <div className="space-y-2">
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                Editando anotações:
-              </h4>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={onStopEditing}
-                className="text-xs"
-              >
+              <p className="text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf]">
+                Editando
+              </p>
+              <Button variant="outline" onClick={onStopEditing}>
                 Salvar
               </Button>
             </div>
@@ -60,40 +54,38 @@ export function NotesSection({
               value={notes}
               onChange={onNotesChange}
               onKeyDown={onKeyDown}
-              className="min-h-64 resize-none"
+              className="min-h-64 resize-none rounded-2xl border-2 font-bold"
             />
           </div>
         ) : (
-          // Modo de visualização - mostra preview
           <div
-            className="min-h-64 p-3 dark:bg-gray-800 rounded-lg border border-gray-300 dark:border-gray-600 cursor-pointer hover:border-gray-400 dark:hover:border-gray-500 transition-colors"
+            className="min-h-64 cursor-pointer rounded-2xl border-2 border-[#e5e5e5] p-4 transition-colors hover:border-[#1cb0f6]/40"
             onClick={onStartEditing}
           >
             {notes ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Anotações:
-                  </h4>
-                  <Button
-                    variant="ghost"
-                    size="sm"
+                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf]">
+                    Anotações
+                  </p>
+                  <button
+                    type="button"
                     onClick={(e) => {
                       e.stopPropagation();
                       onStartEditing();
                     }}
-                    className="text-xs"
+                    className="text-xs font-extrabold uppercase tracking-wide text-[#1cb0f6]"
                   >
                     Editar
-                  </Button>
+                  </button>
                 </div>
-                <div className="text-sm leading-6 whitespace-pre-wrap break-words">
+                <div className="text-sm font-bold leading-6 text-[#3c3c3c] whitespace-pre-wrap break-words">
                   {renderTextWithMentions(notes).map((part) => {
                     if (part.type === "mention") {
                       return (
                         <span
                           key={part.key}
-                          className="px-1 py-0.5 rounded bg-blue-500 text-white font-medium"
+                          className="rounded-full bg-[#1cb0f6] px-2 py-0.5 font-extrabold text-white"
                         >
                           @{part.content}
                         </span>
@@ -104,10 +96,12 @@ export function NotesSection({
                 </div>
               </div>
             ) : (
-              <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400">
+              <div className="flex h-full items-center justify-center text-[#777]">
                 <div className="text-center">
-                  <p className="text-sm">Clique para adicionar anotações</p>
-                  <p className="text-xs mt-1">
+                  <p className="text-sm font-bold">
+                    Clique para adicionar anotações
+                  </p>
+                  <p className="mt-1 text-xs font-extrabold uppercase tracking-wide text-[#afafaf]">
                     Digite @ para referenciar palavras
                   </p>
                 </div>
@@ -118,40 +112,33 @@ export function NotesSection({
       </div>
 
       {sentenceWords.length > 0 && (
-        <div className="mt-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
-          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Palavras na frase:
-          </h4>
-          <div className="space-y-2">
-            {sentenceWords
-              .sort((a, b) => a.position - b.position)
-              .map((wordItem) => (
-                <div
-                  key={wordItem.id}
-                  className={`flex items-center justify-between p-2 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors ${getColorClasses(
-                    wordItem.highlightColor || ""
-                  )}`}
-                  onContextMenu={(e) => onRightClick(e, wordItem.id)}
-                >
-                  <div className="text-sm flex-1">
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {wordItem.word.name}
-                    </span>
-                    <span className="text-gray-600 dark:text-gray-400 ml-2">
-                      - {wordItem.word.translations.join(", ")}
-                    </span>
-                    <span className="text-xs text-gray-500 ml-2">
-                      ({wordItem.word.grammaticalClass})
-                    </span>
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    Clique direito para opções
-                  </div>
+        <div className="mt-4 space-y-2">
+          <p className="text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf]">
+            Palavras na frase
+          </p>
+          {sentenceWords
+            .sort((a, b) => a.position - b.position)
+            .map((wordItem) => (
+              <div
+                key={wordItem.id}
+                className={`flex items-center justify-between gap-2 rounded-2xl border-2 border-[#e5e5e5] p-3 ${getColorClasses(
+                  wordItem.highlightColor || ""
+                )}`}
+                onContextMenu={(e) => onRightClick(e, wordItem.id)}
+              >
+                <div className="min-w-0 text-sm">
+                  <span className="font-extrabold">{wordItem.word.name}</span>
+                  <span className="ml-2 font-bold opacity-70">
+                    {wordItem.word.translations.join(", ")}
+                  </span>
                 </div>
-              ))}
-          </div>
+                <span className="shrink-0 text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf]">
+                  {wordItem.word.grammaticalClass}
+                </span>
+              </div>
+            ))}
         </div>
       )}
-    </Card>
+    </div>
   );
 }

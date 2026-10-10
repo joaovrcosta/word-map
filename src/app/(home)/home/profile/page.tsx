@@ -1,43 +1,26 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { useEffect, useState, type ReactNode } from "react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import {
   BookOpen,
   Brain,
   Network,
   TrendingUp,
   Settings,
-  User,
   Target,
   Zap,
   Trophy,
-  Star,
-  Award,
-  TrendingDown,
-  Calendar,
-  Clock,
-  Flame,
-  Rocket,
 } from "lucide-react";
 import {
   getUserStats,
   getUserSettings,
   upsertUserSettings,
 } from "@/actions/user-settings";
+import { getCurrentUser } from "@/actions/auth";
 import useUserSettingsStore from "@/store/userSettingsStore";
-import { ProgressChart } from "@/components/ui/progress-chart";
+import useThemeStore from "@/store/themeStore";
 
 interface UserStats {
   totalWords: number;
@@ -62,30 +45,79 @@ interface GamificationStats {
   monthlyProgress: number;
 }
 
+const confidenceLabels: Record<number, string> = {
+  1: "Iniciante",
+  2: "Básico",
+  3: "Intermediário",
+  4: "Avançado",
+};
+
+const duoBarColors = [
+  "bg-[#1cb0f6]",
+  "bg-[#58cc02]",
+  "bg-[#ffc800]",
+  "bg-[#ce82ff]",
+  "bg-[#ff9600]",
+  "bg-[#ff4b4b]",
+];
+
+function DuoCard({
+  children,
+  className = "",
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 dark:border-[#373e47] dark:bg-[#2d333b] ${className}`}
+    >
+      {children}
+    </div>
+  );
+}
+
+function ProgressBar({
+  percent,
+  color = "bg-[#1cb0f6]",
+}: {
+  percent: number;
+  color?: string;
+}) {
+  return (
+    <div className="h-3 w-full overflow-hidden rounded-full bg-[#e5e5e5]">
+      <div
+        className={`h-full rounded-full transition-all duration-500 ${color}`}
+        style={{ width: `${Math.min(Math.max(percent, 0), 100)}%` }}
+      />
+    </div>
+  );
+}
+
 export default function ProfilePage() {
   const [stats, setStats] = useState<UserStats | null>(null);
   const [gamificationStats, setGamificationStats] =
     useState<GamificationStats | null>(null);
+  const [displayName, setDisplayName] = useState("Você");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { settings, updateSettings } = useUserSettingsStore();
-
-  // Mock userId - em produção, isso viria do contexto de autenticação
-  const userId = 1;
+  const theme = useThemeStore((state) => state.theme);
+  const setTheme = useThemeStore((state) => state.setTheme);
 
   useEffect(() => {
     const loadData = async () => {
       try {
-        console.log("Iniciando carregamento de dados do perfil...");
-
-        const [statsData, userSettings] = await Promise.all([
+        const [statsData, userSettings, user] = await Promise.all([
           getUserStats(),
           getUserSettings(),
+          getCurrentUser(),
         ]);
 
-        console.log("Dados carregados:", { statsData, userSettings });
-
         setStats(statsData);
+        if (user?.name) {
+          setDisplayName(user.name.split(" ")[0]);
+        }
 
         if (userSettings) {
           updateSettings({
@@ -93,21 +125,17 @@ export default function ProfilePage() {
             autoTranslateWordPreview: userSettings.autoTranslateWordPreview,
           });
         } else {
-          // Se não há configurações, usar padrão
           updateSettings({
             useAllVaultsForLinks: false,
             autoTranslateWordPreview: false,
           });
         }
 
-        // Calcular estatísticas gamificadas
         if (statsData) {
-          const gamificationData = calculateGamificationStats(statsData);
-          setGamificationStats(gamificationData);
+          setGamificationStats(calculateGamificationStats(statsData));
         }
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
-        // Definir valores padrão em caso de erro
         setStats({
           totalWords: 0,
           totalVaults: 0,
@@ -125,21 +153,16 @@ export default function ProfilePage() {
     loadData();
   }, [updateSettings]);
 
-  // Função para calcular estatísticas gamificadas
   const calculateGamificationStats = (
     userStats: UserStats
   ): GamificationStats => {
-    // Calcular nível baseado no total de palavras
-    const baseExp = 100; // Experiência base para o primeiro nível
     const level = Math.floor(userStats.totalWords / 10) + 1;
     const experience = userStats.totalWords * 10;
     const experienceToNextLevel = level * 10 * 10 - experience;
 
-    // Calcular streak baseado na atividade recente
-    const streak = Math.min(userStats.recentActivity, 7); // Máximo de 7 dias
-    const bestStreak = Math.max(streak, 14); // Streak máximo histórico
+    const streak = Math.min(userStats.recentActivity, 7);
+    const bestStreak = Math.max(streak, 14);
 
-    // Conquistas baseadas em marcos
     const achievements: string[] = [];
     if (userStats.totalWords >= 10) achievements.push("Iniciante");
     if (userStats.totalWords >= 25) achievements.push("Aprendiz");
@@ -149,7 +172,6 @@ export default function ProfilePage() {
     if (userStats.totalConnections >= 10) achievements.push("Conectador");
     if (userStats.recentActivity >= 5) achievements.push("Consistente");
 
-    // Metas semanais e mensais
     const weeklyGoal = Math.max(10, Math.floor(userStats.totalWords * 0.1));
     const weeklyProgress = Math.min(userStats.recentActivity, weeklyGoal);
     const monthlyGoal = Math.max(50, Math.floor(userStats.totalWords * 0.3));
@@ -172,14 +194,11 @@ export default function ProfilePage() {
   const handleUseAllVaultsChange = async (useAllVaults: boolean) => {
     setSaving(true);
     try {
-      console.log("Iniciando mudança de configuração:", useAllVaults);
-      const result = await upsertUserSettings({
+      await upsertUserSettings({
         useAllVaultsForLinks: useAllVaults,
       });
-      console.log("Configuração salva com sucesso:", result);
       updateSettings({ useAllVaultsForLinks: useAllVaults });
     } catch (error) {
-      console.error("Erro ao salvar configuração:", error);
       if (error instanceof Error) {
         alert(`Erro ao salvar configuração: ${error.message}`);
       } else {
@@ -193,13 +212,11 @@ export default function ProfilePage() {
   const handleAutoTranslateChange = async (autoTranslate: boolean) => {
     setSaving(true);
     try {
-      const result = await upsertUserSettings({
+      await upsertUserSettings({
         autoTranslateWordPreview: autoTranslate,
       });
-      console.log("Configuração salva com sucesso:", result);
       updateSettings({ autoTranslateWordPreview: autoTranslate });
     } catch (error) {
-      console.error("Erro ao salvar configuração:", error);
       if (error instanceof Error) {
         alert(`Erro ao salvar configuração: ${error.message}`);
       } else {
@@ -212,319 +229,294 @@ export default function ProfilePage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="text-center">
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-[#1cb0f6]" />
+          <p className="mt-4 text-gray-600">Carregando perfil...</p>
+        </div>
       </div>
     );
   }
 
   if (!stats) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <p className="text-gray-500">Erro ao carregar estatísticas</p>
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <p className="font-bold text-[#777]">Erro ao carregar estatísticas</p>
       </div>
     );
   }
 
-  const confidenceLabels = {
-    1: "Iniciante",
-    2: "Básico",
-    3: "Intermediário",
-    4: "Avançado",
-  };
+  const xpTotal =
+    (gamificationStats?.experience ?? 0) +
+    (gamificationStats?.experienceToNextLevel ?? 0);
+  const xpPercent = xpTotal
+    ? ((gamificationStats?.experience ?? 0) / xpTotal) * 100
+    : 0;
+  const maxConfidence = Math.max(
+    1,
+    ...stats.wordsByConfidence.map((w) => w.count)
+  );
+
+  const summaryCards = [
+    {
+      label: "Palavras",
+      value: stats.totalWords,
+      hint: "Aprendidas",
+      icon: BookOpen,
+      color: "text-[#1cb0f6]",
+      bg: "bg-[#ddf4ff]",
+    },
+    {
+      label: "Vaults",
+      value: stats.totalVaults,
+      hint: "Coleções",
+      icon: Brain,
+      color: "text-[#58cc02]",
+      bg: "bg-[#d7ffb8]",
+    },
+    {
+      label: "Conexões",
+      value: stats.totalConnections,
+      hint: "Palavras ligadas",
+      icon: Network,
+      color: "text-[#ce82ff]",
+      bg: "bg-[#f2dfff]",
+    },
+    {
+      label: "Atividade",
+      value: stats.recentActivity,
+      hint: "Últimos 30 dias",
+      icon: TrendingUp,
+      color: "text-[#ff9600]",
+      bg: "bg-[#fff5d6]",
+    },
+  ];
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header do Perfil */}
-      <div className="flex items-center gap-4">
-        <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-red-500 rounded-full flex items-center justify-center">
-          <User className="w-8 h-8 text-white" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Meu Perfil
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Acompanhe seu progresso e configure suas preferências
-          </p>
+    <div className="min-h-full max-w-full overflow-x-hidden bg-white dark:bg-gray-950">
+      <div className="px-8 pt-5 pb-4">
+        <div className="flex items-center gap-3">
+          <span className="text-[26px] leading-none" aria-hidden="true">
+            🦉
+          </span>
+          <div>
+            <h1 className="text-[26px] font-extrabold text-[#3c3c3c] dark:text-white">
+              Olá, {displayName}
+            </h1>
+            <p className="mt-1 text-sm font-bold text-[#afafaf]">
+              Acompanhe seu progresso e configure suas preferências
+            </p>
+          </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Estatísticas Principais */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Cards de Estatísticas */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  Total de Palavras
-                </CardTitle>
-                <BookOpen className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalWords}</div>
-                <p className="text-xs text-muted-foreground">
-                  Palavras aprendidas
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Vaults</CardTitle>
-                <Brain className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.totalVaults}</div>
-                <p className="text-xs text-muted-foreground">
-                  Coleções criadas
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Conexões</CardTitle>
-                <Network className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {stats.totalConnections}
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Palavras conectadas
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Atividade</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{stats.recentActivity}</div>
-                <p className="text-xs text-muted-foreground">Últimos 30 dias</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Seção Gamificada */}
-          {gamificationStats && (
-            <div className="space-y-6">
-              {/* Nível e Experiência */}
-              <Card className="bg-gradient-to-r from-purple-50 to-blue-50 border-purple-200">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-purple-800">
-                    <Trophy className="h-6 w-6" />
-                    Nível {gamificationStats.level}
-                  </CardTitle>
-                  <CardDescription className="text-purple-600">
-                    Continue aprendendo para subir de nível!
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium text-purple-700">
-                      Experiência
-                    </span>
-                    <span className="text-sm text-purple-600">
-                      {gamificationStats.experience} /{" "}
-                      {gamificationStats.experience +
-                        gamificationStats.experienceToNextLevel}{" "}
-                      XP
-                    </span>
-                  </div>
-                  <ProgressChart
-                    value={
-                      (gamificationStats.experience /
-                        (gamificationStats.experience +
-                          gamificationStats.experienceToNextLevel)) *
-                      100
-                    }
-                    className="h-3"
-                    variant="default"
-                  />
-                  <div className="text-xs text-purple-500 text-center">
-                    {gamificationStats.experienceToNextLevel} XP para o próximo
-                    nível
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-
-          {/* Seção de Gráficos e Análises Visuais */}
-          <div className="space-y-6">
-            <h2 className="text-2xl font-bold text-gray-900 dark:text-white flex items-center gap-2">
-              <TrendingUp className="h-6 w-6 text-blue-600" />
-              Gráficos e Análises Visuais
-            </h2>
-
-            {/* Gráficos Principais */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Gráfico de Barras - Palavras por Nível de Confiança */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Target className="h-5 w-5 text-blue-600" />
-                    Nível de Confiança
-                  </CardTitle>
-                  <CardDescription>
-                    Distribuição das palavras por nível de aprendizado
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {stats.wordsByConfidence.map((item) => {
-                      const percentage = (item.count / stats.totalWords) * 100;
-                      const maxBarWidth = 200; // Largura máxima da barra
-                      const barWidth =
-                        (item.count /
-                          Math.max(
-                            ...stats.wordsByConfidence.map((w) => w.count)
-                          )) *
-                        maxBarWidth;
-
-                      return (
-                        <div key={item.confidence} className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <span className="text-sm font-medium text-gray-700">
-                              {
-                                confidenceLabels[
-                                  item.confidence as keyof typeof confidenceLabels
-                                ]
-                              }
-                            </span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-sm text-gray-600">
-                                {item.count}
-                              </span>
-                              <span className="text-xs text-gray-500">
-                                ({percentage.toFixed(1)}%)
-                              </span>
-                            </div>
-                          </div>
-                          <div className="relative">
-                            <div className="w-full bg-gray-200 rounded-full h-3">
-                              <div
-                                className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full transition-all duration-500 ease-out"
-                                style={{ width: `${barWidth}px` }}
-                              />
-                            </div>
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-
-              {/* Gráfico de Pizza - Classe Gramatical */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Zap className="h-5 w-5 text-purple-600" />
-                    Classe Gramatical
-                  </CardTitle>
-                  <CardDescription>
-                    Distribuição por tipo de palavra
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {stats.wordsByGrammaticalClass.map((item, index) => {
-                      const percentage = (item.count / stats.totalWords) * 100;
-                      const colors = [
-                        "#3b82f6",
-                        "#8b5cf6",
-                        "#06b6d4",
-                        "#10b981",
-                        "#f59e0b",
-                        "#ef4444",
-                      ];
-
-                      return (
-                        <div
-                          key={item.grammaticalClass}
-                          className="flex items-center gap-3"
-                        >
-                          <div
-                            className="w-4 h-4 rounded-full"
-                            style={{
-                              backgroundColor: colors[index % colors.length],
-                            }}
-                          />
-                          <div className="flex-1">
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-sm font-medium text-gray-700">
-                                {item.grammaticalClass}
-                              </span>
-                              <span className="text-sm text-gray-600">
-                                {item.count} ({percentage.toFixed(1)}%)
-                              </span>
-                            </div>
-                            <ProgressChart
-                              value={percentage}
-                              className="h-2"
-                              variant="default"
-                            />
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-
-          {/* Categorias */}
-          {stats.wordsByCategory.length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Categorias</CardTitle>
-                <CardDescription>
-                  Palavras organizadas por categoria
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {stats.wordsByCategory.map((item) => (
-                    <Badge key={item.category} variant="secondary">
-                      {item.category} ({item.count})
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+      <div className="space-y-6 px-6 pb-10">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {summaryCards.map((card) => (
+            <DuoCard key={card.label} className="text-center">
+              <div
+                className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl ${card.bg}`}
+              >
+                <card.icon className={`h-6 w-6 ${card.color}`} />
+              </div>
+              <p className={`text-3xl font-extrabold ${card.color}`}>
+                {card.value}
+              </p>
+              <p className="mt-2 text-xs font-extrabold uppercase tracking-wide text-[#afafaf]">
+                {card.label}
+              </p>
+              <p className="mt-1 text-xs font-bold text-[#777]">{card.hint}</p>
+            </DuoCard>
+          ))}
         </div>
 
-        {/* Configurações */}
-        <div className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5" />
-                Configurações
-              </CardTitle>
-              <CardDescription>
+        {gamificationStats && (
+          <DuoCard>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#fff5d6]">
+                  <Trophy className="h-6 w-6 text-[#ffc800]" />
+                </div>
+                <div>
+                  <p className="text-xs font-extrabold uppercase tracking-wide text-[#ffc800]">
+                    Nível
+                  </p>
+                  <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
+                    Nível {gamificationStats.level}
+                  </h2>
+                </div>
+              </div>
+              <p className="text-sm font-extrabold text-[#afafaf]">
+                {gamificationStats.experience} / {xpTotal} XP
+              </p>
+            </div>
+            <div className="mt-4">
+              <ProgressBar percent={xpPercent} color="bg-[#ffc800]" />
+              <p className="mt-2 text-center text-xs font-bold text-[#afafaf]">
+                {gamificationStats.experienceToNextLevel} XP para o próximo
+                nível
+              </p>
+            </div>
+            <div className="mt-5 grid grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-[#fff5d6] px-4 py-3 text-center">
+                <p className="text-2xl font-extrabold text-[#ff9600]">
+                  {gamificationStats.streak}
+                </p>
+                <p className="mt-1 text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf]">
+                  Sequência
+                </p>
+              </div>
+              <div className="rounded-2xl bg-[#ddf4ff] px-4 py-3 text-center">
+                <p className="text-2xl font-extrabold text-[#1cb0f6]">
+                  {gamificationStats.bestStreak}
+                </p>
+                <p className="mt-1 text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf]">
+                  Recorde
+                </p>
+              </div>
+            </div>
+            {gamificationStats.achievements.length > 0 && (
+              <div className="mt-5 flex flex-wrap gap-2">
+                {gamificationStats.achievements.map((achievement) => (
+                  <span
+                    key={achievement}
+                    className="rounded-full bg-[#d7ffb8] px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-[#58cc02]"
+                  >
+                    {achievement}
+                  </span>
+                ))}
+              </div>
+            )}
+          </DuoCard>
+        )}
+
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <div className="space-y-4 lg:col-span-2">
+            <DuoCard>
+              <div className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-[#1cb0f6]" />
+                <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
+                  Nível de confiança
+                </h2>
+              </div>
+              <p className="mt-1 text-sm font-bold text-[#afafaf]">
+                Distribuição das palavras por nível de aprendizado
+              </p>
+              <div className="mt-5 space-y-4">
+                {stats.wordsByConfidence.length === 0 ? (
+                  <p className="text-sm font-bold text-[#777]">
+                    Adicione palavras para ver esta análise.
+                  </p>
+                ) : (
+                  stats.wordsByConfidence.map((item) => {
+                    const percentage = stats.totalWords
+                      ? (item.count / stats.totalWords) * 100
+                      : 0;
+                    const barPercent = (item.count / maxConfidence) * 100;
+                    return (
+                      <div key={item.confidence}>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <span className="text-sm font-extrabold text-[#3c3c3c]">
+                            {confidenceLabels[item.confidence] ??
+                              `Nível ${item.confidence}`}
+                          </span>
+                          <span className="text-xs font-extrabold uppercase tracking-wide text-[#afafaf]">
+                            {item.count} ({percentage.toFixed(1)}%)
+                          </span>
+                        </div>
+                        <ProgressBar percent={barPercent} />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </DuoCard>
+
+            <DuoCard>
+              <div className="flex items-center gap-2">
+                <Zap className="h-5 w-5 text-[#ce82ff]" />
+                <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
+                  Classe gramatical
+                </h2>
+              </div>
+              <p className="mt-1 text-sm font-bold text-[#afafaf]">
+                Distribuição por tipo de palavra
+              </p>
+              <div className="mt-5 space-y-4">
+                {stats.wordsByGrammaticalClass.length === 0 ? (
+                  <p className="text-sm font-bold text-[#777]">
+                    Ainda não há classes gramaticais para mostrar.
+                  </p>
+                ) : (
+                  stats.wordsByGrammaticalClass.map((item, index) => {
+                    const percentage = stats.totalWords
+                      ? (item.count / stats.totalWords) * 100
+                      : 0;
+                    return (
+                      <div key={item.grammaticalClass}>
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <span className="text-sm font-extrabold text-[#3c3c3c]">
+                            {item.grammaticalClass}
+                          </span>
+                          <span className="text-xs font-extrabold uppercase tracking-wide text-[#afafaf]">
+                            {item.count} ({percentage.toFixed(1)}%)
+                          </span>
+                        </div>
+                        <ProgressBar
+                          percent={percentage}
+                          color={duoBarColors[index % duoBarColors.length]}
+                        />
+                      </div>
+                    );
+                  })
+                )}
+              </div>
+            </DuoCard>
+
+            {stats.wordsByCategory.length > 0 && (
+              <DuoCard>
+                <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
+                  Categorias
+                </h2>
+                <p className="mt-1 text-sm font-bold text-[#afafaf]">
+                  Palavras organizadas por categoria
+                </p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {stats.wordsByCategory.map((item) => (
+                    <span
+                      key={item.category}
+                      className="rounded-full bg-[#ddf4ff] px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-[#1cb0f6]"
+                    >
+                      {item.category} ({item.count})
+                    </span>
+                  ))}
+                </div>
+              </DuoCard>
+            )}
+          </div>
+
+          <div className="space-y-4">
+            <DuoCard>
+              <div className="flex items-center gap-2">
+                <Settings className="h-5 w-5 text-[#1cb0f6]" />
+                <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
+                  Configurações
+                </h2>
+              </div>
+              <p className="mt-1 text-sm font-bold text-[#afafaf]">
                 Personalize como o sistema funciona para você
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
+              </p>
+
+              <div className="mt-5 space-y-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
                     <Label
                       htmlFor="use-all-vaults"
-                      className="text-base font-medium"
+                      className="text-sm font-extrabold text-[#3c3c3c]"
                     >
                       Usar todas as palavras para links
                     </Label>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="mt-1 text-sm font-bold text-[#777]">
                       {settings.useAllVaultsForLinks
                         ? "Permite conectar palavras de todos os vaults"
                         : "Permite conectar apenas palavras do vault ativo"}
@@ -535,20 +527,47 @@ export default function ProfilePage() {
                     checked={settings.useAllVaultsForLinks}
                     onCheckedChange={handleUseAllVaultsChange}
                     disabled={saving}
+                    className="data-[state=checked]:bg-[#58cc02]"
                   />
                 </div>
 
-                <Separator />
+                <div className="border-t-2 border-[#e5e5e5] dark:border-gray-800" />
 
-                <div className="flex items-center justify-between">
-                  <div className="space-y-0.5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
+                    <Label
+                      htmlFor="dark-theme"
+                      className="text-sm font-extrabold text-[#3c3c3c] dark:text-white"
+                    >
+                      Tema escuro
+                    </Label>
+                    <p className="mt-1 text-sm font-bold text-[#777]">
+                      {theme === "dark"
+                        ? "Interface escura para leitura à noite"
+                        : "Interface clara"}
+                    </p>
+                  </div>
+                  <Switch
+                    id="dark-theme"
+                    checked={theme === "dark"}
+                    onCheckedChange={(checked) =>
+                      setTheme(checked ? "dark" : "light")
+                    }
+                    className="data-[state=checked]:bg-[#58cc02]"
+                  />
+                </div>
+
+                <div className="border-t-2 border-[#e5e5e5] dark:border-gray-800" />
+
+                <div className="flex items-start justify-between gap-4">
+                  <div className="min-w-0">
                     <Label
                       htmlFor="auto-translate-preview"
-                      className="text-base font-medium"
+                      className="text-sm font-extrabold text-[#3c3c3c]"
                     >
                       Traduzir preview de palavras
                     </Label>
-                    <p className="text-sm text-muted-foreground">
+                    <p className="mt-1 text-sm font-bold text-[#777]">
                       {settings.autoTranslateWordPreview
                         ? "Definições e exemplos aparecem em português ao clicar em palavras nos textos"
                         : "Definições e exemplos aparecem em inglês ao clicar em palavras nos textos"}
@@ -559,48 +578,46 @@ export default function ProfilePage() {
                     checked={settings.autoTranslateWordPreview}
                     onCheckedChange={handleAutoTranslateChange}
                     disabled={saving}
+                    className="data-[state=checked]:bg-[#58cc02]"
                   />
                 </div>
 
-                <Separator />
-
-                <div className="space-y-2">
-                  <h4 className="text-sm font-medium text-muted-foreground">
-                    Como funciona:
-                  </h4>
-                  <ul className="text-sm text-muted-foreground space-y-1">
+                <div className="rounded-2xl bg-[#f7f7f7] p-4">
+                  <p className="text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf]">
+                    Como funciona
+                  </p>
+                  <ul className="mt-2 space-y-2 text-sm font-bold text-[#777]">
                     <li>
-                      • <strong>Desabilitado:</strong> Ao criar links, apenas
-                      palavras do vault atual são sugeridas
+                      Desligado: só palavras do vault atual entram nas
+                      sugestões de link.
                     </li>
                     <li>
-                      • <strong>Habilitado:</strong> Todas as palavras de todos
-                      os vaults são consideradas para links
+                      Ligado: todas as palavras de todos os vaults são
+                      consideradas.
                     </li>
                   </ul>
                 </div>
               </div>
-            </CardContent>
-          </Card>
+            </DuoCard>
 
-          {/* Informações do Sistema */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">
-                Informações do Sistema
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <div className="flex justify-between">
-                <span>Versão:</span>
-                <span>1.0.0</span>
+            <DuoCard>
+              <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
+                Sistema
+              </h2>
+              <div className="mt-4 space-y-3 text-sm font-bold text-[#777]">
+                <div className="flex justify-between">
+                  <span>Versão</span>
+                  <span className="font-extrabold text-[#3c3c3c]">1.0.0</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Atualizado</span>
+                  <span className="font-extrabold text-[#3c3c3c]">
+                    {new Date().toLocaleDateString("pt-BR")}
+                  </span>
+                </div>
               </div>
-              <div className="flex justify-between">
-                <span>Última atualização:</span>
-                <span>{new Date().toLocaleDateString("pt-BR")}</span>
-              </div>
-            </CardContent>
-          </Card>
+            </DuoCard>
+          </div>
         </div>
       </div>
     </div>

@@ -98,7 +98,7 @@ export default function BookPage() {
               {book.title}
             </h1>
             {book.description && (
-              <p className="mt-2 max-w-2xl text-[#777]">{book.description}</p>
+              <p className="mt-2 max-w-2xl text-[#777] dark:text-zinc-400">{book.description}</p>
             )}
           </div>
           {book.canEdit && (
@@ -111,7 +111,7 @@ export default function BookPage() {
 
         <ol className="mt-10 space-y-4">
           {book.chapters.length === 0 ? (
-            <li className="rounded-2xl border-2 border-dashed border-[#e5e5e5] p-8 text-center text-[#777]">
+            <li className="rounded-2xl border-2 border-dashed border-[#e5e5e5] p-8 text-center text-[#777] dark:border-gray-800 dark:text-zinc-400">
               {book.canEdit
                 ? "Este livro ainda não tem capítulos. Crie o primeiro."
                 : "Este livro ainda não tem capítulos."}
@@ -120,7 +120,7 @@ export default function BookPage() {
             book.chapters.map((chapter, index) => (
               <li
                 key={chapter.id}
-                className="flex items-center justify-between gap-4 rounded-2xl border-2 border-[#e5e5e5] px-5 py-4 hover:border-[#1cb0f6]/40"
+                className="flex items-center justify-between gap-4 rounded-2xl border-2 border-[#e5e5e5] px-5 py-4 hover:border-[#1cb0f6]/40 dark:border-gray-800"
               >
                 <button
                   type="button"
@@ -134,14 +134,14 @@ export default function BookPage() {
                   <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#ddf4ff] text-sm font-extrabold text-[#1cb0f6]">
                     {index + 1}
                   </span>
-                  <span className="truncate text-[16px] font-extrabold text-[#3c3c3c]">
+                  <span className="truncate text-[16px] font-extrabold text-[#3c3c3c] dark:text-white">
                     {chapter.title}
                   </span>
                 </button>
                 {book.canEdit && (
                   <button
                     type="button"
-                    className="size-8 rounded-full text-red-500 hover:bg-red-50"
+                    className="size-8 rounded-full text-red-500 hover:bg-red-50 dark:hover:bg-red-950"
                     onClick={() => handleDeleteChapter(chapter.id)}
                     aria-label="Excluir capítulo"
                   >

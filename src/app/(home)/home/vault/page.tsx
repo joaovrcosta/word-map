@@ -4,13 +4,6 @@ import { useState, useCallback } from "react";
 import { Plus, FolderOpen, Trash, Pencil, Eye } from "@phosphor-icons/react";
 import { Brain } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -26,13 +19,11 @@ export default function VaultPage() {
     id: number;
     name: string;
   } | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const router = useRouter();
 
-  // Usar hook otimizado com cache
   const { data: vaults, isLoading: isLoadingVaults, refetch } = useVaults();
 
-  // Deletar vault usando Server Action
   const handleDeleteVault = useCallback(
     async (vaultId: number) => {
       if (
@@ -44,18 +35,15 @@ export default function VaultPage() {
 
       try {
         await deleteVault(vaultId);
-
-        // Recarregar dados do cache
         refetch();
       } catch (error) {
         console.error("Erro ao deletar vault:", error);
-        alert("Erro ao deletar vault. Tente novamente.");
+        alert("Não foi possível excluir o vault. Tente novamente.");
       }
     },
     [refetch]
   );
 
-  // Editar nome do vault
   const handleEditVault = useCallback((vault: Vault) => {
     setEditingVault({ id: vault.id, name: vault.name });
   }, []);
@@ -64,17 +52,15 @@ export default function VaultPage() {
     if (!editingVault || !editingVault.name.trim()) return;
 
     try {
-      setIsEditing(true);
+      setIsSaving(true);
       await updateVaultName(editingVault.id, editingVault.name);
-
-      // Recarregar dados do cache
       refetch();
       setEditingVault(null);
     } catch (error) {
       console.error("Erro ao editar vault:", error);
-      alert("Erro ao editar vault. Tente novamente.");
+      alert("Não foi possível editar o vault. Tente novamente.");
     } finally {
-      setIsEditing(false);
+      setIsSaving(false);
     }
   }, [editingVault, refetch]);
 
@@ -82,10 +68,8 @@ export default function VaultPage() {
     setEditingVault(null);
   }, []);
 
-  // Visualizar vault (navegar para home com vault selecionado)
   const handleViewVault = useCallback(
     (vault: Vault) => {
-      // Navegar para a página home com o vault selecionado
       router.push(`/home?vaultId=${vault.id}`);
     },
     [router]
@@ -101,9 +85,9 @@ export default function VaultPage() {
 
   if (isLoadingVaults) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="text-center py-12">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-gray-900 mx-auto"></div>
+      <div className="flex items-center justify-center min-h-[50vh]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1cb0f6] mx-auto"></div>
           <p className="mt-4 text-gray-600">Carregando vaults...</p>
         </div>
       </div>
@@ -111,174 +95,170 @@ export default function VaultPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Meus Vaults
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">
-            Organize suas palavras em vaults personalizados
-          </p>
-        </div>
-
-        <Button className="flex items-center gap-2" asChild>
-          <Link href="/create-vault">
-            <Plus size={20} />
-            Criar meu próprio vault
-          </Link>
-        </Button>
-      </div>
-
-      {/* Lista de Vaults */}
-      {!vaults || vaults.length === 0 ? (
-        <div className="text-center py-12">
-          <FolderOpen size={64} className="mx-auto text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 dark:text-white mb-2">
-            Nenhum vault criado ainda
-          </h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
-            Crie seu primeiro vault para começar a organizar suas palavras
-          </p>
+    <div className="min-h-full bg-white dark:bg-gray-950 max-w-full overflow-x-hidden">
+      <div className="px-8 pt-5 pb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span className="text-[26px] leading-none" aria-hidden="true">
+              📗
+            </span>
+            <div>
+              <h1 className="text-[26px] font-extrabold text-[#3c3c3c] dark:text-white">
+                Meus vaults
+              </h1>
+              <p className="mt-1 text-sm font-bold text-[#afafaf]">
+                Organize suas palavras em vaults personalizados
+              </p>
+            </div>
+          </div>
           <Button asChild>
             <Link href="/create-vault">
-              <Plus size={20} className="mr-2" />
-              Criar meu próprio vault
+              <Plus size={20} />
+              Novo vault
             </Link>
           </Button>
         </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {vaults?.map((vault) => (
-            <Card key={vault.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg font-semibold text-gray-900 dark:text-white">
-                      {editingVault?.id === vault.id && isEditing ? (
-                        <Input
-                          value={editingVault.name}
-                          onChange={(e) =>
-                            setEditingVault({
-                              ...editingVault,
-                              name: e.target.value,
-                            })
-                          }
-                          onBlur={handleSaveEdit}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                              handleSaveEdit();
-                            } else if (e.key === "Escape") {
-                              handleCancelEdit();
-                            }
-                          }}
-                          autoFocus
-                          className="w-full"
-                        />
-                      ) : (
-                        vault.name
-                      )}
-                    </CardTitle>
-                    <CardDescription className="text-sm text-gray-600 dark:text-gray-400">
+      </div>
+
+      <div className="px-6 pb-10">
+        {!vaults || vaults.length === 0 ? (
+          <div className="flex flex-col items-center py-16 text-center">
+            <FolderOpen size={64} className="text-[#1cb0f6] mb-4" />
+            <h3 className="text-[22px] font-extrabold text-[#3c3c3c] dark:text-white">
+              Nenhum vault criado ainda
+            </h3>
+            <p className="mt-2 max-w-md text-[#777]">
+              Crie seu primeiro vault para começar a organizar suas palavras.
+            </p>
+            <Button className="mt-6" asChild>
+              <Link href="/create-vault">
+                <Plus size={20} className="mr-2" />
+                Criar meu próprio vault
+              </Link>
+            </Button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-2">
+            {vaults.map((vault) => (
+              <div
+                key={vault.id}
+                className="flex flex-col rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 transition-colors hover:border-[#1cb0f6]/40 dark:border-[#373e47] dark:bg-[#2d333b]"
+              >
+                <div className="flex items-start gap-3">
+                  <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#ddf4ff] text-xl">
+                    📗
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    {editingVault?.id === vault.id ? (
+                      <Input
+                        value={editingVault.name}
+                        onChange={(e) =>
+                          setEditingVault({
+                            ...editingVault,
+                            name: e.target.value,
+                          })
+                        }
+                        onBlur={handleSaveEdit}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleSaveEdit();
+                          if (e.key === "Escape") handleCancelEdit();
+                        }}
+                        autoFocus
+                        disabled={isSaving}
+                        className="h-11 rounded-2xl border-2 font-extrabold"
+                      />
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => router.push(`/home/vault/${vault.id}`)}
+                        className="block w-full min-w-0 text-left"
+                      >
+                        <h2 className="truncate text-lg font-extrabold text-[#3c3c3c] dark:text-white">
+                          {vault.name}
+                        </h2>
+                      </button>
+                    )}
+                    <p className="mt-1 text-[13px] font-extrabold uppercase tracking-wide text-[#afafaf]">
                       {vault.words.length} palavra
                       {vault.words.length !== 1 ? "s" : ""}
-                    </CardDescription>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() =>
-                        router.push(`/home/vault/${vault.id}/flashcards`)
-                      }
-                      title="Estudar com Flashcards"
-                    >
-                      <Brain size={16} className="text-purple-500" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => handleDeleteVault(vault.id)}
-                    >
-                      <Trash size={16} className="text-red-500" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => handleEditVault(vault)}
-                      disabled={isEditing}
-                    >
-                      <Pencil size={16} className="text-blue-500" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 w-8 p-0"
-                      onClick={() => handleViewVault(vault)}
-                    >
-                      <Eye size={16} className="text-green-500" />
-                    </Button>
+                    </p>
                   </div>
                 </div>
-              </CardHeader>
 
-              <CardContent className="pt-0">
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-                    <span>Criado em:</span>
-                    <span>{formatDate(vault.createdAt)}</span>
-                  </div>
+                <div className="mt-4 flex items-center justify-between text-xs font-bold uppercase tracking-wide text-[#afafaf]">
+                  <span>Criado {formatDate(vault.createdAt)}</span>
+                  <span>Atualizado {formatDate(vault.updatedAt)}</span>
+                </div>
 
-                  <div className="flex items-center justify-between text-sm text-gray-600 dark:text-gray-400">
-                    <span>Atualizado em:</span>
-                    <span>{formatDate(vault.updatedAt)}</span>
-                  </div>
-
-                  {vault.words.length > 0 && (
-                    <div className="pt-3 border-t border-gray-200 dark:border-gray-700">
-                      <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Palavras recentes:
-                      </p>
-                      <div className="space-y-1">
-                        {vault.words.slice(0, 3).map((word) => (
-                          <div
-                            key={word.id}
-                            className="flex items-center justify-between text-xs"
-                          >
-                            <span className="text-gray-600 dark:text-gray-400">
-                              {word.name}
-                            </span>
-                            <span
-                              className={`px-2 py-1 rounded-full text-xs ${
-                                word.confidence >= 80
-                                  ? "bg-green-100 text-green-800"
-                                  : word.confidence >= 60
-                                  ? "bg-yellow-100 text-yellow-800"
-                                  : "bg-red-100 text-red-800"
-                              }`}
-                            >
-                              {word.confidence}%
-                            </span>
-                          </div>
-                        ))}
-                        {vault.words.length > 3 && (
-                          <p className="text-xs text-gray-500 dark:text-gray-400 text-center">
-                            +{vault.words.length - 3} mais
-                          </p>
-                        )}
+                {vault.words.length > 0 && (
+                  <div className="mt-4 space-y-2 border-t-2 border-[#e5e5e5] pt-4">
+                    {vault.words.slice(0, 3).map((word) => (
+                      <div
+                        key={word.id}
+                        className="flex items-center justify-between gap-2"
+                      >
+                        <span className="truncate text-sm font-bold text-[#3c3c3c]">
+                          {word.name}
+                        </span>
+                        <span className="shrink-0 rounded-full bg-[#ddf4ff] px-2.5 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1cb0f6]">
+                          Nível {word.confidence}
+                        </span>
                       </div>
-                    </div>
-                  )}
+                    ))}
+                    {vault.words.length > 3 && (
+                      <p className="text-xs font-bold text-[#afafaf]">
+                        +{vault.words.length - 3} mais
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                <div className="mt-4 flex items-center justify-end gap-1 border-t-2 border-[#e5e5e5] pt-3">
+                  <button
+                    type="button"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#1cb0f6] hover:bg-[#ddf4ff]"
+                    onClick={() =>
+                      router.push(`/home/vault/${vault.id}/flashcards`)
+                    }
+                    title="Estudar com flashcards"
+                    aria-label="Flashcards"
+                  >
+                    <Brain className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#1cb0f6] hover:bg-[#ddf4ff]"
+                    onClick={() => handleEditVault(vault)}
+                    disabled={isSaving}
+                    title="Editar nome"
+                    aria-label="Editar vault"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full text-[#58cc02] hover:bg-green-50"
+                    onClick={() => handleViewVault(vault)}
+                    title="Ver palavras"
+                    aria-label="Ver palavras"
+                  >
+                    <Eye size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full text-red-500 hover:bg-red-50"
+                    onClick={() => handleDeleteVault(vault.id)}
+                    title="Excluir vault"
+                    aria-label="Excluir vault"
+                  >
+                    <Trash size={16} />
+                  </button>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

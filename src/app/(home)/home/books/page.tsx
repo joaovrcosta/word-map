@@ -324,7 +324,7 @@ function BookCard({
   action: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 hover:border-[#1cb0f6]/40 transition-colors">
+    <div className="rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 transition-colors hover:border-[#1cb0f6]/40 dark:border-[#373e47] dark:bg-[#2d333b]">
       <div className="flex items-start justify-between gap-2">
         <button type="button" onClick={onOpen} className="text-left min-w-0">
           <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
@@ -334,7 +334,9 @@ function BookCard({
         <div className="shrink-0">{action}</div>
       </div>
       {book.description && (
-        <p className="mt-2 text-sm text-[#777] line-clamp-3">{book.description}</p>
+        <p className="mt-2 line-clamp-3 text-sm text-[#777] dark:text-[#8b949e]">
+          {book.description}
+        </p>
       )}
       <div className="mt-4 flex items-center gap-2 text-xs font-bold uppercase tracking-wide text-[#afafaf]">
         <BookOpen size={14} />

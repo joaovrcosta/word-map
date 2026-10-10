@@ -59,6 +59,7 @@ model Word {
   grammaticalClass String
   category         String?
   translations     String[]
+  notes            String?
   lastPractice     DateTime?
   confidence       Int           @default(1)
   isSaved          Boolean       @default(false)

@@ -2,7 +2,6 @@
 
 import { Search, Plus, Globe } from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Card } from "@/components/ui/card";
 import { Word, ExternalWord } from "./types";
 
 interface WordSearchProps {
@@ -23,36 +22,38 @@ export function WordSearch({
   onAddWord,
 }: WordSearchProps) {
   return (
-    <Card className="p-4">
-      <h3 className="font-medium text-gray-900 dark:text-white mb-3">
-        Pesquisar Palavras
+    <div className="rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 dark:bg-gray-950">
+      <h3 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
+        Pesquisar palavras
       </h3>
+      <p className="mt-1 text-sm font-bold text-[#afafaf]">
+        Do vault ou uma palavra nova
+      </p>
 
-      <div className="relative">
+      <div className="relative mt-4">
         <Search
-          className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400"
+          className="absolute left-3 top-1/2 -translate-y-1/2 text-[#afafaf]"
           size={16}
         />
         <Input
-          placeholder="Digite para pesquisar palavras do vault ou palavras novas..."
+          placeholder="Digite para pesquisar..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
-          className="pl-10"
+          className="h-11 rounded-2xl border-2 pl-10 font-bold"
         />
       </div>
 
-      {/* Lista de palavras filtradas */}
-      <div className="mt-4 max-h-96 overflow-y-auto space-y-2">
+      <div className="mt-4 max-h-96 space-y-2 overflow-y-auto">
         {isSearching && (
-          <div className="text-center py-4">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="py-4 text-center">
+            <div className="mx-auto h-6 w-6 animate-spin rounded-full border-b-2 border-[#1cb0f6]" />
           </div>
         )}
 
         {!isSearching &&
           filteredWords.length === 0 &&
           searchTerm.length >= 2 && (
-            <p className="text-sm text-gray-500 text-center py-4">
+            <p className="py-4 text-center text-sm font-bold text-[#777]">
               Nenhuma palavra encontrada
             </p>
           )}
@@ -60,54 +61,53 @@ export function WordSearch({
         {filteredWords.map((word) => {
           const isExternal = "isExternal" in word && word.isExternal;
           return (
-            <div
+            <button
+              type="button"
               key={word.id}
-              className={`p-3 border rounded-lg cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors ${
+              className={`w-full rounded-2xl border-2 p-3 text-left transition-colors hover:border-[#1cb0f6]/40 ${
                 isExternal
-                  ? "border-blue-300 bg-blue-50/50 dark:bg-blue-900/20"
-                  : ""
+                  ? "border-[#1cb0f6]/40 bg-[#ddf4ff]"
+                  : "border-[#e5e5e5] bg-white"
               }`}
               onClick={() => onAddWord(word)}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <p className="font-medium text-gray-900 dark:text-white">
+                    <p className="truncate font-extrabold text-[#3c3c3c] dark:text-white">
                       {word.name}
                     </p>
                     {isExternal && (
-                      <div className="flex items-center gap-1">
-                        <Globe size={12} className="text-blue-500" />
-                        <span className="text-xs text-blue-600 dark:text-blue-400">
-                          Nova palavra
-                        </span>
-                      </div>
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1cb0f6]">
+                        <Globe size={12} />
+                        Nova
+                      </span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <p className="mt-1 truncate text-sm font-bold text-[#777]">
                     {word.translations.length > 0
                       ? word.translations.join(", ")
                       : isExternal
-                      ? "Tradução será buscada automaticamente"
-                      : "Sem traduções"}
+                        ? "Tradução será buscada automaticamente"
+                        : "Sem traduções"}
                   </p>
                   {isExternal && (
-                    <p className="text-xs text-gray-500 mt-1">
-                      Classe: {word.grammaticalClass}
+                    <p className="mt-1 text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf]">
+                      {word.grammaticalClass}
                     </p>
                   )}
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex shrink-0 items-center gap-2">
                   {isTranslating && isExternal && (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
+                    <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-[#1cb0f6]" />
                   )}
-                  <Plus size={16} className="text-gray-400" />
+                  <Plus size={16} className="text-[#1cb0f6]" />
                 </div>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>
-    </Card>
+    </div>
   );
 }

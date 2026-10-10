@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Word" ADD COLUMN IF NOT EXISTS "notes" TEXT;

@@ -10,11 +10,14 @@ import {
   Lightbulb,
   Lock,
   Network,
+  PencilLine,
   Plus,
 } from "lucide-react";
 import { getCurrentUser } from "@/actions/auth";
 import { useVaults } from "@/hooks/use-words";
 import useSidebarStore from "@/store/sidebarStore";
+import { ThemeToggle } from "@/components/theme-toggle";
+import type { VaultNavItem } from "@/types/vault-nav";
 
 function ClassFlag() {
   return (
@@ -69,6 +72,11 @@ const menuLinks = [
     icon: Lightbulb,
   },
   {
+    name: "Frases",
+    path: "/home/sentence-builder",
+    icon: PencilLine,
+  },
+  {
     name: "Conexões",
     path: "/home/connections",
     icon: Network,
@@ -80,13 +88,30 @@ const menuLinks = [
   },
 ];
 
-export default function AppSidebar() {
+export default function AppSidebar({
+  initialVaults = [],
+}: {
+  initialVaults?: VaultNavItem[];
+}) {
   const pathName = usePathname();
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isOpen, collapseSidebar, expandSidebar } = useSidebarStore();
-  const { data: vaults } = useVaults();
+  const { data } = useVaults();
   const [userLabel, setUserLabel] = useState("você");
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const vaults: VaultNavItem[] = mounted
+    ? (data?.map((vault) => ({
+        id: vault.id,
+        name: vault.name,
+        wordCount: vault.words?.length ?? 0,
+      })) ?? initialVaults)
+    : initialVaults;
 
   useEffect(() => {
     getCurrentUser().then((user) => {
@@ -108,7 +133,7 @@ export default function AppSidebar() {
 
   return (
     <aside
-      className="relative hidden lg:flex h-screen shrink-0 flex-col bg-[#f7f7f7] dark:bg-gray-900 border-r border-[#e5e5e5] dark:border-gray-800"
+      className="relative hidden lg:flex h-screen shrink-0 flex-col bg-[#f7f7f7] dark:bg-[#1c2128] border-r border-[#e5e5e5] dark:border-[#373e47]"
       style={{
         width: isOpen ? 300 : 72,
         minWidth: isOpen ? 300 : 72,
@@ -118,7 +143,7 @@ export default function AppSidebar() {
       <button
         type="button"
         onClick={isOpen ? collapseSidebar : expandSidebar}
-        className="absolute -right-3 top-[22px] z-20 flex size-6 items-center justify-center rounded-full bg-white border border-[#e5e5e5] text-[#afafaf] shadow-sm hover:text-[#777]"
+        className="absolute -right-3 top-[60px] z-20 flex size-6 items-center justify-center rounded-full border border-[#e5e5e5] bg-white text-[#afafaf] shadow-sm hover:text-[#777] dark:border-[#373e47] dark:bg-[#2d333b] dark:text-[#8b949e] dark:hover:text-zinc-200"
         aria-label={isOpen ? "Recolher menu" : "Expandir menu"}
       >
         {isOpen ? (
@@ -160,8 +185,8 @@ export default function AppSidebar() {
                     isOpen ? "px-5" : "justify-center px-0"
                   } ${
                     active
-                      ? "bg-[#ddf4ff] text-[#1cb0f6]"
-                      : "text-[#afafaf] hover:bg-black/[0.03]"
+                      ? "bg-[#ddf4ff] text-[#1cb0f6] dark:bg-[#1cb0f6]/15"
+                      : "text-[#afafaf] hover:bg-black/[0.03] dark:hover:bg-white/5"
                   }`}
                 >
                   <ClassFlag />
@@ -195,8 +220,8 @@ export default function AppSidebar() {
                     isOpen ? "px-5" : "justify-center px-0"
                   } ${
                     active
-                      ? "bg-[#ddf4ff] text-[#1cb0f6]"
-                      : "text-[#afafaf] hover:bg-black/[0.03]"
+                      ? "bg-[#ddf4ff] text-[#1cb0f6] dark:bg-[#1cb0f6]/15"
+                      : "text-[#afafaf] hover:bg-black/[0.03] dark:hover:bg-white/5"
                   }`}
                 >
                   <Icon className="size-5 shrink-0" strokeWidth={2} />
@@ -213,10 +238,13 @@ export default function AppSidebar() {
       </nav>
 
       <div className="mt-auto border-t border-[#e5e5e5] dark:border-gray-800">
+        <div className={`border-b border-[#e5e5e5] py-3 dark:border-gray-800 ${isOpen ? "px-5" : "px-0"}`}>
+          <ThemeToggle compact={!isOpen} className={isOpen ? "w-full" : "w-full py-1"} />
+        </div>
         <button
           type="button"
           onClick={() => router.push("/home/profile")}
-          className={`flex w-full items-center gap-3 py-4 text-left hover:bg-black/[0.03] ${
+          className={`flex w-full items-center gap-3 py-4 text-left hover:bg-black/[0.03] dark:hover:bg-white/5 ${
             isOpen ? "px-5" : "justify-center px-0"
           }`}
         >
