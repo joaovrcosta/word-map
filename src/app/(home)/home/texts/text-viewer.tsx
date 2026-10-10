@@ -622,30 +622,25 @@ export function TextViewer({
         )}
       </div>
       <div
-        className={
-          selectedWord
-            ? "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-60 max-lg:h-dvh max-lg:w-[min(100%,300px)] max-lg:shadow-2xl lg:w-[300px] lg:shrink-0"
-            : "hidden lg:block lg:w-[300px] lg:shrink-0"
+        className={`hidden lg:block lg:shrink-0 ${
+          selectedWord ? "lg:w-[300px]" : "lg:w-0"
+        }`}
+      />
+      <ReadingWordPanel
+        selected={selectedWord}
+        sourceText={editContent}
+        userVaults={userVaults}
+        wordInfo={selectedWord ? wordInfoMap[selectedWord.clean] : null}
+        isLoadingInfo={
+          !!selectedWord && loadingWords.has(selectedWord.clean)
         }
-      >
-        <div className="h-full lg:fixed lg:top-12 lg:right-0 lg:h-[calc(100dvh-3rem)] lg:w-[300px]">
-          <ReadingWordPanel
-            selected={selectedWord}
-            sourceText={editContent}
-            userVaults={userVaults}
-            wordInfo={selectedWord ? wordInfoMap[selectedWord.clean] : null}
-            isLoadingInfo={
-              !!selectedWord && loadingWords.has(selectedWord.clean)
-            }
-            isSaving={isAddingWord}
-            autoTranslateWordPreview={autoTranslateWordPreview}
-            onClose={() => setSelectedWord(null)}
-            onSave={handlePanelSave}
-            onUpdate={handlePanelUpdate}
-            onRemove={handleRemoveWordFromVault}
-          />
-        </div>
-      </div>
+        isSaving={isAddingWord}
+        autoTranslateWordPreview={autoTranslateWordPreview}
+        onClose={() => setSelectedWord(null)}
+        onSave={handlePanelSave}
+        onUpdate={handlePanelUpdate}
+        onRemove={handleRemoveWordFromVault}
+      />
       </div>
 
       {/* Modal de edição de palavra */}

@@ -1065,28 +1065,25 @@ export default function TextPage() {
         />
       </div>
       <div
-        className={
-          selectedWord
-            ? "max-lg:fixed max-lg:inset-y-0 max-lg:right-0 max-lg:z-60 max-lg:flex max-lg:h-dvh max-lg:w-[min(100%,300px)] max-lg:shadow-2xl lg:sticky lg:top-12 lg:flex lg:h-[calc(100dvh-3rem)] lg:w-[300px] lg:shrink-0"
-            : "hidden lg:sticky lg:top-12 lg:flex lg:h-[calc(100dvh-3rem)] lg:w-[300px] lg:shrink-0"
+        className={`hidden lg:block lg:shrink-0 ${
+          selectedWord ? "lg:w-[300px]" : "lg:w-0"
+        }`}
+      />
+      <ReadingWordPanel
+        selected={selectedWord}
+        sourceText={editContent}
+        userVaults={userVaults}
+        wordInfo={selectedWord ? wordInfoMap[selectedWord.clean] : null}
+        isLoadingInfo={
+          !!selectedWord && loadingWords.has(selectedWord.clean)
         }
-      >
-        <ReadingWordPanel
-          selected={selectedWord}
-          sourceText={editContent}
-          userVaults={userVaults}
-          wordInfo={selectedWord ? wordInfoMap[selectedWord.clean] : null}
-          isLoadingInfo={
-            !!selectedWord && loadingWords.has(selectedWord.clean)
-          }
-          isSaving={isAddingWord}
-          autoTranslateWordPreview={autoTranslateWordPreview}
-          onClose={() => setSelectedWord(null)}
-          onSave={handlePanelSave}
-          onUpdate={handlePanelUpdate}
-          onRemove={handleRemoveWordFromVault}
-        />
-      </div>
+        isSaving={isAddingWord}
+        autoTranslateWordPreview={autoTranslateWordPreview}
+        onClose={() => setSelectedWord(null)}
+        onSave={handlePanelSave}
+        onUpdate={handlePanelUpdate}
+        onRemove={handleRemoveWordFromVault}
+      />
       </div>
     </div>
   );

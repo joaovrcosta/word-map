@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { Volume2, X, Trash2, Plus } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
+import { Volume2, X, Trash2, Plus, Check, ChevronDown, ChevronUp } from "lucide-react";
 import { translateDefinitions } from "@/lib/translate";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -113,6 +114,8 @@ interface ReadingWordPanelProps {
     }
   ) => Promise<void> | void;
   onRemove: (word: string, vaultId: number) => Promise<void> | void;
+  extras?: ReactNode;
+  docked?: boolean;
 }
 
 const LEVEL_COLORS = [
@@ -174,7 +177,8 @@ export function ReadingWordToken({
       onClick={onClick}
       className={cn(
         "mx-px inline rounded-[3px] px-[2px] py-[1px] !text-zinc-900 dark:!text-zinc-100",
-        inVault && "bg-[#fff3a3] dark:bg-amber-500/35 dark:text-zinc-50",
+        inVault &&
+          "bg-[#ddf4ff] text-[#1cb0f6] dark:bg-[#1cb0f6]/25 dark:text-[#7ed0fb]",
         !inVault && "hover:bg-black/[0.04] dark:hover:bg-white/10",
         selected &&
           "bg-[#e8e8e8] shadow-[inset_0_0_0_1px_#cfcfcf] dark:bg-zinc-600 dark:text-zinc-50 dark:shadow-[inset_0_0_0_1px_#888]"
@@ -197,13 +201,38 @@ export function ReadingWordPanel({
   onSave,
   onUpdate,
   onRemove,
+  extras,
 }: ReadingWordPanelProps) {
+  const [onClient, setOnClient] = useState(false);
+  const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [snapOffscreen, setSnapOffscreen] = useState(false);
+  const closeTimerRef = useRef<number>(0);
   const [selectedMeanings, setSelectedMeanings] = useState<string[]>([]);
   const [customMeaning, setCustomMeaning] = useState("");
   const [candidateMeanings, setCandidateMeanings] = useState<string[]>([]);
   const [isTranslatingMeanings, setIsTranslatingMeanings] = useState(false);
   const [notes, setNotes] = useState("");
   const [vaultId, setVaultId] = useState<string>("");
+
+  const selectedKey = selected?.saved?.id ?? selected?.clean ?? null;
+
+  useEffect(() => {
+    if (!selectedKey) return;
+    setExpanded(false);
+    setSnapOffscreen(true);
+    setOpen(false);
+    const frame = requestAnimationFrame(() => {
+      setSnapOffscreen(false);
+      requestAnimationFrame(() => setOpen(true));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [selectedKey]);
+
+  useEffect(() => {
+    setOnClient(true);
+    return () => window.clearTimeout(closeTimerRef.current);
+  }, []);
 
   const suggestedClass = normalizeGrammaticalClass(
     selected?.saved?.grammaticalClass ||
@@ -332,22 +361,41 @@ export function ReadingWordPanel({
     (item) => !hasMeaning(selectedMeanings, item)
   );
 
-  return (
+  const handleClose = () => {
+    setOpen(false);
+    window.clearTimeout(closeTimerRef.current);
+    closeTimerRef.current = window.setTimeout(() => onClose(), 320);
+  };
+
+  if (!selected) return null;
+
+  const panel = (
     <aside
       className={cn(
-        "flex h-full min-h-0 w-full flex-col border-[#ececec] bg-white dark:border-gray-800 dark:bg-gray-950",
-        "lg:w-[300px] lg:shrink-0 lg:border-l"
+        "flex min-h-0 flex-col overflow-hidden border-[#ececec] bg-white dark:border-[#373e47] dark:bg-[#22272e] will-change-transform",
+        snapOffscreen
+          ? "transition-none"
+          : "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
+        open
+          ? "max-lg:translate-y-0 lg:translate-x-0"
+          : "pointer-events-none max-lg:translate-y-[110%] lg:translate-x-full",
+        "fixed z-[80]",
+        "max-lg:inset-x-3 max-lg:bottom-3 max-lg:top-auto max-lg:h-fit max-lg:w-auto max-lg:rounded-2xl max-lg:border max-lg:shadow-2xl",
+        expanded
+          ? "max-lg:max-h-[min(72dvh,560px)]"
+          : "max-lg:max-h-none",
+        "lg:inset-x-auto lg:top-12 lg:right-0 lg:bottom-auto lg:h-[calc(100dvh-3rem)] lg:w-[300px] lg:max-h-none lg:rounded-none lg:border-l lg:shadow-none"
       )}
+      onTransitionEnd={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.propertyName !== "transform") return;
+        if (!open) {
+          window.clearTimeout(closeTimerRef.current);
+          onClose();
+        }
+      }}
     >
-      {!selected ? (
-        <div className="flex flex-1 items-center justify-center px-5 text-center">
-          <p className="text-[13px] text-[#b0b0b0]">
-            Clique em uma palavra
-          </p>
-        </div>
-      ) : (
-        <>
-          <div className="flex items-center justify-between gap-2 border-b border-[#ececec] px-3 py-2.5 dark:border-gray-800">
+          <div className="flex items-center justify-between gap-2 border-b border-[#ececec] px-3 py-2.5 dark:border-gray-800 max-lg:border-b-0">
             <div className="flex min-w-0 items-center gap-2">
               <button
                 type="button"
@@ -363,18 +411,57 @@ export function ReadingWordPanel({
                 </p>
               </div>
             </div>
-            <button
-              type="button"
-              onClick={onClose}
-              className="inline-flex h-7 w-7 items-center justify-center text-[#b0b0b0] hover:text-[#555] lg:hidden"
-              aria-label="Fechar painel"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex shrink-0 items-center gap-1">
+              {selected.saved && (
+                <span className="inline-flex h-7 w-7 items-center justify-center text-[#58cc02]">
+                  <Check className="h-4 w-4" strokeWidth={2.5} />
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleClose}
+                className="inline-flex h-7 w-7 items-center justify-center rounded text-[#b0b0b0] hover:bg-black/5 hover:text-[#555] dark:hover:bg-white/10 dark:hover:text-white"
+                aria-label="Fechar painel"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
+          <div className="px-3 pb-1 lg:hidden">
+            <Textarea
+              value={customMeaning}
+              onChange={(e) => setCustomMeaning(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  void handleAddMeaning(customMeaning);
+                }
+              }}
+              placeholder="Digite um novo significado aqui"
+              className="min-h-16 resize-none rounded-md border-[#e5e5e5] text-[13px] shadow-none dark:border-gray-700 dark:bg-gray-900"
+            />
+          </div>
+
+          <div
+            className={cn(
+              "min-h-0 overflow-y-auto px-3 py-3 lg:flex-1",
+              expanded
+                ? "max-lg:max-h-[min(52dvh,420px)]"
+                : "hidden lg:block"
+            )}
+          >
             <div className="mb-3 flex flex-wrap items-center gap-1.5">
+              {confidence > 0 && (
+                <span
+                  className={cn(
+                    "inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[11px] font-bold",
+                    LEVEL_COLORS[Math.min(confidence, 4) - 1]
+                  )}
+                >
+                  {confidence}
+                </span>
+              )}
               {partOfSpeechBadges.map((badge) => (
                 <span
                   key={badge}
@@ -385,7 +472,7 @@ export function ReadingWordPanel({
               ))}
             </div>
 
-            <p className="text-[11px] font-medium text-[#8a8a8a] dark:text-zinc-400">
+            <p className="hidden text-[11px] font-medium text-[#8a8a8a] lg:block dark:text-zinc-400">
               Salvar significado
             </p>
             {selectedMeanings.length > 0 && (
@@ -408,7 +495,7 @@ export function ReadingWordPanel({
                 ))}
               </div>
             )}
-            <div className="mt-1.5 flex items-center gap-1">
+            <div className="mt-1.5 hidden items-center gap-1 lg:flex">
               <Input
                 value={customMeaning}
                 onChange={(e) => setCustomMeaning(e.target.value)}
@@ -498,6 +585,8 @@ export function ReadingWordPanel({
               </div>
             )}
 
+            {extras}
+
             <div className="mt-4">
               <p className="text-[11px] font-medium text-[#8a8a8a] dark:text-zinc-400">
                 Notas
@@ -512,10 +601,24 @@ export function ReadingWordPanel({
             </div>
           </div>
 
+          <button
+            type="button"
+            onClick={() => setExpanded((current) => !current)}
+            className="flex w-full shrink-0 items-center justify-center py-1.5 text-[#8b949e] lg:hidden"
+            aria-label={expanded ? "Recolher painel" : "Expandir painel"}
+          >
+            {expanded ? (
+              <ChevronUp className="h-5 w-5" />
+            ) : (
+              <ChevronDown className="h-5 w-5" />
+            )}
+          </button>
+
           <div
             className={cn(
-              "flex items-center gap-2 border-t border-[#ececec] px-3 py-2.5 dark:border-gray-800",
-              selected.saved ? "justify-between" : "justify-center"
+              "flex shrink-0 items-center gap-2 border-t border-[#ececec] px-3 py-2.5 dark:border-gray-800",
+              selected.saved ? "justify-between" : "justify-center",
+              !expanded && "hidden lg:flex"
             )}
           >
             {selected.saved && (
@@ -550,8 +653,9 @@ export function ReadingWordPanel({
               ))}
             </div>
           </div>
-        </>
-      )}
     </aside>
   );
+
+  if (!onClient) return panel;
+  return createPortal(panel, document.body);
 }

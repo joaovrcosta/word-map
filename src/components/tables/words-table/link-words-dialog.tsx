@@ -26,12 +26,14 @@ interface LinkWordsDialogProps {
   word: Word;
   onWordsLinked: () => void;
   onTableUpdating?: (isUpdating: boolean) => void;
+  triggerLabel?: string;
 }
 
 export function LinkWordsDialog({
   word,
   onWordsLinked,
   onTableUpdating,
+  triggerLabel,
 }: LinkWordsDialogProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -173,9 +175,14 @@ export function LinkWordsDialog({
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 w-8 p-0 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+          className={
+            triggerLabel
+              ? "h-7 gap-1 px-2 text-[11px] font-medium text-purple-600 hover:bg-purple-50 dark:text-purple-400 dark:hover:bg-purple-900/20"
+              : "h-8 w-8 p-0 hover:bg-purple-50 dark:hover:bg-purple-900/20"
+          }
         >
-          <Link className="h-4 w-4 text-purple-600" />
+          <Link className={triggerLabel ? "h-3.5 w-3.5" : "h-4 w-4 text-purple-600"} />
+          {triggerLabel}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-2xl">

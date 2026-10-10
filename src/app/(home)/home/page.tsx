@@ -3,9 +3,6 @@
 import { useState, useEffect, useMemo, useCallback, Suspense } from "react";
 import { Plus, BookOpen, Sparkles, Target, Trophy } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { DataTable } from "@/components/tables/words-table/data-table";
-import { columns } from "@/components/tables/words-table/columns";
-import { type Vault, type Word } from "@/actions/actions";
 import { getCurrentUser } from "@/actions/auth";
 import {
   Dialog,
@@ -22,13 +19,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { createWord } from "@/actions/actions";
-import { SearchWord } from "@/components/search-word";
 import { ImportExportWords } from "@/components/import-export-words";
+import { VaultWordsList } from "@/components/vault-words-list";
 import { SentenceBuilder } from "@/components/sentence-builder";
 import { VaultOnboarding } from "@/components/vault-onboarding";
 import { translateToPortuguese } from "@/lib/translate";
 import { useSearchParams, useRouter } from "next/navigation";
-import { useWords, useVaults } from "@/hooks/use-words";
+import { useWords } from "@/hooks/use-words";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
@@ -63,7 +60,6 @@ function HomePageContent() {
     confidence: 1,
   });
   const [isCreatingWord, setIsCreatingWord] = useState(false);
-  const [isTableUpdating, setIsTableUpdating] = useState(false);
   const [classChosenByUser, setClassChosenByUser] = useState(false);
   const [isSuggestingClass, setIsSuggestingClass] = useState(false);
   const [suggestedClass, setSuggestedClass] = useState("");
@@ -81,7 +77,7 @@ function HomePageContent() {
   }, []);
 
   // Usar hooks otimizados com cache
-  const { vaults, currentVault, words, isLoading } = useWords();
+  const { vaults, isLoading } = useWords();
 
   // Obter vaultId da URL de forma otimizada
   const vaultIdFromUrl = useMemo(() => {
@@ -165,7 +161,6 @@ function HomePageContent() {
     }
 
     setIsCreatingWord(true);
-    setIsTableUpdating(true);
     try {
       // Extrair traduções do input
       const rawTranslations = newWord.translations
@@ -235,7 +230,6 @@ function HomePageContent() {
       // });
     } finally {
       setIsCreatingWord(false);
-      setIsTableUpdating(false);
     }
   }, [selectedVault, newWord, queryClient]);
 
@@ -392,7 +386,7 @@ function HomePageContent() {
     );
 
   return (
-    <div className="min-h-full bg-white dark:bg-gray-950 max-w-full overflow-x-hidden">
+    <div className="min-h-full bg-white dark:bg-[#22272e]">
       <div className="px-8 pt-5">
         <div className="flex items-center gap-3">
           <span className="text-[26px] leading-none" aria-hidden="true">
@@ -427,9 +421,9 @@ function HomePageContent() {
         </nav>
       </div>
 
-      <div className="px-6">
-        {activeTab === "words" &&
-          (currentWords.length === 0 ? (
+      {activeTab === "words" &&
+        (currentWords.length === 0 ? (
+          <div className="px-6">
             <VaultOnboarding
               firstName={firstName}
               onAddWords={() => setIsCreateDialogOpen(true)}
@@ -437,37 +431,20 @@ function HomePageContent() {
                 router.push(`/home/vault/${selectedVault?.id}/flashcards`)
               }
             />
-          ) : (
-            <div className="space-y-6 py-6">
-              <div className="flex justify-end">
-                <Button onClick={() => setIsCreateDialogOpen(true)}>
-                  <Plus size={20} className="mr-2" />
-                  Nova Palavra
-                </Button>
-              </div>
-              <SearchWord />
-              <div className="overflow-hidden rounded-2xl border-2 border-[#e5e5e5] bg-white dark:border-[#373e47] dark:bg-[#2d333b]">
-                <div className="px-6 py-5 border-b-2 border-[#e5e5e5]">
-                  <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
-                    Palavras do Vault
-                  </h2>
-                  <p className="mt-1 text-[13px] font-extrabold uppercase tracking-wide text-[#afafaf]">
-                    {currentWords.length} palavra
-                    {currentWords.length !== 1 ? "s" : ""}
-                  </p>
-                </div>
-                <div className="p-5">
-                  <DataTable<Word>
-                    columns={columns}
-                    data={currentWords}
-                    isLoading={isTableUpdating}
-                  />
-                </div>
-              </div>
-            </div>
-          ))}
+          </div>
+        ) : (
+          selectedVault && (
+            <VaultWordsList
+              words={currentWords}
+              vault={selectedVault}
+              vaults={vaults ?? []}
+              onAddWord={() => setIsCreateDialogOpen(true)}
+            />
+          )
+        ))}
 
-        {activeTab === "report" && (
+      {activeTab === "report" && (
+        <div className="px-6">
           <div className="space-y-6 py-8 max-w-4xl mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {stats.map((stat) => (
@@ -494,9 +471,11 @@ function HomePageContent() {
             </div>
             <SentenceBuilder embedded />
           </div>
-        )}
+        </div>
+      )}
 
-        {activeTab === "settings" && selectedVault && (
+      {activeTab === "settings" && selectedVault && (
+        <div className="px-6">
           <div className="max-w-xl mx-auto py-10 space-y-6">
             {vaults && vaults.length > 1 && (
               <div>
@@ -526,8 +505,8 @@ function HomePageContent() {
               wordCount={currentWords.length}
             />
           </div>
-        )}
-      </div>
+        </div>
+      )}
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
             <DialogContent className="max-w-md">

@@ -1,19 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams } from "next/navigation";
 import { FlashcardDeck } from "@/components/flashcards";
 import { getVaultForFlashcards } from "@/actions/flashcards";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { ArrowLeft, BookOpen, Brain, Target, Clock } from "lucide-react";
-import Link from "next/link";
 
 interface VaultInfo {
   id: number;
@@ -37,9 +28,9 @@ export default function VaultFlashcardsPage() {
       setLoading(true);
       const info = await getVaultForFlashcards(vaultId);
       setVaultInfo(info);
-    } catch (error) {
-      setError("Erro ao carregar informações do vault");
-      console.error("Erro ao carregar vault:", error);
+    } catch (loadError) {
+      setError("Não foi possível abrir este vault.");
+      console.error("Erro ao carregar vault:", loadError);
     } finally {
       setLoading(false);
     }
@@ -47,130 +38,47 @@ export default function VaultFlashcardsPage() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600"></div>
+      <div className="flex min-h-[50vh] items-center justify-center">
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-[#1cb0f6]" />
       </div>
     );
   }
 
   if (error || !vaultInfo) {
     return (
-      <div className="container mx-auto p-6">
-        <Card className="text-center p-8">
-          <div className="text-red-500 mb-4">
-            <BookOpen className="h-16 w-16 mx-auto" />
-          </div>
-          <h3 className="text-lg font-semibold text-gray-600 mb-2">
-            Erro ao carregar vault
-          </h3>
-          <p className="text-gray-500 mb-4">
-            {error || "Vault não encontrado ou erro inesperado"}
-          </p>
-          <Link href="/home/vault">
-            <Button variant="outline">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar aos Vaults
-            </Button>
-          </Link>
-        </Card>
+      <div className="min-h-full bg-white px-8 pt-10 dark:bg-[#22272e]">
+        <p className="text-[15px] font-extrabold text-[#3c3c3c] dark:text-white">
+          Vault não encontrado
+        </p>
+        <p className="mt-2 text-[14px] text-[#777] dark:text-[#8b949e]">
+          {error || "Não foi possível abrir este vault."}
+        </p>
+        <Link
+          href="/home/flashcards"
+          className="mt-6 inline-flex text-[13px] font-extrabold uppercase tracking-wide text-[#1cb0f6]"
+        >
+          Voltar
+        </Link>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link href={`/home/vault/${vaultId}`}>
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="h-4 w-4 mr-2" />
-            Voltar ao Vault
-          </Button>
+    <div className="min-h-full bg-white dark:bg-[#22272e]">
+      <div className="px-8 pt-5 pb-10">
+        <Link
+          href={`/home/vault/${vaultId}`}
+          className="text-[13px] font-extrabold uppercase tracking-wide text-[#afafaf] hover:text-[#777]"
+        >
+          Voltar
         </Link>
-
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Flashcards - {vaultInfo.name}
-          </h1>
-          <p className="text-gray-600 dark:text-gray-400">
-            Sistema de repetição espaçada para memorização eficiente
-          </p>
+        <h1 className="mt-3 text-[26px] font-extrabold text-[#3c3c3c] dark:text-white">
+          {vaultInfo.name}
+        </h1>
+        <div className="mt-6">
+          <FlashcardDeck vaultId={vaultInfo.id} vaultName={vaultInfo.name} />
         </div>
       </div>
-
-      {/* Informações do Vault */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <BookOpen className="h-5 w-5 text-blue-600" />
-            Informações do Vault
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">
-                {vaultInfo.totalWords}
-              </div>
-              <div className="text-sm text-blue-600">Total de Palavras</div>
-            </div>
-            <div className="text-center p-4 bg-green-50 rounded-lg">
-              <div className="text-2xl font-bold text-green-600">
-                {vaultInfo.totalWords > 0 ? "Pronto" : "Vazio"}
-              </div>
-              <div className="text-sm text-green-600">Status</div>
-            </div>
-            <div className="text-center p-4 bg-purple-50 rounded-lg">
-              <div className="text-2xl font-bold text-purple-600">
-                {vaultInfo.totalWords > 0 ? "Ativo" : "Inativo"}
-              </div>
-              <div className="text-sm text-purple-600">Flashcards</div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Sistema de Flashcards */}
-      <FlashcardDeck vaultId={vaultInfo.id} vaultName={vaultInfo.name} />
-
-      {/* Dicas de Uso */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Brain className="h-5 w-5 text-purple-600" />
-            Dicas para Melhor Aproveitamento
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3">
-              <h4 className="font-semibold text-gray-800 flex items-center gap-2">
-                <Target className="h-4 w-4 text-blue-600" />
-                Como Estudar
-              </h4>
-              <ul className="text-sm text-gray-600 space-y-2">
-                <li>• Estude em sessões de 15-30 minutos</li>
-                <li>• Revise palavras difíceis mais frequentemente</li>
-                <li>• Use o sistema de confiança honestamente</li>
-                <li>• Mantenha consistência diária</li>
-              </ul>
-            </div>
-
-            <div className="space-y-3">
-              <h4 className="font-semibold text-gray-800 flex items-center gap-2">
-                <Clock className="h-4 w-4 text-green-600" />
-                Sistema de Repetição
-              </h4>
-              <ul className="text-sm text-gray-600 space-y-2">
-                <li>• Nível 1-2: Revisão diária</li>
-                <li>• Nível 3: Revisão a cada 3 dias</li>
-                <li>• Nível 4: Revisão semanal</li>
-                <li>• Progresso adaptativo automático</li>
-              </ul>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }
