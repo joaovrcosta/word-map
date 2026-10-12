@@ -259,8 +259,8 @@ export function VaultWordsList({
 
       <div
         className={cn(
-          "hidden lg:block lg:shrink-0 lg:transition-[width] lg:duration-300",
-          selected ? "lg:w-[300px]" : "lg:w-0"
+          "hidden lg:block lg:shrink-0",
+          selected ? "lg:w-[var(--reading-panel-width)]" : "lg:w-0"
         )}
       />
       <ReadingWordPanel

@@ -771,7 +771,7 @@ export function TextViewer({
       </div>
       <div
         className={`hidden lg:block lg:shrink-0 ${
-          selectedWord ? "lg:w-[300px]" : "lg:w-0"
+          selectedWord ? "lg:w-[var(--reading-panel-width)]" : "lg:w-0"
         }`}
       />
       <ReadingWordPanel

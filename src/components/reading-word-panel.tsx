@@ -152,6 +152,32 @@ interface ReadingWordPanelProps {
   contextPayload?: ContextualizePayload | null;
 }
 
+const READING_PANEL_WIDTH_KEY = "wordmap-reading-panel-width";
+const READING_PANEL_DEFAULT_WIDTH = 300;
+
+export function clampReadingPanelWidth(value: number, viewport = 1280) {
+  const max = Math.max(
+    READING_PANEL_DEFAULT_WIDTH,
+    Math.min(640, viewport - 360)
+  );
+  if (!Number.isFinite(value)) return READING_PANEL_DEFAULT_WIDTH;
+  return Math.min(max, Math.max(260, Math.round(value)));
+}
+
+function applyReadingPanelWidth(value: number, viewport?: number) {
+  const width = clampReadingPanelWidth(
+    value,
+    viewport ?? (typeof window === "undefined" ? 1280 : window.innerWidth)
+  );
+  if (typeof document !== "undefined") {
+    document.documentElement.style.setProperty(
+      "--reading-panel-width",
+      `${width}px`
+    );
+  }
+  return width;
+}
+
 const LEVEL_COLORS = [
   "bg-[#ff4b4b] text-white",
   "bg-[#ff9600] text-white",
@@ -223,12 +249,12 @@ export function ReadingWordToken({
           ? "inline-block px-1.5 py-0.5 leading-none"
           : "inline px-[2px] py-[1px]",
         inVault &&
-          "bg-[#ddf4ff] text-[#1cb0f6] dark:bg-[#1cb0f6]/25 dark:text-[#7ed0fb]",
+        "bg-[#ddf4ff] text-[#1cb0f6] dark:bg-[#1cb0f6]/25 dark:text-[#7ed0fb]",
         !marked && "hover:bg-black/[0.04] dark:hover:bg-white/10",
         similar &&
-          "bg-[#edf9df] !text-zinc-900 dark:bg-[#58cc02]/15 dark:!text-zinc-100",
+        "bg-[#edf9df] !text-zinc-900 dark:bg-[#58cc02]/15 dark:!text-zinc-100",
         selected &&
-          "relative bg-[#58cc02] !text-white shadow-none dark:bg-[#58cc02] dark:!text-white dark:shadow-none"
+        "relative bg-[#58cc02] !text-white shadow-none dark:bg-[#58cc02] dark:!text-white dark:shadow-none"
       )}
     >
       {selected && (
@@ -272,6 +298,8 @@ export function ReadingWordPanel({
   const [explanation, setExplanation] = useState<string | null>(null);
   const [explanationError, setExplanationError] = useState<string | null>(null);
   const [isExplaining, setIsExplaining] = useState(false);
+  const [isResizing, setIsResizing] = useState(false);
+  const panelWidthRef = useRef(READING_PANEL_DEFAULT_WIDTH);
 
   const selectedKey = selected?.saved?.id ?? selected?.clean ?? null;
 
@@ -289,12 +317,20 @@ export function ReadingWordPanel({
 
   useEffect(() => {
     setOnClient(true);
-    return () => window.clearTimeout(closeTimerRef.current);
+    const stored = Number(window.localStorage.getItem(READING_PANEL_WIDTH_KEY));
+    if (Number.isFinite(stored) && stored > 0) {
+      panelWidthRef.current = applyReadingPanelWidth(stored);
+    }
+    return () => {
+      window.clearTimeout(closeTimerRef.current);
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+    };
   }, []);
 
   const suggestedClass = normalizeGrammaticalClass(
     selected?.saved?.grammaticalClass ||
-      wordInfo?.meanings?.[0]?.partOfSpeech
+    wordInfo?.meanings?.[0]?.partOfSpeech
   );
 
   const passageSpan = contextPayload?.span ?? "";
@@ -484,7 +520,7 @@ export function ReadingWordPanel({
         expanded
           ? "max-lg:max-h-[min(72dvh,560px)]"
           : "max-lg:max-h-none",
-        "lg:inset-x-auto lg:top-12 lg:right-0 lg:bottom-auto lg:h-[calc(100dvh-3rem)] lg:w-[300px] lg:max-h-none lg:rounded-none lg:border-l lg:shadow-none"
+        "lg:inset-x-auto lg:top-12 lg:right-0 lg:bottom-auto lg:h-[calc(100dvh-3rem)] lg:w-[var(--reading-panel-width)] lg:max-h-none lg:rounded-none lg:border-l lg:shadow-none"
       )}
       onTransitionEnd={(event) => {
         if (event.target !== event.currentTarget) return;
@@ -495,306 +531,363 @@ export function ReadingWordPanel({
         }
       }}
     >
-          <div className="flex items-center justify-between gap-2 border-b border-[#ececec] px-3 py-2.5 dark:border-gray-800 max-lg:border-b-0">
-            <div className="flex min-w-0 items-center gap-2">
-              <button
-                type="button"
-                onClick={() => playWordAudio(selected.clean)}
-                className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-[#888] hover:text-[#333] dark:hover:text-white"
-                aria-label={`Ouvir ${selected.clean}`}
-              >
-                <Volume2 className="h-4 w-4" />
-              </button>
-              <div className="min-w-0">
-                <p className="truncate text-[15px] font-medium text-[#333] dark:text-white">
-                  {selected.clean}
-                </p>
-              </div>
-            </div>
-            <div className="flex shrink-0 items-center gap-1">
-              {selected.saved && (
-                <span className="inline-flex h-7 w-7 items-center justify-center text-[#58cc02]">
-                  <Check className="h-4 w-4" strokeWidth={2.5} />
-                </span>
-              )}
-              <button
-                type="button"
-                onClick={handleClose}
-                className="inline-flex h-7 w-7 items-center justify-center rounded text-[#b0b0b0] hover:bg-black/5 hover:text-[#555] dark:hover:bg-white/10 dark:hover:text-white"
-                aria-label="Fechar painel"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            </div>
-          </div>
+      <div
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="Ajustar largura do painel"
+        aria-valuemin={260}
+        aria-valuemax={640}
+        aria-valuenow={panelWidthRef.current}
+        tabIndex={0}
+        onPointerDown={(event) => {
+          if (event.button !== 0) return;
+          event.preventDefault();
+          const startX = event.clientX;
+          const startWidth = panelWidthRef.current;
+          const handle = event.currentTarget;
+          handle.setPointerCapture(event.pointerId);
+          setIsResizing(true);
+          document.body.style.cursor = "col-resize";
+          document.body.style.userSelect = "none";
 
-          <div className="px-3 pb-1 lg:hidden">
-            <Textarea
-              value={customMeaning}
-              onChange={(e) => setCustomMeaning(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  void handleAddMeaning(customMeaning);
-                }
-              }}
-              placeholder="Digite um novo significado aqui"
-              className="min-h-16 resize-none rounded-md border-[#e5e5e5] text-[13px] shadow-none dark:border-gray-700 dark:bg-gray-900"
-            />
-          </div>
-
-          <div
-            className={cn(
-              "min-h-0 overflow-y-auto px-3 py-3 lg:flex-1",
-              expanded
-                ? "max-lg:max-h-[min(52dvh,420px)]"
-                : "hidden lg:block"
-            )}
-          >
-            <div className="mb-3 flex flex-wrap items-center gap-1.5">
-              {confidence > 0 && (
-                <span
-                  className={cn(
-                    "inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[11px] font-bold",
-                    LEVEL_COLORS[Math.min(confidence, 4) - 1]
-                  )}
-                >
-                  {confidence}
-                </span>
-              )}
-              {partOfSpeechBadges.map((badge) => (
-                <span
-                  key={badge}
-                  className="rounded bg-[#f3f3f3] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#888] dark:bg-white/10 dark:text-gray-400"
-                >
-                  {badge}
-                </span>
-              ))}
-            </div>
-
-            <p className="hidden text-[11px] font-medium text-[#8a8a8a] lg:block dark:text-zinc-400">
-              Salvar significado
-            </p>
-            {selectedMeanings.length > 0 && (
-              <div className="mt-1.5 space-y-1">
-                {selectedMeanings.map((item) => (
-                  <div
-                    key={item}
-                    className="flex items-start justify-between gap-2 rounded bg-[#eef6ff] px-2.5 py-1.5 text-[13px] text-[#2b7de9] dark:bg-sky-950 dark:text-sky-300"
-                  >
-                    <span className="min-w-0 leading-snug">{item}</span>
-                    <button
-                      type="button"
-                      onClick={() => void handleRemoveMeaning(item)}
-                      className="shrink-0 text-[#2b7de9]/70 hover:text-[#2b7de9]"
-                      aria-label={`Remover ${item}`}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-            <div className="mt-1.5 hidden items-center gap-1 lg:flex">
-              <Input
-                value={customMeaning}
-                onChange={(e) => setCustomMeaning(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    void handleAddMeaning(customMeaning);
-                  }
-                }}
-                placeholder="Digite um novo significado aqui"
-                className="h-9 rounded-md border-[#e5e5e5] text-[13px] shadow-none dark:border-gray-700 dark:bg-gray-900"
-              />
-              <button
-                type="button"
-                disabled={!customMeaning.trim() || isSaving || !vaultId}
-                onClick={() => void handleAddMeaning(customMeaning)}
-                className="inline-flex h-9 w-8 shrink-0 items-center justify-center text-[#b0b0b0] hover:text-[#2b7de9] disabled:opacity-30"
-                aria-label="Adicionar significado"
-              >
-                <Plus className="h-4 w-4" />
-              </button>
-            </div>
-            {!selected.saved && userVaults.length > 1 && (
-              <Select value={vaultId} onValueChange={setVaultId}>
-                <SelectTrigger className="mt-1.5 h-8 w-full rounded-md border-[#e5e5e5] text-[12px] shadow-none dark:border-gray-700 dark:bg-gray-900">
-                  <SelectValue placeholder="Vault" />
-                </SelectTrigger>
-                <SelectContent>
-                  {userVaults.map((vault) => (
-                    <SelectItem key={vault.id} value={String(vault.id)}>
-                      {vault.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
-            <p className="mt-4 text-[11px] font-medium text-[#8a8a8a] dark:text-zinc-400">
-              Significados populares
-            </p>
-            {(isLoadingInfo || isTranslatingMeanings) && (
-              <div className="mt-2 space-y-2">
-                <Skeleton className="h-3 w-[78%] rounded-full bg-black/5 dark:bg-white/8" />
-                <Skeleton className="h-3 w-[62%] rounded-full bg-black/5 dark:bg-white/8" />
-                <Skeleton className="h-3 w-[48%] rounded-full bg-black/5 dark:bg-white/8" />
-              </div>
-            )}
-            {!isLoadingInfo &&
-              !isTranslatingMeanings &&
-              availableMeanings.length === 0 && (
-                <p className="mt-2 text-[12px] text-[#aaa]">
-                  Nenhum significado sugerido.
-                </p>
-              )}
-            {!isLoadingInfo && !isTranslatingMeanings && (
-              <div className="mt-1.5 space-y-1">
-                {availableMeanings.map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    disabled={isSaving || !vaultId}
-                    onClick={() => void handleAddMeaning(item)}
-                    className="flex w-full items-center justify-between gap-2 rounded bg-[#f6f6f6] px-2.5 py-1.5 text-left text-[13px] text-[#2b7de9] hover:bg-[#eef6ff] disabled:opacity-40 dark:bg-zinc-800 dark:text-sky-300 dark:hover:bg-zinc-700"
-                  >
-                    <span className="line-clamp-2 min-w-0 leading-snug">{item}</span>
-                    <Plus className="h-3.5 w-3.5 shrink-0 text-[#b0b0b0]" />
-                  </button>
-                ))}
-              </div>
-            )}
-
-            {relatedPhrases.length > 0 && (
-              <div className="mt-4">
-                <p className="text-[11px] font-medium text-[#8a8a8a] dark:text-zinc-400">
-                  Frases relacionadas
-                </p>
-                <ul className="mt-1 space-y-0.5">
-                  {relatedPhrases.slice(0, 4).map((phrase) => (
-                    <li
-                      key={phrase}
-                      className="px-0.5 py-1 text-[12px] leading-snug text-[#666] dark:text-zinc-300"
-                    >
-                      {phrase}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            )}
-
-            {showContextualize &&
-              (explanation && !isExplaining ? (
-                <div className="mt-4 rounded-md border border-violet-200 bg-violet-50/80 px-3 py-2.5 dark:border-violet-400/15 dark:bg-violet-400/[0.06]">
-                  <button
-                    type="button"
-                    onClick={handleContextualize}
-                    disabled={!contextPayload}
-                    className="inline-flex items-center gap-1.5 text-[12px] font-medium text-violet-700 hover:text-violet-900 dark:text-violet-300 dark:hover:text-violet-200"
-                  >
-                    <Sparkles className="h-3.5 w-3.5" aria-hidden />
-                    Explicar contexto
-                  </button>
-                  <p className="mt-2 text-[13px] leading-snug text-[#444] dark:text-zinc-300">
-                    {explanation}
-                  </p>
-                </div>
-              ) : (
-                <div className="mt-4">
-                  <button
-                    type="button"
-                    onClick={handleContextualize}
-                    disabled={!contextPayload || isExplaining}
-                    className="flex w-full items-center justify-center gap-1.5 rounded-md border border-violet-200 bg-violet-50/80 px-3 py-2 text-[13px] font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-70 dark:border-violet-400/20 dark:bg-violet-400/[0.08] dark:text-violet-300 dark:hover:bg-violet-400/[0.14]"
-                  >
-                    <Sparkles
-                      className={cn("h-3.5 w-3.5", isExplaining && "ai-sparkle")}
-                      aria-hidden
-                    />
-                    {isExplaining ? "Explicando..." : "Explicar contexto"}
-                  </button>
-                  {explanationError && (
-                    <p className="mt-2 text-[12px] leading-snug text-rose-700 dark:text-rose-300">
-                      {explanationError}
-                    </p>
-                  )}
-                </div>
-              ))}
-
-            {extras}
-
-            <div className="mt-4">
-              <p className="text-[11px] font-medium text-[#8a8a8a] dark:text-zinc-400">
-                Notas
-              </p>
-              <Textarea
-                value={notes}
-                onChange={(e) => setNotes(e.target.value)}
-                onBlur={() => void handleNotesBlur()}
-                placeholder="Adicionar nota aqui"
-                className="mt-1.5 min-h-20 resize-none rounded-md border-[#e5e5e5] text-[13px] shadow-none dark:border-gray-700 dark:bg-zinc-900 dark:text-zinc-100"
-              />
-            </div>
-          </div>
-
+          const resizeTo = (clientX: number, persist: boolean) => {
+            const next = applyReadingPanelWidth(startWidth + (startX - clientX));
+            panelWidthRef.current = next;
+            handle.setAttribute("aria-valuenow", String(next));
+            if (persist) {
+              window.localStorage.setItem(READING_PANEL_WIDTH_KEY, String(next));
+            }
+          };
+          const onMove = (moveEvent: PointerEvent) => resizeTo(moveEvent.clientX, false);
+          const onUp = (upEvent: PointerEvent) => {
+            resizeTo(upEvent.clientX, true);
+            setIsResizing(false);
+            document.body.style.cursor = "";
+            document.body.style.userSelect = "";
+            handle.removeEventListener("pointermove", onMove);
+            handle.removeEventListener("pointerup", onUp);
+            handle.removeEventListener("pointercancel", onUp);
+          };
+          handle.addEventListener("pointermove", onMove);
+          handle.addEventListener("pointerup", onUp);
+          handle.addEventListener("pointercancel", onUp);
+        }}
+        onKeyDown={(event) => {
+          const step =
+            event.key === "ArrowLeft" ? 16 : event.key === "ArrowRight" ? -16 : 0;
+          if (!step) return;
+          event.preventDefault();
+          const next = applyReadingPanelWidth(panelWidthRef.current + step);
+          panelWidthRef.current = next;
+          event.currentTarget.setAttribute("aria-valuenow", String(next));
+          window.localStorage.setItem(READING_PANEL_WIDTH_KEY, String(next));
+        }}
+        className={cn(
+          "absolute inset-y-0 left-0 z-20 hidden w-3 cursor-col-resize touch-none lg:block",
+          "after:absolute after:inset-y-0 after:left-0 after:w-0.5 after:bg-[#58cc02] after:opacity-0 hover:after:opacity-80",
+          isResizing && "after:opacity-100"
+        )}
+      />
+      <div className="flex items-center justify-between gap-2 border-b border-[#ececec] px-3 py-2.5 dark:border-gray-800 max-lg:border-b-0">
+        <div className="flex min-w-0 items-center gap-2">
           <button
             type="button"
-            onClick={() => setExpanded((current) => !current)}
-            className="flex w-full shrink-0 items-center justify-center py-1.5 text-[#8b949e] lg:hidden"
-            aria-label={expanded ? "Recolher painel" : "Expandir painel"}
+            onClick={() => playWordAudio(selected.clean)}
+            className="inline-flex h-7 w-7 shrink-0 items-center justify-center text-[#888] hover:text-[#333] dark:hover:text-white"
+            aria-label={`Ouvir ${selected.clean}`}
           >
-            {expanded ? (
-              <ChevronUp className="h-5 w-5" />
-            ) : (
-              <ChevronDown className="h-5 w-5" />
-            )}
+            <Volume2 className="h-4 w-4" />
           </button>
-
-          <div
-            className={cn(
-              "flex shrink-0 items-center gap-2 border-t border-[#ececec] px-3 py-2.5 dark:border-gray-800",
-              selected.saved ? "justify-between" : "justify-center",
-              !expanded && "hidden lg:flex"
-            )}
+          <div className="min-w-0">
+            <p className="truncate text-[20px] font-medium text-[#333] dark:text-white">
+              {selected.clean}
+            </p>
+          </div>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {selected.saved && (
+            <span className="inline-flex h-7 w-7 items-center justify-center text-[#58cc02]">
+              <Check className="h-4 w-4" strokeWidth={2.5} />
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={handleClose}
+            className="inline-flex h-7 w-7 items-center justify-center rounded text-[#b0b0b0] hover:bg-black/5 hover:text-[#555] dark:hover:bg-white/10 dark:hover:text-white"
+            aria-label="Fechar painel"
           >
-            {selected.saved && (
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
+      <div className="px-3 pb-1 lg:hidden">
+        <Textarea
+          value={customMeaning}
+          onChange={(e) => setCustomMeaning(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && !e.shiftKey) {
+              e.preventDefault();
+              void handleAddMeaning(customMeaning);
+            }
+          }}
+          placeholder="Digite um novo significado aqui"
+          className="min-h-16 resize-none rounded-md border-[#e5e5e5] text-[13px] shadow-none dark:border-gray-700 dark:bg-gray-900"
+        />
+      </div>
+
+      <div
+        className={cn(
+          "min-h-0 overflow-y-auto px-3 py-3 lg:flex-1",
+          expanded
+            ? "max-lg:max-h-[min(52dvh,420px)]"
+            : "hidden lg:block"
+        )}
+      >
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          {confidence > 0 && (
+            <span
+              className={cn(
+                "inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[11px] font-bold",
+                LEVEL_COLORS[Math.min(confidence, 4) - 1]
+              )}
+            >
+              {confidence}
+            </span>
+          )}
+          {partOfSpeechBadges.map((badge) => (
+            <span
+              key={badge}
+              className="rounded bg-[#f3f3f3] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#888] dark:bg-white/10 dark:text-gray-400"
+            >
+              {badge}
+            </span>
+          ))}
+        </div>
+
+        <p className="hidden text-[11px] font-medium text-[#8a8a8a] lg:block dark:text-zinc-400">
+          Salvar significado
+        </p>
+        {selectedMeanings.length > 0 && (
+          <div className="mt-1.5 space-y-1">
+            {selectedMeanings.map((item) => (
+              <div
+                key={item}
+                className="flex items-start justify-between gap-2 rounded bg-[#eef6ff] px-2.5 py-1.5 text-[13px] text-[#2b7de9] dark:bg-sky-950 dark:text-sky-300"
+              >
+                <span className="min-w-0 leading-snug">{item}</span>
+                <button
+                  type="button"
+                  onClick={() => void handleRemoveMeaning(item)}
+                  className="shrink-0 text-[#2b7de9]/70 hover:text-[#2b7de9]"
+                  aria-label={`Remover ${item}`}
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+        <div className="mt-1.5 hidden items-center gap-1 lg:flex">
+          <Input
+            value={customMeaning}
+            onChange={(e) => setCustomMeaning(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                void handleAddMeaning(customMeaning);
+              }
+            }}
+            placeholder="Digite um novo significado aqui"
+            className="h-9 rounded-md border-[#e5e5e5] text-[13px] shadow-none dark:border-gray-700 dark:bg-gray-900"
+          />
+          <button
+            type="button"
+            disabled={!customMeaning.trim() || isSaving || !vaultId}
+            onClick={() => void handleAddMeaning(customMeaning)}
+            className="inline-flex h-9 w-8 shrink-0 items-center justify-center text-[#b0b0b0] hover:text-[#2b7de9] disabled:opacity-30"
+            aria-label="Adicionar significado"
+          >
+            <Plus className="h-4 w-4" />
+          </button>
+        </div>
+        {!selected.saved && userVaults.length > 1 && (
+          <Select value={vaultId} onValueChange={setVaultId}>
+            <SelectTrigger className="mt-1.5 h-8 w-full rounded-md border-[#e5e5e5] text-[12px] shadow-none dark:border-gray-700 dark:bg-gray-900">
+              <SelectValue placeholder="Vault" />
+            </SelectTrigger>
+            <SelectContent>
+              {userVaults.map((vault) => (
+                <SelectItem key={vault.id} value={String(vault.id)}>
+                  {vault.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+
+        <p className="mt-4 text-[11px] font-medium text-[#8a8a8a] dark:text-zinc-400">
+          Significados populares
+        </p>
+        {(isLoadingInfo || isTranslatingMeanings) && (
+          <div className="mt-2 space-y-2">
+            <Skeleton className="h-3 w-[78%] rounded-full bg-black/5 dark:bg-white/8" />
+            <Skeleton className="h-3 w-[62%] rounded-full bg-black/5 dark:bg-white/8" />
+            <Skeleton className="h-3 w-[48%] rounded-full bg-black/5 dark:bg-white/8" />
+          </div>
+        )}
+        {!isLoadingInfo &&
+          !isTranslatingMeanings &&
+          availableMeanings.length === 0 && (
+            <p className="mt-2 text-[12px] text-[#aaa]">
+              Nenhum significado sugerido.
+            </p>
+          )}
+        {!isLoadingInfo && !isTranslatingMeanings && (
+          <div className="mt-1.5 space-y-1">
+            {availableMeanings.map((item) => (
+              <button
+                key={item}
+                type="button"
+                disabled={isSaving || !vaultId}
+                onClick={() => void handleAddMeaning(item)}
+                className="flex w-full items-center justify-between gap-2 rounded bg-[#f6f6f6] px-2.5 py-1.5 text-left text-[13px] text-[#2b7de9] hover:bg-[#eef6ff] disabled:opacity-40 dark:bg-zinc-800 dark:text-sky-300 dark:hover:bg-zinc-700"
+              >
+                <span className="line-clamp-2 min-w-0 leading-snug">{item}</span>
+                <Plus className="h-3.5 w-3.5 shrink-0 text-[#b0b0b0]" />
+              </button>
+            ))}
+          </div>
+        )}
+
+        {relatedPhrases.length > 0 && (
+          <div className="mt-4">
+            <p className="text-[11px] font-medium text-[#8a8a8a] dark:text-zinc-400">
+              Frases relacionadas
+            </p>
+            <ul className="mt-1 space-y-0.5">
+              {relatedPhrases.slice(0, 4).map((phrase) => (
+                <li
+                  key={phrase}
+                  className="px-0.5 py-1 text-[12px] leading-snug text-[#666] dark:text-zinc-300"
+                >
+                  {phrase}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {showContextualize &&
+          (explanation && !isExplaining ? (
+            <div className="mt-4 rounded-md border border-violet-200 bg-violet-50/80 px-3 py-2.5 dark:border-violet-400/15 dark:bg-violet-400/[0.06]">
               <button
                 type="button"
-                disabled={isSaving}
-                onClick={() =>
-                  onRemove(
-                    selected.saved!.name,
-                    selected.saved!.vaultId,
-                    selected.saved!.id
-                  )
-                }
-                className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[12px] font-medium text-zinc-500 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-40 dark:text-zinc-400 dark:hover:text-red-400"
+                onClick={handleContextualize}
+                disabled={!contextPayload}
+                className="inline-flex items-center gap-1.5 text-[12px] font-medium text-violet-700 hover:text-violet-900 dark:text-violet-300 dark:hover:text-violet-200"
               >
-                <Trash2 className="h-3.5 w-3.5" />
-                Remover
+                <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                Explicar contexto
               </button>
-            )}
-            <div className="flex justify-center gap-2">
-              {[1, 2, 3, 4].map((level) => (
-                <button
-                  key={level}
-                  type="button"
-                  disabled={isSaving || (!selected.saved && !vaultId)}
-                  onClick={() => void handleConfidence(level)}
-                  className={cn(
-                    "flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-medium",
-                    confidence === level
-                      ? LEVEL_COLORS[level - 1]
-                      : "bg-[#f4f4f4] text-[#999] dark:bg-gray-800 dark:text-gray-400"
-                  )}
-                >
-                  {level}
-                </button>
-              ))}
+              <p className="mt-2 text-[13px] leading-snug text-[#444] dark:text-zinc-300">
+                {explanation}
+              </p>
             </div>
-          </div>
+          ) : (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={handleContextualize}
+                disabled={!contextPayload || isExplaining}
+                className="flex w-full items-center justify-center gap-1.5 rounded-md border border-violet-200 bg-violet-50/80 px-3 py-2 text-[13px] font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-70 dark:border-violet-400/20 dark:bg-violet-400/[0.08] dark:text-violet-300 dark:hover:bg-violet-400/[0.14]"
+              >
+                <Sparkles
+                  className={cn("h-3.5 w-3.5", isExplaining && "ai-sparkle")}
+                  aria-hidden
+                />
+                {isExplaining ? "Explicando..." : "Explicar contexto"}
+              </button>
+              {explanationError && (
+                <p className="mt-2 text-[12px] leading-snug text-rose-700 dark:text-rose-300">
+                  {explanationError}
+                </p>
+              )}
+            </div>
+          ))}
+
+        {extras}
+
+        <div className="mt-4">
+          <p className="text-[11px] font-medium text-[#8a8a8a] dark:text-zinc-400">
+            Notas
+          </p>
+          <Textarea
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            onBlur={() => void handleNotesBlur()}
+            placeholder="Adicionar nota aqui"
+            className="mt-1.5 min-h-20 resize-none rounded-md border-[#e5e5e5] text-[13px] shadow-none dark:border-gray-700 dark:bg-zinc-900 dark:text-zinc-100"
+          />
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={() => setExpanded((current) => !current)}
+        className="flex w-full shrink-0 items-center justify-center py-1.5 text-[#8b949e] lg:hidden"
+        aria-label={expanded ? "Recolher painel" : "Expandir painel"}
+      >
+        {expanded ? (
+          <ChevronUp className="h-5 w-5" />
+        ) : (
+          <ChevronDown className="h-5 w-5" />
+        )}
+      </button>
+
+      <div
+        className={cn(
+          "flex shrink-0 items-center gap-2 border-t border-[#ececec] px-3 py-2.5 dark:border-gray-800",
+          selected.saved ? "justify-between" : "justify-center",
+          !expanded && "hidden lg:flex"
+        )}
+      >
+        {selected.saved && (
+          <button
+            type="button"
+            disabled={isSaving}
+            onClick={() =>
+              onRemove(
+                selected.saved!.name,
+                selected.saved!.vaultId,
+                selected.saved!.id
+              )
+            }
+            className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[12px] font-medium text-zinc-500 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-40 dark:text-zinc-400 dark:hover:text-red-400"
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Remover
+          </button>
+        )}
+        <div className="flex justify-center gap-2">
+          {[1, 2, 3, 4].map((level) => (
+            <button
+              key={level}
+              type="button"
+              disabled={isSaving || (!selected.saved && !vaultId)}
+              onClick={() => void handleConfidence(level)}
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-medium",
+                confidence === level
+                  ? LEVEL_COLORS[level - 1]
+                  : "bg-[#f4f4f4] text-[#999] dark:bg-gray-800 dark:text-gray-400"
+              )}
+            >
+              {level}
+            </button>
+          ))}
+        </div>
+      </div>
     </aside>
   );
 

@@ -1,5 +1,9 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { ReadingWordPanel, readingWordMark } from "../reading-word-panel";
+import {
+  ReadingWordPanel,
+  clampReadingPanelWidth,
+  readingWordMark,
+} from "../reading-word-panel";
 import { resetContextualizeClient } from "@/lib/contextualize-client";
 import { getPassageExplanation } from "@/actions/passage-explanations";
 
@@ -38,6 +42,15 @@ function renderPanel(showContextualize: boolean) {
     />
   );
 }
+
+describe("clampReadingPanelWidth", () => {
+  it("mantém a largura entre o mínimo e o máximo da tela", () => {
+    expect(clampReadingPanelWidth(300, 1280)).toBe(300);
+    expect(clampReadingPanelWidth(120, 1280)).toBe(260);
+    expect(clampReadingPanelWidth(900, 1280)).toBe(640);
+    expect(clampReadingPanelWidth(500, 800)).toBe(440);
+  });
+});
 
 describe("readingWordMark", () => {
   it("deixa forte só a ocorrência clicada", () => {
