@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser, type User } from "@/actions/auth";
 import { publicErrorMessage } from "@/lib/public-error";
+import {
+  normalizeReadingPosition,
+  paginateReading,
+} from "@/lib/reading-pages";
 
 const GENERIC_ERROR = "Não foi possível concluir a ação. Tente novamente.";
 
@@ -41,6 +45,11 @@ export type ChapterSummary = {
 export type BookDetail = BookListItem & {
   chapters: ChapterSummary[];
   canEdit: boolean;
+};
+
+export type ReadingPosition = {
+  pageIndex: number;
+  paragraphIndex: number;
 };
 
 export type ChapterDetail = {
@@ -516,6 +525,72 @@ export async function getChapterById(
     if (error instanceof Error && error.message === "Livro não encontrado") {
       return null;
     }
+    wrapError(error);
+  }
+}
+
+async function readableChapter(user: User, chapterId: number) {
+  const chapter = await prisma.chapter.findUnique({
+    where: { id: chapterId },
+  });
+  if (!chapter) {
+    throw new Error("Capítulo não encontrado");
+  }
+  await getAccessibleBook(user, chapter.bookId);
+  return chapter;
+}
+
+export async function getReadingProgress(
+  chapterId: number
+): Promise<ReadingPosition | null> {
+  try {
+    const user = await requireUser();
+    const chapter = await readableChapter(user, chapterId);
+    const stored = await prisma.readingProgress.findUnique({
+      where: { userId_chapterId: { userId: user.id, chapterId } },
+    });
+    if (!stored) return null;
+    return normalizeReadingPosition(
+      paginateReading(chapter.content),
+      stored.paragraphIndex,
+      stored.pageIndex
+    );
+  } catch (error) {
+    if (error instanceof Error && error.message === "Livro não encontrado") {
+      return null;
+    }
+    wrapError(error);
+  }
+}
+
+export async function saveReadingProgress(
+  chapterId: number,
+  pageIndex: number,
+  paragraphIndex: number
+): Promise<ReadingPosition> {
+  try {
+    const user = await requireUser();
+    const chapter = await readableChapter(user, chapterId);
+    const position = normalizeReadingPosition(
+      paginateReading(chapter.content),
+      paragraphIndex,
+      pageIndex
+    );
+    await prisma.readingProgress.upsert({
+      where: { userId_chapterId: { userId: user.id, chapterId } },
+      create: {
+        userId: user.id,
+        chapterId,
+        pageIndex: position.pageIndex,
+        paragraphIndex: position.paragraphIndex,
+      },
+      update: {
+        pageIndex: position.pageIndex,
+        paragraphIndex: position.paragraphIndex,
+      },
+    });
+    return position;
+  } catch (error) {
     wrapError(error);
   }
 }

@@ -12,6 +12,8 @@ import {
 } from "@/actions/actions";
 import { Vault, Word } from "@/actions/actions";
 import {
+  ChevronLeft,
+  ChevronRight,
   Edit2,
   Save,
   X,
@@ -47,12 +49,26 @@ import {
   playWordAudio,
   type SelectedReadingWord,
 } from "@/components/reading-word-panel";
+import type { ContextualizePayload } from "@/lib/contextualize-client";
+import { buildReadingContext } from "@/lib/reading-context";
+import {
+  paginateReading,
+  resolveReadingPage,
+  splitParagraphs,
+} from "@/lib/reading-pages";
 
 interface TextViewerProps {
   text: Text;
   onTextUpdated?: () => void;
   onSave?: (title: string, content: string) => Promise<void>;
   canEdit?: boolean;
+  paged?: boolean;
+  initialPageIndex?: number;
+  initialParagraphIndex?: number;
+  onReadingPosition?: (position: {
+    pageIndex: number;
+    paragraphIndex: number;
+  }) => void;
 }
 
 interface FoundWord {
@@ -66,6 +82,10 @@ export function TextViewer({
   onTextUpdated,
   onSave,
   canEdit = true,
+  paged = false,
+  initialPageIndex = 0,
+  initialParagraphIndex = 0,
+  onReadingPosition,
 }: TextViewerProps) {
   const [foundWords, setFoundWords] = useState<FoundWord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -98,6 +118,61 @@ export function TextViewer({
   );
   const { containerRef: selectionContainerRef, selection, clearSelection } =
     useTextSelection();
+  const [pageIndex, setPageIndex] = useState(initialPageIndex);
+  const pages = useMemo(
+    () => (paged ? paginateReading(editContent) : []),
+    [paged, editContent]
+  );
+  const appliedPositionKey = useRef("");
+
+  useEffect(() => {
+    if (!paged) return;
+    const key = `${initialPageIndex}:${initialParagraphIndex}:${editContent}`;
+    if (appliedPositionKey.current === key) return;
+    appliedPositionKey.current = key;
+    setPageIndex(
+      resolveReadingPage(paginateReading(editContent), initialParagraphIndex, initialPageIndex)
+    );
+  }, [paged, editContent, initialPageIndex, initialParagraphIndex]);
+
+  useEffect(() => {
+    if (!paged || pages.length === 0) return;
+    const paragraphIndex = pages[pageIndex]?.slices[0]?.paragraphIndex ?? 0;
+    onReadingPosition?.({ pageIndex, paragraphIndex });
+  }, [paged, pageIndex, pages, onReadingPosition]);
+
+  useEffect(() => {
+    if (!paged || !selection) return;
+    const clean = selection.text.replace(/\s+/g, " ").trim();
+    if (!clean) return;
+    setSelectedWord({ surface: clean, clean });
+  }, [paged, selection]);
+
+  useEffect(() => {
+    if (!paged) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (isEditing || selectedWord || selection) return;
+      const target = event.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (
+        tag === "INPUT" ||
+        tag === "TEXTAREA" ||
+        target?.isContentEditable
+      ) {
+        return;
+      }
+      if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+      event.preventDefault();
+      setPageIndex((current) => {
+        if (event.key === "ArrowRight") {
+          return Math.min(pages.length - 1, current + 1);
+        }
+        return Math.max(0, current - 1);
+      });
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [paged, isEditing, selectedWord, selection, pages.length]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -431,11 +506,15 @@ export function TextViewer({
   };
 
   // Função para remover palavra do vault
-  const handleRemoveWordFromVault = async (word: string, vaultId: number) => {
+  const handleRemoveWordFromVault = async (
+    word: string,
+    vaultId: number,
+    wordId?: number
+  ) => {
     try {
       setIsAddingWord(true);
 
-      await removeWordFromVault(word, vaultId);
+      await removeWordFromVault(word, vaultId, wordId);
 
       toast({
         title: "Sucesso",
@@ -523,9 +602,29 @@ export function TextViewer({
   );
 
   // Memoizar a renderização do texto interativo
+  const visibleText =
+    paged && !isEditing ? (pages[pageIndex]?.text ?? "") : editContent;
+  const contextPayload = useMemo<ContextualizePayload | null>(() => {
+    if (!paged || isEditing || !selectedWord) return null;
+    const built = buildReadingContext({
+      paragraphs: splitParagraphs(editContent),
+      pages,
+      pageIndex,
+      span: selectedWord.clean,
+    });
+    if (!built.ok) return null;
+    return {
+      span: built.span,
+      sentence: built.sentence,
+      paragraph: built.paragraph,
+      previousParagraph: built.previousParagraph,
+      ...(selectedWord.saved ? { wordId: selectedWord.saved.id } : {}),
+    };
+  }, [paged, isEditing, selectedWord, editContent, pages, pageIndex]);
+
   const renderInteractiveText = useMemo(() => {
-    return renderTextChunk(editContent);
-  }, [editContent, renderTextChunk]);
+    return renderTextChunk(visibleText);
+  }, [visibleText, renderTextChunk]);
 
   if (isLoading) {
     return (
@@ -620,6 +719,37 @@ export function TextViewer({
             {renderInteractiveText}
           </div>
         )}
+        {paged && !isEditing && pages.length > 0 && (
+          <div className="mt-10 flex items-center justify-between gap-3 text-[13px] text-[#777] dark:text-zinc-400">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={pageIndex === 0}
+              onClick={() => setPageIndex((current) => Math.max(0, current - 1))}
+              className="gap-1"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              Anterior
+            </Button>
+            <span>
+              {pageIndex + 1} de {pages.length}
+            </span>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              disabled={pageIndex >= pages.length - 1}
+              onClick={() =>
+                setPageIndex((current) => Math.min(pages.length - 1, current + 1))
+              }
+              className="gap-1"
+            >
+              Próxima
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
       </div>
       <div
         className={`hidden lg:block lg:shrink-0 ${
@@ -628,7 +758,7 @@ export function TextViewer({
       />
       <ReadingWordPanel
         selected={selectedWord}
-        sourceText={editContent}
+        sourceText={visibleText}
         userVaults={userVaults}
         wordInfo={selectedWord ? wordInfoMap[selectedWord.clean] : null}
         isLoadingInfo={
@@ -636,6 +766,8 @@ export function TextViewer({
         }
         isSaving={isAddingWord}
         autoTranslateWordPreview={autoTranslateWordPreview}
+        showContextualize={paged && !isEditing}
+        contextPayload={contextPayload}
         onClose={() => setSelectedWord(null)}
         onSave={handlePanelSave}
         onUpdate={handlePanelUpdate}

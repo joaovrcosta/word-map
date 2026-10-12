@@ -624,40 +624,46 @@ export async function deleteWord(wordId: number): Promise<void> {
 // Remover palavra de um vault específico
 export async function removeWordFromVault(
   wordName: string,
-  vaultId: number
+  vaultId: number,
+  wordId?: number
 ): Promise<void> {
   try {
     console.log("=== INÍCIO removeWordFromVault ===");
     console.log("Removendo palavra:", wordName, "do vault:", vaultId);
 
-    // Verificar se o vault existe
-    const existingVault = await prisma.vault.findUnique({
-      where: { id: vaultId },
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    const existingVault = await prisma.vault.findFirst({
+      where: { id: vaultId, userId: user.id },
     });
 
     if (!existingVault) {
       throw new Error("Vault não encontrado");
     }
 
-    // Buscar a palavra no vault
     const existingWord = await prisma.word.findFirst({
-      where: {
-        name: {
-          equals: wordName,
-          mode: "insensitive",
-        },
-        vaultId: vaultId,
-      },
+      where: wordId
+        ? { id: wordId, vaultId }
+        : {
+            name: {
+              equals: wordName.trim(),
+              mode: "insensitive",
+            },
+            vaultId,
+          },
     });
 
     if (!existingWord) {
       throw new Error("Palavra não encontrada no vault");
     }
 
-    // Deletar a palavra do vault
-    await prisma.word.delete({
-      where: { id: existingWord.id },
-    });
+    await prisma.$transaction([
+      prisma.wordHistory.deleteMany({ where: { wordId: existingWord.id } }),
+      prisma.word.delete({ where: { id: existingWord.id } }),
+    ]);
 
     console.log("Palavra removida do vault com sucesso");
     console.log("=== FIM removeWordFromVault - SUCESSO ===");

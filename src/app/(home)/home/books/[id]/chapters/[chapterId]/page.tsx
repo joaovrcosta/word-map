@@ -4,9 +4,16 @@ import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { getChapterById, updateChapter } from "@/actions/books";
+import {
+  getChapterById,
+  getReadingProgress,
+  saveReadingProgress,
+  updateChapter,
+  type ReadingPosition,
+} from "@/actions/books";
 import type { Text } from "@/actions/actions";
 import { TextViewer } from "@/app/(home)/home/texts/text-viewer";
+import { useDebounce } from "@/hooks/use-debounce";
 
 export default function ChapterPage() {
   const params = useParams();
@@ -17,6 +24,13 @@ export default function ChapterPage() {
   const [canEdit, setCanEdit] = useState(false);
   const [bookTitle, setBookTitle] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [position, setPosition] = useState<ReadingPosition>({
+    pageIndex: 0,
+    paragraphIndex: 0,
+  });
+  const [progressReady, setProgressReady] = useState(false);
+  const [saveArmed, setSaveArmed] = useState(false);
+  const debouncedPosition = useDebounce(position, 400);
 
   const loadChapter = useCallback(async () => {
     try {
@@ -48,6 +62,52 @@ export default function ChapterPage() {
     if (!Number.isFinite(chapterId) || !Number.isFinite(bookId)) return;
     loadChapter();
   }, [bookId, chapterId, loadChapter]);
+
+  useEffect(() => {
+    if (!Number.isFinite(chapterId)) return;
+    let cancelled = false;
+    setProgressReady(false);
+    getReadingProgress(chapterId)
+      .then((progress) => {
+        if (cancelled) return;
+        if (progress) setPosition(progress);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        if (!cancelled) setProgressReady(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [chapterId]);
+
+  useEffect(() => {
+    if (!progressReady || saveArmed) return;
+    if (
+      debouncedPosition.pageIndex === position.pageIndex &&
+      debouncedPosition.paragraphIndex === position.paragraphIndex
+    ) {
+      setSaveArmed(true);
+    }
+  }, [progressReady, saveArmed, debouncedPosition, position]);
+
+  useEffect(() => {
+    if (!saveArmed || !Number.isFinite(chapterId)) return;
+    void saveReadingProgress(
+      chapterId,
+      debouncedPosition.pageIndex,
+      debouncedPosition.paragraphIndex
+    ).catch(() => undefined);
+  }, [saveArmed, chapterId, debouncedPosition]);
+
+  const handleReadingPosition = useCallback((next: ReadingPosition) => {
+    setPosition((current) =>
+      current.pageIndex === next.pageIndex &&
+      current.paragraphIndex === next.paragraphIndex
+        ? current
+        : next
+    );
+  }, []);
 
   const handleSave = async (title: string, content: string) => {
     await updateChapter(chapterId, title, content);
@@ -91,12 +151,18 @@ export default function ChapterPage() {
             {bookTitle || "Livro"}
           </Button>
         </div>
-        <TextViewer
-          text={text}
-          canEdit={canEdit}
-          onSave={handleSave}
-          onTextUpdated={loadChapter}
-        />
+        {progressReady && (
+          <TextViewer
+            text={text}
+            canEdit={canEdit}
+            onSave={handleSave}
+            onTextUpdated={loadChapter}
+            paged
+            initialPageIndex={position.pageIndex}
+            initialParagraphIndex={position.paragraphIndex}
+            onReadingPosition={handleReadingPosition}
+          />
+        )}
       </div>
     </div>
   );

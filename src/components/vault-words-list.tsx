@@ -37,6 +37,7 @@ function toSelectedWord(word: Word, vaultName: string): SelectedReadingWord {
     clean: word.name,
     saved: {
       id: word.id,
+      name: word.name,
       vaultId: word.vaultId,
       vaultName,
       translations: word.translations,
@@ -284,10 +285,10 @@ export function VaultWordsList({
             setIsSaving(false);
           }
         }}
-        onRemove={async (wordName, vaultId) => {
+        onRemove={async (wordName, vaultId, wordId) => {
           setIsSaving(true);
           try {
-            await removeWordFromVault(wordName, vaultId);
+            await removeWordFromVault(wordName, vaultId, wordId);
             await queryClient.invalidateQueries({ queryKey: ["vaults"] });
             setSelectedId(null);
           } finally {

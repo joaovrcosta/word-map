@@ -30,6 +30,9 @@ model User {
   sentences        Sentence[]
   books            Book[]
   library          UserLibrary[]
+  readingProgress  ReadingProgress[]
+  tutorQuota       TutorQuota?
+  passageExplanations WordPassageExplanation[]
 }
 
 model UserSettings {
@@ -74,6 +77,7 @@ model Word {
   semanticConnections SemanticConnectionWord[]
   sentenceWords    SentenceWord[]
   reviews          WordReview[]
+  passageExplanations WordPassageExplanation[]
 }
 
 model WordReview {
@@ -125,9 +129,59 @@ model Chapter {
   title     String
   content   String   @db.Text
   order     Int      @default(0)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  book      Book     @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  book            Book              @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  readingProgress ReadingProgress[]
+}
+
+model ReadingProgress {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  chapterId      Int
+  pageIndex      Int
+  paragraphIndex Int
+  updatedAt      DateTime @updatedAt
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapter        Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, chapterId])
+}
+
+model WordPassageExplanation {
+  id          Int      @id @default(autoincrement())
+  userId      Int
+  wordId      Int?
+  passageKey  String
+  span        String
+  sentence    String   @db.Text
+  explanation String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  word        Word?    @relation(fields: [wordId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, passageKey])
+  @@index([wordId])
+}
+
+model ReadingExplanation {
+  id            Int      @id @default(autoincrement())
+  cacheKey      String   @unique
+  promptVersion String
+  model         String
+  explanation   String   @db.Text
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+}
+
+model TutorQuota {
+  userId      Int      @id
+  minuteStart DateTime @default(now())
+  minuteCount Int      @default(0)
+  dayStart    DateTime @default(now())
+  dayCount    Int      @default(0)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model UserLibrary {

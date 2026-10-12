@@ -14,6 +14,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { extractRelatedSentences } from "@/lib/word-matching";
+import { getPassageExplanation } from "@/actions/passage-explanations";
+import {
+  requestContextualize,
+  type ContextualizePayload,
+} from "@/lib/contextualize-client";
 import { normalizeGrammaticalClass } from "@/lib/dictionary";
 import type { Vault } from "@/actions/actions";
 import { cn } from "@/lib/utils";
@@ -21,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 
 export type SavedReadingWord = {
   id: number;
+  name: string;
   vaultId: number;
   vaultName: string;
   translations: string[];
@@ -67,6 +73,7 @@ export function findSavedReadingWord(
 
   return {
     id: word.id,
+    name: word.name,
     vaultId: vault.id,
     vaultName: vault.name,
     translations: word.translations,
@@ -113,9 +120,15 @@ interface ReadingWordPanelProps {
       notes?: string | null;
     }
   ) => Promise<void> | void;
-  onRemove: (word: string, vaultId: number) => Promise<void> | void;
+  onRemove: (
+    word: string,
+    vaultId: number,
+    wordId?: number
+  ) => Promise<void> | void;
   extras?: ReactNode;
   docked?: boolean;
+  showContextualize?: boolean;
+  contextPayload?: ContextualizePayload | null;
 }
 
 const LEVEL_COLORS = [
@@ -206,6 +219,8 @@ export function ReadingWordPanel({
   onUpdate,
   onRemove,
   extras,
+  showContextualize = false,
+  contextPayload = null,
 }: ReadingWordPanelProps) {
   const [onClient, setOnClient] = useState(false);
   const [open, setOpen] = useState(false);
@@ -218,6 +233,9 @@ export function ReadingWordPanel({
   const [isTranslatingMeanings, setIsTranslatingMeanings] = useState(false);
   const [notes, setNotes] = useState("");
   const [vaultId, setVaultId] = useState<string>("");
+  const [explanation, setExplanation] = useState<string | null>(null);
+  const [explanationError, setExplanationError] = useState<string | null>(null);
+  const [isExplaining, setIsExplaining] = useState(false);
 
   const selectedKey = selected?.saved?.id ?? selected?.clean ?? null;
 
@@ -242,6 +260,48 @@ export function ReadingWordPanel({
     selected?.saved?.grammaticalClass ||
       wordInfo?.meanings?.[0]?.partOfSpeech
   );
+
+  const passageSpan = contextPayload?.span ?? "";
+  const passageSentence = contextPayload?.sentence ?? "";
+
+  useEffect(() => {
+    if (!showContextualize || !passageSpan || !passageSentence) {
+      setExplanation(null);
+      setExplanationError(null);
+      return;
+    }
+
+    let cancelled = false;
+    setExplanation(null);
+    setExplanationError(null);
+    void getPassageExplanation(passageSpan, passageSentence).then((saved) => {
+      if (!cancelled && saved) setExplanation(saved);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [showContextualize, passageSpan, passageSentence]);
+
+  const handleContextualize = () => {
+    if (!contextPayload) return;
+    setIsExplaining(true);
+    setExplanationError(null);
+    void requestContextualize(contextPayload)
+      .then((text) => {
+        setExplanation(text);
+      })
+      .catch((error: unknown) => {
+        setExplanationError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível explicar este trecho."
+        );
+      })
+      .finally(() => {
+        setIsExplaining(false);
+      });
+  };
 
   useEffect(() => {
     setSelectedMeanings(selected?.saved?.translations ?? []);
@@ -589,6 +649,29 @@ export function ReadingWordPanel({
               </div>
             )}
 
+            {showContextualize && (
+              <div className="mt-4">
+                <button
+                  type="button"
+                  onClick={handleContextualize}
+                  disabled={!contextPayload}
+                  className="text-[13px] font-medium text-[#1cb0f6] hover:underline disabled:opacity-40"
+                >
+                  {isExplaining ? "Explicando..." : "Explicar contexto"}
+                </button>
+                {explanation && (
+                  <p className="mt-2 text-[13px] leading-snug text-[#444] dark:text-zinc-200">
+                    {explanation}
+                  </p>
+                )}
+                {explanationError && (
+                  <p className="mt-2 text-[12px] leading-snug text-[#c2410c]">
+                    {explanationError}
+                  </p>
+                )}
+              </div>
+            )}
+
             {extras}
 
             <div className="mt-4">
@@ -630,7 +713,11 @@ export function ReadingWordPanel({
                 type="button"
                 disabled={isSaving}
                 onClick={() =>
-                  onRemove(selected.clean, selected.saved!.vaultId)
+                  onRemove(
+                    selected.saved!.name,
+                    selected.saved!.vaultId,
+                    selected.saved!.id
+                  )
                 }
                 className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[12px] font-medium text-zinc-500 hover:bg-red-500/10 hover:text-red-500 disabled:opacity-40 dark:text-zinc-400 dark:hover:text-red-400"
               >

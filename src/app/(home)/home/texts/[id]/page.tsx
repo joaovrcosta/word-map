@@ -480,11 +480,15 @@ export default function TextPage() {
   };
 
   // Função para remover palavra do vault
-  const handleRemoveWordFromVault = async (word: string, vaultId: number) => {
+  const handleRemoveWordFromVault = async (
+    word: string,
+    vaultId: number,
+    wordId?: number
+  ) => {
     try {
       setIsAddingWord(true);
 
-      await removeWordFromVault(word, vaultId);
+      await removeWordFromVault(word, vaultId, wordId);
 
       toast({
         title: "Palavra removida!",
