@@ -31,6 +31,40 @@ type DictionaryWordInfo = {
   }>;
 };
 
+const CONFIDENCE_COLORS = [
+  "bg-[#ff4b4b] text-white",
+  "bg-[#ff9600] text-white",
+  "bg-[#ffc800] text-[#3c3c3c]",
+  "bg-[#58cc02] text-white",
+];
+
+const CONFIDENCE_LABELS = ["Não lembro", "Difícil", "Bom", "Fácil"];
+
+function ConfidenceMark({ level }: { level: number }) {
+  const value = Math.round(level);
+  if (!Number.isFinite(value) || value < 1) {
+    return (
+      <span
+        aria-label="Sem nível"
+        className="size-6 shrink-0 rounded-full bg-[#e5e5e5] dark:bg-[#373e47]"
+      />
+    );
+  }
+  const index = Math.min(value, 4) - 1;
+  return (
+    <span
+      title={CONFIDENCE_LABELS[index]}
+      aria-label={`${CONFIDENCE_LABELS[index]}, nível ${index + 1}`}
+      className={cn(
+        "inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+        CONFIDENCE_COLORS[index]
+      )}
+    >
+      {index + 1}
+    </span>
+  );
+}
+
 function toSelectedWord(word: Word, vaultName: string): SelectedReadingWord {
   return {
     surface: word.name,
@@ -224,31 +258,34 @@ export function VaultWordsList({
                     type="button"
                     onClick={() => selectWord(word)}
                     className={cn(
-                      "w-full rounded-md px-3 py-3 text-left",
+                      "flex w-full items-center gap-3 rounded-md px-3 py-3 text-left",
                       active
                         ? "bg-[#ddf4ff] dark:bg-[#1cb0f6]/15"
                         : "hover:bg-black/[0.03] dark:hover:bg-white/5"
                     )}
                   >
-                    <span className="block text-[15px] font-medium text-[#333] dark:text-zinc-100">
-                      {word.name}
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[15px] font-medium text-[#333] dark:text-zinc-100">
+                        {word.name}
+                      </span>
+                      {word.translations.length > 0 ? (
+                        <span className="mt-1.5 flex flex-wrap gap-1">
+                          {word.translations.map((item) => (
+                            <span
+                              key={item}
+                              className="rounded bg-[#eef6ff] px-2 py-0.5 text-[13px] text-[#2b7de9] dark:bg-sky-950 dark:text-sky-300"
+                            >
+                              {item}
+                            </span>
+                          ))}
+                        </span>
+                      ) : (
+                        <span className="mt-1 block text-[13px] text-[#afafaf]">
+                          Sem tradução
+                        </span>
+                      )}
                     </span>
-                    {word.translations.length > 0 ? (
-                      <span className="mt-1.5 flex flex-wrap gap-1">
-                        {word.translations.map((item) => (
-                          <span
-                            key={item}
-                            className="rounded bg-[#eef6ff] px-2 py-0.5 text-[13px] text-[#2b7de9] dark:bg-sky-950 dark:text-sky-300"
-                          >
-                            {item}
-                          </span>
-                        ))}
-                      </span>
-                    ) : (
-                      <span className="mt-1 block text-[13px] text-[#afafaf]">
-                        Sem tradução
-                      </span>
-                    )}
+                    <ConfidenceMark level={word.confidence} />
                   </button>
                 </li>
               );

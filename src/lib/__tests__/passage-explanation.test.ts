@@ -30,6 +30,7 @@ describe("passage explanation", () => {
     mockPrisma.wordPassageExplanation.upsert.mockResolvedValue({} as never);
     mockPrisma.wordPassageExplanation.findUnique.mockResolvedValue({
       explanation: "Aqui save significa exceto.",
+      translation: "exceto",
     } as never);
 
     await writePassageExplanation({
@@ -37,12 +38,14 @@ describe("passage explanation", () => {
       span: "Save",
       sentence,
       explanation: "Aqui save significa exceto.",
+      translation: "exceto",
       wordId: 9,
     });
 
-    await expect(readPassageExplanation(3, "save", sentence)).resolves.toBe(
-      "Aqui save significa exceto."
-    );
+    await expect(readPassageExplanation(3, "save", sentence)).resolves.toEqual({
+      explanation: "Aqui save significa exceto.",
+      translation: "exceto",
+    });
 
     const key = passageExplanationKey("save", sentence);
     expect(mockPrisma.wordPassageExplanation.upsert).toHaveBeenCalledWith(

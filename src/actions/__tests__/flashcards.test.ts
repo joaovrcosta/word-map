@@ -428,6 +428,47 @@ describe("Flashcards Actions", () => {
       });
     });
 
+    it("mantém a confiança entre 1 e 4 no completar", async () => {
+      mockPrisma.word.findUnique.mockResolvedValue({
+        id: 1,
+        confidence: 4,
+      });
+      mockPrisma.word.update.mockResolvedValue({});
+      mockPrisma.wordReview.create.mockResolvedValue({});
+
+      await recordChallengeResult(1, true, "cloze");
+
+      expect(mockPrisma.word.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: {
+          confidence: 4,
+          lastPractice: expect.any(Date),
+        },
+      });
+
+      mockPrisma.word.findUnique.mockResolvedValue({
+        id: 1,
+        confidence: 1,
+      });
+
+      await recordChallengeResult(1, false, "cloze");
+
+      expect(mockPrisma.word.update).toHaveBeenLastCalledWith({
+        where: { id: 1 },
+        data: {
+          confidence: 1,
+          lastPractice: expect.any(Date),
+        },
+      });
+      expect(mockPrisma.wordReview.create).toHaveBeenCalledWith({
+        data: {
+          wordId: 1,
+          correct: false,
+          challenge: "cloze",
+        },
+      });
+    });
+
     it("deve descer a confiança quando o desafio está errado", async () => {
       mockPrisma.word.findUnique.mockResolvedValue({
         id: 1,

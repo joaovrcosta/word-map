@@ -57,11 +57,18 @@ export function useUpdateWord() {
       data,
     }: {
       wordId: number;
-      data: Partial<Word>;
+      data: Partial<Word> & {
+        origin?: {
+          sentence?: string | null;
+          sourceTitle?: string | null;
+          sourceKind?: "book" | "text" | "manual";
+        };
+      };
     }) => {
       return await updateWord(wordId, data);
     },
     onMutate: async ({ wordId, data }) => {
+      const { origin: _origin, ...wordData } = data;
       // Cancelar queries em andamento para evitar conflitos
       await queryClient.cancelQueries({ queryKey: CACHE_KEYS.vaults });
 
@@ -82,7 +89,7 @@ export function useUpdateWord() {
               const updatedWords = [...vault.words];
               updatedWords[wordIndex] = {
                 ...updatedWords[wordIndex],
-                ...data,
+                ...wordData,
               };
               return {
                 ...vault,

@@ -25,9 +25,15 @@ import {
 import { extractRelatedSentences } from "@/lib/word-matching";
 import { getPassageExplanation } from "@/actions/passage-explanations";
 import {
+  listWordOrigins,
+  type WordOriginEntry,
+} from "@/actions/word-origins";
+import { formatOriginDate, type WordOriginKind } from "@/lib/word-origin";
+import {
   requestContextualize,
   type ContextualizePayload,
 } from "@/lib/contextualize-client";
+import { requestSuggestTranslation } from "@/lib/suggest-translation-client";
 import { normalizeGrammaticalClass } from "@/lib/dictionary";
 import type { Vault } from "@/actions/actions";
 import { cn } from "@/lib/utils";
@@ -120,6 +126,11 @@ type SavePayload = {
   grammaticalClass: string;
   confidence: number;
   notes: string | null;
+  origin?: {
+    sentence?: string | null;
+    sourceTitle?: string | null;
+    sourceKind?: WordOriginKind;
+  };
 };
 
 interface ReadingWordPanelProps {
@@ -139,6 +150,11 @@ interface ReadingWordPanelProps {
       grammaticalClass?: string;
       confidence?: number;
       notes?: string | null;
+      origin?: {
+        sentence?: string | null;
+        sourceTitle?: string | null;
+        sourceKind?: WordOriginKind;
+      };
     }
   ) => Promise<void> | void;
   onRemove: (
@@ -150,6 +166,7 @@ interface ReadingWordPanelProps {
   docked?: boolean;
   showContextualize?: boolean;
   contextPayload?: ContextualizePayload | null;
+  originSource?: { title: string; kind: WordOriginKind } | null;
 }
 
 const READING_PANEL_WIDTH_KEY = "wordmap-reading-panel-width";
@@ -283,6 +300,7 @@ export function ReadingWordPanel({
   extras,
   showContextualize = false,
   contextPayload = null,
+  originSource = null,
 }: ReadingWordPanelProps) {
   const [onClient, setOnClient] = useState(false);
   const [open, setOpen] = useState(false);
@@ -296,12 +314,43 @@ export function ReadingWordPanel({
   const [notes, setNotes] = useState("");
   const [vaultId, setVaultId] = useState<string>("");
   const [explanation, setExplanation] = useState<string | null>(null);
+  const [suggestedTranslation, setSuggestedTranslation] = useState<string | null>(
+    null
+  );
   const [explanationError, setExplanationError] = useState<string | null>(null);
   const [isExplaining, setIsExplaining] = useState(false);
+  const [isSuggesting, setIsSuggesting] = useState(false);
+  const [suggestionLocked, setSuggestionLocked] = useState(false);
+  const suggestingRef = useRef(false);
+  const suggestWordKeyRef = useRef<string | number | null>(null);
+  const originsFetchRef = useRef(0);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
+  const [origins, setOrigins] = useState<WordOriginEntry[]>([]);
   const [isResizing, setIsResizing] = useState(false);
   const panelWidthRef = useRef(READING_PANEL_DEFAULT_WIDTH);
 
   const selectedKey = selected?.saved?.id ?? selected?.clean ?? null;
+  suggestWordKeyRef.current = selectedKey;
+
+  const savedOriginKey = selected?.saved
+    ? `${selected.saved.id}:${selected.saved.translations.join("\n")}`
+    : "";
+
+  useEffect(() => {
+    const wordId = selected?.saved?.id;
+    const fetchId = ++originsFetchRef.current;
+    if (!wordId) {
+      setOrigins([]);
+      return;
+    }
+    void listWordOrigins(wordId)
+      .then((rows) => {
+        if (originsFetchRef.current === fetchId) setOrigins(rows);
+      })
+      .catch(() => {
+        if (originsFetchRef.current === fetchId) setOrigins([]);
+      });
+  }, [savedOriginKey, selected?.saved?.id]);
 
   useEffect(() => {
     if (!selectedKey) return;
@@ -339,15 +388,19 @@ export function ReadingWordPanel({
   useEffect(() => {
     if (!showContextualize || !passageSpan || !passageSentence) {
       setExplanation(null);
+      setSuggestedTranslation(null);
       setExplanationError(null);
       return;
     }
 
     let cancelled = false;
     setExplanation(null);
+    setSuggestedTranslation(null);
     setExplanationError(null);
     void getPassageExplanation(passageSpan, passageSentence).then((saved) => {
-      if (!cancelled && saved) setExplanation(saved);
+      if (cancelled || !saved) return;
+      setExplanation(saved.explanation);
+      setSuggestedTranslation(saved.translation);
     });
 
     return () => {
@@ -360,8 +413,9 @@ export function ReadingWordPanel({
     setIsExplaining(true);
     setExplanationError(null);
     void requestContextualize(contextPayload)
-      .then((text) => {
-        setExplanation(text);
+      .then((result) => {
+        setExplanation(result.explanation);
+        setSuggestedTranslation(result.translation);
       })
       .catch((error: unknown) => {
         setExplanationError(
@@ -376,8 +430,15 @@ export function ReadingWordPanel({
   };
 
   useEffect(() => {
+    suggestingRef.current = false;
+    setSuggestionLocked(false);
+    setSuggestError(null);
+  }, [selected?.clean, selected?.saved?.id]);
+
+  useEffect(() => {
     setSelectedMeanings(selected?.saved?.translations ?? []);
     setCustomMeaning("");
+    setSuggestError(null);
     setNotes(selected?.saved?.notes ?? "");
     setVaultId(
       selected?.saved
@@ -440,13 +501,34 @@ export function ReadingWordPanel({
 
   const confidence = selected?.saved?.confidence ?? 0;
 
+  const currentOrigin = () => {
+    const sentence = contextPayload?.sentence ?? null;
+    return {
+      sentence,
+      sourceTitle: originSource?.title ?? null,
+      sourceKind: (originSource?.kind ??
+        (sentence ? "text" : "manual")) as WordOriginKind,
+    };
+  };
+
   const persistMeanings = async (translations: string[], confidence?: number) => {
     if (!selected) return;
+    const origin = currentOrigin();
     if (selected.saved) {
-      await onUpdate(selected.saved.id, {
+      const wordId = selected.saved.id;
+      await onUpdate(wordId, {
         translations,
         confidence,
+        origin,
       });
+      const fetchId = ++originsFetchRef.current;
+      const rows = await listWordOrigins(wordId);
+      if (
+        originsFetchRef.current === fetchId &&
+        suggestWordKeyRef.current === wordId
+      ) {
+        setOrigins(rows);
+      }
       return;
     }
     if (!vaultId) return;
@@ -457,7 +539,41 @@ export function ReadingWordPanel({
       grammaticalClass: suggestedClass,
       confidence: confidence ?? 1,
       notes: notes.trim() || null,
+      origin,
     });
+  };
+
+  const handleSuggestTranslation = async () => {
+    const wordKey = selectedKey;
+    if (!selected || wordKey == null || suggestingRef.current || suggestionLocked) {
+      return;
+    }
+    suggestingRef.current = true;
+    setIsSuggesting(true);
+    setSuggestError(null);
+    let locked = false;
+    try {
+      const translation = await requestSuggestTranslation({
+        word: selected.clean,
+        sentence: contextPayload?.sentence,
+        wordId: selected.saved?.id,
+      });
+      if (suggestWordKeyRef.current !== wordKey) return;
+      setCustomMeaning(translation);
+      setSuggestionLocked(true);
+      locked = true;
+    } catch (error) {
+      setSuggestError(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível sugerir uma tradução."
+      );
+    } finally {
+      setIsSuggesting(false);
+      if (!locked && suggestWordKeyRef.current === wordKey) {
+        suggestingRef.current = false;
+      }
+    }
   };
 
   const handleAddMeaning = async (value: string) => {
@@ -622,18 +738,34 @@ export function ReadingWordPanel({
       </div>
 
       <div className="px-3 pb-1 lg:hidden">
-        <Textarea
-          value={customMeaning}
-          onChange={(e) => setCustomMeaning(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              void handleAddMeaning(customMeaning);
-            }
-          }}
-          placeholder="Digite um novo significado aqui"
-          className="min-h-16 resize-none rounded-md border-[#e5e5e5] text-[13px] shadow-none dark:border-gray-700 dark:bg-gray-900"
-        />
+        <div className="relative">
+          <Textarea
+            value={customMeaning}
+            onChange={(e) => setCustomMeaning(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                void handleAddMeaning(customMeaning);
+              }
+            }}
+            placeholder="Digite um novo significado aqui"
+            className="min-h-16 resize-none rounded-md border-[#e5e5e5] pr-9 text-[13px] shadow-none dark:border-gray-700 dark:bg-gray-900"
+          />
+          <button
+            type="button"
+            aria-label="Sugerir tradução"
+            disabled={!selected || isSuggesting || suggestionLocked}
+            onClick={() => void handleSuggestTranslation()}
+            className="absolute right-1.5 bottom-1.5 inline-flex h-7 w-7 items-center justify-center rounded text-violet-600 hover:bg-violet-50 disabled:opacity-40 dark:text-violet-300 dark:hover:bg-violet-400/10"
+          >
+            <Sparkles
+              className={cn("h-3.5 w-3.5", isSuggesting && "animate-pulse")}
+            />
+          </button>
+        </div>
+        {suggestError ? (
+          <p className="mt-1 text-[12px] text-red-500 lg:hidden">{suggestError}</p>
+        ) : null}
       </div>
 
       <div
@@ -689,18 +821,31 @@ export function ReadingWordPanel({
           </div>
         )}
         <div className="mt-1.5 hidden items-center gap-1 lg:flex">
-          <Input
-            value={customMeaning}
-            onChange={(e) => setCustomMeaning(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") {
-                e.preventDefault();
-                void handleAddMeaning(customMeaning);
-              }
-            }}
-            placeholder="Digite um novo significado aqui"
-            className="h-9 rounded-md border-[#e5e5e5] text-[13px] shadow-none dark:border-gray-700 dark:bg-gray-900"
-          />
+          <div className="relative min-w-0 flex-1">
+            <Input
+              value={customMeaning}
+              onChange={(e) => setCustomMeaning(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleAddMeaning(customMeaning);
+                }
+              }}
+              placeholder="Digite um novo significado aqui"
+              className="h-9 rounded-md border-[#e5e5e5] pr-9 text-[13px] shadow-none dark:border-gray-700 dark:bg-gray-900"
+            />
+            <button
+              type="button"
+              aria-label="Sugerir tradução"
+              disabled={!selected || isSuggesting || suggestionLocked}
+              onClick={() => void handleSuggestTranslation()}
+              className="absolute top-1/2 right-1 inline-flex h-7 w-7 -translate-y-1/2 items-center justify-center rounded text-violet-600 hover:bg-violet-50 disabled:opacity-40 dark:text-violet-300 dark:hover:bg-violet-400/10"
+            >
+              <Sparkles
+                className={cn("h-3.5 w-3.5", isSuggesting && "animate-pulse")}
+              />
+            </button>
+          </div>
           <button
             type="button"
             disabled={!customMeaning.trim() || isSaving || !vaultId}
@@ -711,6 +856,11 @@ export function ReadingWordPanel({
             <Plus className="h-4 w-4" />
           </button>
         </div>
+        {suggestError ? (
+          <p className="mt-1 hidden text-[12px] text-red-500 lg:block">
+            {suggestError}
+          </p>
+        ) : null}
         {!selected.saved && userVaults.length > 1 && (
           <Select value={vaultId} onValueChange={setVaultId}>
             <SelectTrigger className="mt-1.5 h-8 w-full rounded-md border-[#e5e5e5] text-[12px] shadow-none dark:border-gray-700 dark:bg-gray-900">
@@ -724,6 +874,34 @@ export function ReadingWordPanel({
               ))}
             </SelectContent>
           </Select>
+        )}
+
+        {origins.length > 0 && (
+          <div className="mt-4">
+            <p className="text-[11px] font-medium text-[#8a8a8a] dark:text-zinc-400">
+              Origem
+            </p>
+            <ol className="mt-2 space-y-3">
+              {origins.map((item) => (
+                <li
+                  key={item.id}
+                  className="border-l-2 border-[#1cb0f6] pl-3"
+                >
+                  <p className="text-[11px] text-[#8a8a8a] dark:text-zinc-400">
+                    {formatOriginDate(item.createdAt)}
+                    {" · "}
+                    {item.sourceTitle || "No vault"}
+                  </p>
+                  <p className="mt-0.5 text-[12px] leading-snug text-[#555] dark:text-zinc-300">
+                    {item.sentence || "Adicionada no vault"}
+                  </p>
+                  <p className="mt-0.5 text-[13px] font-medium text-[#2b7de9] dark:text-sky-300">
+                    Significado: {item.meaning}
+                  </p>
+                </li>
+              ))}
+            </ol>
+          </div>
         )}
 
         <p className="mt-4 text-[11px] font-medium text-[#8a8a8a] dark:text-zinc-400">
@@ -793,6 +971,37 @@ export function ReadingWordPanel({
               <p className="mt-2 text-[13px] leading-snug text-[#444] dark:text-zinc-300">
                 {explanation}
               </p>
+              {suggestedTranslation ? (
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[11px] font-medium text-violet-700/80 dark:text-violet-300/80">
+                      Tradução
+                    </p>
+                    <p className="text-[13px] font-medium leading-snug text-[#3c3c3c] dark:text-white">
+                      {suggestedTranslation}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={
+                      isSaving ||
+                      !selected ||
+                      hasMeaning(selectedMeanings, suggestedTranslation)
+                    }
+                    onClick={() => void handleAddMeaning(suggestedTranslation)}
+                    className="inline-flex shrink-0 items-center gap-1 rounded-md bg-white px-2 py-1 text-[12px] font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-60 dark:bg-zinc-900 dark:text-violet-300"
+                  >
+                    {hasMeaning(selectedMeanings, suggestedTranslation) ? (
+                      <Check className="h-3.5 w-3.5" />
+                    ) : (
+                      <Plus className="h-3.5 w-3.5" />
+                    )}
+                    {hasMeaning(selectedMeanings, suggestedTranslation)
+                      ? "Salva"
+                      : "Salvar"}
+                  </button>
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="mt-4">

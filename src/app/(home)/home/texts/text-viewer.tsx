@@ -70,6 +70,8 @@ interface TextViewerProps {
     pageIndex: number;
     paragraphIndex: number;
   }) => void;
+  sourceTitle?: string;
+  sourceKind?: "book" | "text";
 }
 
 interface FoundWord {
@@ -87,6 +89,8 @@ export function TextViewer({
   initialPageIndex = 0,
   initialParagraphIndex = 0,
   onReadingPosition,
+  sourceTitle,
+  sourceKind = "text",
 }: TextViewerProps) {
   const [foundWords, setFoundWords] = useState<FoundWord[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -373,7 +377,12 @@ export function TextViewer({
       translations: string[],
       grammaticalClass: string,
       confidence: number,
-      notes?: string | null
+      notes?: string | null,
+      origin?: {
+        sentence?: string | null;
+        sourceTitle?: string | null;
+        sourceKind?: "book" | "text" | "manual";
+      }
     ) => {
       try {
         setIsAddingWord(true);
@@ -385,6 +394,7 @@ export function TextViewer({
           notes: notes ?? null,
           confidence,
           vaultId,
+          origin,
         };
 
         await createWord(wordData);
@@ -417,6 +427,11 @@ export function TextViewer({
       grammaticalClass: string;
       confidence: number;
       notes: string | null;
+      origin?: {
+        sentence?: string | null;
+        sourceTitle?: string | null;
+        sourceKind?: "book" | "text" | "manual";
+      };
     }) => {
       await handleAddWordToVault(
         payload.vaultId,
@@ -424,7 +439,8 @@ export function TextViewer({
         payload.translations,
         payload.grammaticalClass,
         payload.confidence,
-        payload.notes
+        payload.notes,
+        payload.origin
       );
     },
     [handleAddWordToVault]
@@ -786,6 +802,10 @@ export function TextViewer({
         autoTranslateWordPreview={autoTranslateWordPreview}
         showContextualize={paged && !isEditing}
         contextPayload={contextPayload}
+        originSource={{
+          title: sourceTitle || text.title,
+          kind: sourceKind,
+        }}
         onClose={() => setSelectedWord(null)}
         onSave={handlePanelSave}
         onUpdate={handlePanelUpdate}

@@ -1,4 +1,5 @@
 import type { FlashcardWord } from "@/actions/flashcards";
+import { isSingleWordName } from "@/lib/cloze-text";
 
 export type RecallStep = {
   type: "recall";
@@ -21,7 +22,52 @@ export type MatchStep = {
   pairs: MatchPair[];
 };
 
-export type FlashcardStep = RecallStep | ListenStep | MatchStep;
+export type ClozeStep = {
+  type: "cloze";
+  word: FlashcardWord;
+  sentence: string;
+  answer: string;
+};
+
+export type ClozeSource = {
+  wordId: number;
+  sentence: string;
+  answer: string;
+};
+
+export type FlashcardStep = RecallStep | ListenStep | MatchStep | ClozeStep;
+
+export function stepWordIds(step: FlashcardStep): number[] {
+  if (step.type === "match") return step.pairs.map((pair) => pair.word.id);
+  return [step.word.id];
+}
+
+function sharesWord(left: FlashcardStep, right: FlashcardStep): boolean {
+  const ids = new Set(stepWordIds(left));
+  return stepWordIds(right).some((id) => ids.has(id));
+}
+
+export function insertSpacedClozes(
+  steps: FlashcardStep[],
+  clozes: ClozeStep[]
+): FlashcardStep[] {
+  const placed = [...steps];
+  for (const cloze of clozes) {
+    let slot = placed.length;
+    for (let index = 0; index <= placed.length; index += 1) {
+      const before = placed[index - 1];
+      const after = placed[index];
+      const touchesBefore = before ? sharesWord(before, cloze) : false;
+      const touchesAfter = after ? sharesWord(after, cloze) : false;
+      if (!touchesBefore && !touchesAfter) {
+        slot = index;
+        break;
+      }
+    }
+    placed.splice(slot, 0, cloze);
+  }
+  return placed;
+}
 
 function primaryTranslation(word: FlashcardWord) {
   const value = word.translations.find((item) => item.trim());
@@ -75,7 +121,8 @@ function listenOptions(
 
 export function buildFlashcardQueue(
   words: FlashcardWord[],
-  random: () => number = Math.random
+  random: () => number = Math.random,
+  clozes: ClozeSource[] = []
 ): FlashcardStep[] {
   const canListen = uniqueTranslations(words).length >= 2;
   const recall: FlashcardWord[] = [];
@@ -132,5 +179,20 @@ export function buildFlashcardQueue(
     steps.push({ type: "listen", word, options });
   }
 
-  return shuffle(steps, random);
+  const clozeSteps: ClozeStep[] = [];
+  const clozeById = new Map(clozes.map((cloze) => [cloze.wordId, cloze]));
+  for (const word of words) {
+    const cloze = clozeById.get(word.id);
+    if (!cloze || !isSingleWordName(word.name)) continue;
+    clozeSteps.push({
+      type: "cloze",
+      word,
+      sentence: cloze.sentence,
+      answer: cloze.answer,
+    });
+  }
+
+  const ordered = shuffle(steps, random);
+  if (clozeSteps.length === 0) return ordered;
+  return insertSpacedClozes(ordered, clozeSteps);
 }

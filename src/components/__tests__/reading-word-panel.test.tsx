@@ -6,6 +6,7 @@ import {
 } from "../reading-word-panel";
 import { resetContextualizeClient } from "@/lib/contextualize-client";
 import { getPassageExplanation } from "@/actions/passage-explanations";
+import { listWordOrigins } from "@/actions/word-origins";
 
 jest.mock("@/lib/translate", () => ({
   translateDefinitions: jest.fn(async (values: string[]) => values),
@@ -13,6 +14,10 @@ jest.mock("@/lib/translate", () => ({
 
 jest.mock("@/actions/passage-explanations", () => ({
   getPassageExplanation: jest.fn(async () => null),
+}));
+
+jest.mock("@/actions/word-origins", () => ({
+  listWordOrigins: jest.fn(async () => []),
 }));
 
 const payload = {
@@ -69,14 +74,93 @@ describe("ReadingWordPanel contextualize", () => {
   });
 
   it("mostra a explicação salva só para a frase deste trecho", async () => {
-    (getPassageExplanation as jest.Mock).mockResolvedValue(
-      "Aqui save significa exceto."
-    );
+    (getPassageExplanation as jest.Mock).mockResolvedValue({
+      explanation: "Aqui save significa exceto.",
+      translation: "exceto",
+    });
     renderPanel(true);
     expect(
       await screen.findByText("Aqui save significa exceto.")
     ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Salvar" })).toBeInTheDocument();
     expect(global.fetch).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Salvar" }));
+    expect(await screen.findByRole("button", { name: "Salva" })).toBeDisabled();
+    expect(screen.getByLabelText("Remover exceto")).toBeInTheDocument();
+  });
+
+  it("preenche o campo com a tradução sugerida", async () => {
+    global.fetch = jest.fn(async () => ({
+      ok: true,
+      json: async () => ({ translation: "recado" }),
+    })) as unknown as typeof fetch;
+
+    renderPanel(false);
+    fireEvent.click(
+      screen.getAllByRole("button", { name: "Sugerir tradução" })[0]
+    );
+
+    expect(await screen.findAllByDisplayValue("recado")).toHaveLength(2);
+    const buttons = screen.getAllByRole("button", { name: "Sugerir tradução" });
+    expect(buttons.every((button) => button.hasAttribute("disabled"))).toBe(true);
+
+    fireEvent.click(buttons[0]);
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
+  it("mostra de onde a palavra veio e o significado daquele momento", async () => {
+    (listWordOrigins as jest.Mock).mockResolvedValueOnce([
+      {
+        id: 1,
+        meaning: "perguntou",
+        sentence: "He asked a question.",
+        sourceTitle: "O Pequeno Príncipe · Capítulo 1",
+        sourceKind: "book",
+        createdAt: "2026-10-12T15:00:00.000Z",
+      },
+      {
+        id: 2,
+        meaning: "pediu",
+        sentence: "She asked for water.",
+        sourceTitle: "Texto livre",
+        sourceKind: "text",
+        createdAt: "2026-10-12T18:00:00.000Z",
+      },
+    ]);
+
+    render(
+      <ReadingWordPanel
+        selected={{
+          surface: "asked",
+          clean: "asked",
+          saved: {
+            id: 9,
+            name: "asked",
+            vaultId: 4,
+            vaultName: "Vocabulario",
+            translations: ["perguntou", "pediu"],
+            grammaticalClass: "verb",
+            confidence: 2,
+            notes: null,
+          },
+        }}
+        sourceText=""
+        userVaults={[]}
+        onClose={() => undefined}
+        onSave={() => undefined}
+        onUpdate={() => undefined}
+        onRemove={() => undefined}
+      />
+    );
+
+    expect(await screen.findByText("He asked a question.")).toBeInTheDocument();
+    expect(screen.getByText("She asked for water.")).toBeInTheDocument();
+    expect(screen.getByText("Significado: perguntou")).toBeInTheDocument();
+    expect(screen.getByText("Significado: pediu")).toBeInTheDocument();
+    expect(
+      screen.getByText(/O Pequeno Príncipe · Capítulo 1/)
+    ).toBeInTheDocument();
   });
 
   it("não mostra o botão fora da leitura paginada", () => {
@@ -103,7 +187,10 @@ describe("ReadingWordPanel contextualize", () => {
 
     resolveFetch({
       ok: true,
-      json: async () => ({ explanation: "Aqui save significa exceto." }),
+      json: async () => ({
+        explanation: "Aqui save significa exceto.",
+        translation: "exceto",
+      }),
     } as Response);
 
     expect(await screen.findByText("Aqui save significa exceto.")).toBeInTheDocument();

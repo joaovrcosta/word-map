@@ -161,6 +161,10 @@ export default function ChapterPage() {
             initialPageIndex={position.pageIndex}
             initialParagraphIndex={position.paragraphIndex}
             onReadingPosition={handleReadingPosition}
+            sourceTitle={
+              bookTitle ? `${bookTitle} · ${text.title}` : text.title
+            }
+            sourceKind="book"
           />
         )}
       </div>

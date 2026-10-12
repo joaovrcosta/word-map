@@ -6,8 +6,13 @@ export type ContextualizePayload = {
   wordId?: number;
 };
 
-const sessionCache = new Map<string, string>();
-const inflight = new Map<string, Promise<string>>();
+export type ContextualizeResult = {
+  explanation: string;
+  translation: string | null;
+};
+
+const sessionCache = new Map<string, ContextualizeResult>();
+const inflight = new Map<string, Promise<ContextualizeResult>>();
 
 export function contextualizeSessionKey(span: string, sentence: string): string {
   return `${span.trim().toLowerCase()}\n${sentence.trim().toLowerCase()}`;
@@ -20,7 +25,7 @@ export function resetContextualizeClient(): void {
 
 export function requestContextualize(
   payload: ContextualizePayload
-): Promise<string> {
+): Promise<ContextualizeResult> {
   const key = contextualizeSessionKey(payload.span, payload.sentence);
   const cached = sessionCache.get(key);
   if (cached) return Promise.resolve(cached);
@@ -36,13 +41,18 @@ export function requestContextualize(
     .then(async (response) => {
       const data = (await response.json()) as {
         explanation?: string;
+        translation?: string | null;
         error?: string;
       };
       if (!response.ok || !data.explanation) {
         throw new Error(data.error || "Não foi possível explicar este trecho.");
       }
-      sessionCache.set(key, data.explanation);
-      return data.explanation;
+      const result = {
+        explanation: data.explanation,
+        translation: data.translation?.trim() || null,
+      };
+      sessionCache.set(key, result);
+      return result;
     })
     .finally(() => {
       inflight.delete(key);

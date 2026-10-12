@@ -669,6 +669,11 @@ export default function TextPage() {
       grammaticalClass: string;
       confidence: number;
       notes: string | null;
+      origin?: {
+        sentence?: string | null;
+        sourceTitle?: string | null;
+        sourceKind?: "book" | "text" | "manual";
+      };
     }) => {
       try {
         setIsAddingWord(true);
@@ -679,6 +684,7 @@ export default function TextPage() {
           notes: payload.notes,
           confidence: payload.confidence,
           vaultId: payload.vaultId,
+          origin: payload.origin,
         });
         toast({
           title: "Sucesso",
@@ -1102,6 +1108,7 @@ export default function TextPage() {
         isSaving={isAddingWord}
         autoTranslateWordPreview={autoTranslateWordPreview}
         onClose={() => setSelectedWord(null)}
+        originSource={text ? { title: text.title, kind: "text" } : null}
         onSave={handlePanelSave}
         onUpdate={handlePanelUpdate}
         onRemove={handleRemoveWordFromVault}

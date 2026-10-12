@@ -13,11 +13,22 @@ import {
 } from "@/actions/flashcards";
 import {
   buildFlashcardQueue,
+  type ClozeStep,
   type FlashcardStep,
 } from "@/lib/flashcard-queue";
+import {
+  shouldRecordClozeResult,
+  shouldRequeueCloze,
+} from "@/lib/cloze-text";
+import type { ReviewItem } from "@/lib/flashcard-review";
+import {
+  requestSessionReview,
+  requestWordClozes,
+} from "@/lib/flashcard-session-client";
 import { Flashcard } from "./Flashcard";
 import { ListenChallenge } from "./ListenChallenge";
 import { MatchChallenge } from "./MatchChallenge";
+import { ClozeChallenge } from "./ClozeChallenge";
 import { SessionSummary } from "./SessionSummary";
 import { FlashcardDeckSkeleton } from "./FlashcardDeckSkeleton";
 
@@ -39,9 +50,16 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
     correct: 0,
     total: 0,
   });
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [analysisState, setAnalysisState] = useState<
+    "none" | "loading" | "ready" | "unavailable"
+  >("none");
   const stepsRef = useRef<FlashcardStep[]>([]);
   const indexRef = useRef(0);
   const studiedRef = useRef(0);
+  const clozeAttemptsRef = useRef<Map<number, number>>(new Map());
+  const outcomesRef = useRef<ReviewItem[]>([]);
+  const reviewTokenRef = useRef(0);
 
   useEffect(() => {
     loadWords();
@@ -70,8 +88,14 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
   const startSession = async () => {
     try {
       const newSession = await createFlashcardSession(vaultId);
-      const queue = buildFlashcardQueue(words);
+      const clozes = await requestWordClozes(words.map((word) => word.id));
+      const queue = buildFlashcardQueue(words, Math.random, clozes);
       studiedRef.current = 0;
+      clozeAttemptsRef.current = new Map();
+      outcomesRef.current = [];
+      reviewTokenRef.current += 1;
+      setAnalysis(null);
+      setAnalysisState("none");
       setChallengeStats({ correct: 0, total: 0 });
       setSession(newSession);
       syncQueue(queue, 0);
@@ -96,6 +120,25 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
     setIsSessionActive(false);
     setShowSummary(true);
     setShowAnswer(false);
+    const items = outcomesRef.current.slice();
+    const token = reviewTokenRef.current;
+    if (items.length === 0) {
+      setAnalysis(null);
+      setAnalysisState("none");
+      return;
+    }
+    setAnalysis(null);
+    setAnalysisState("loading");
+    void requestSessionReview(items).then((text) => {
+      if (reviewTokenRef.current !== token) return;
+      if (text) {
+        setAnalysis(text);
+        setAnalysisState("ready");
+        return;
+      }
+      setAnalysis(null);
+      setAnalysisState("unavailable");
+    });
   };
 
   const endSession = () => {
@@ -107,7 +150,24 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
     startSession();
   };
 
-  const finishStep = (wordCount: number, requeue: FlashcardWord[]) => {
+  const rememberOutcome = (
+    word: FlashcardWord,
+    kind: ReviewItem["kind"],
+    result: string
+  ) => {
+    outcomesRef.current.push({
+      name: word.name,
+      translation: word.translations.find((item) => item.trim())?.trim() ?? "",
+      kind,
+      result,
+    });
+  };
+
+  const finishStep = (
+    wordCount: number,
+    requeue: FlashcardWord[],
+    clozeRetry?: ClozeStep
+  ) => {
     studiedRef.current += wordCount;
     let nextSteps = stepsRef.current;
     const nextIndex = indexRef.current + 1;
@@ -119,6 +179,10 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
       if (!alreadyQueued) {
         nextSteps = [...nextSteps, { type: "recall", word }];
       }
+    }
+
+    if (clozeRetry) {
+      nextSteps = [...nextSteps, clozeRetry];
     }
 
     syncQueue(nextSteps, nextIndex);
@@ -138,6 +202,7 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
       total: stats.total + 1,
       correct: stats.correct + (correct ? 1 : 0),
     }));
+    rememberOutcome(word, kind, correct ? "ok" : "miss");
     void recordChallengeResult(word.id, correct, kind).catch((error) => {
       console.error("Erro ao registrar desafio:", error);
     });
@@ -153,6 +218,7 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
       console.error("Erro ao atualizar progresso:", error);
     }
 
+    rememberOutcome(step.word, "recall", String(confidence));
     finishStep(1, []);
   };
 
@@ -179,6 +245,8 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
         session={session}
         challengeCorrect={challengeStats.correct}
         challengeTotal={challengeStats.total}
+        analysis={analysis}
+        analysisState={analysisState}
         onRestartSession={restartSession}
       />
     );
@@ -251,6 +319,28 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
           onAnswer={(correct) => {
             noteChallenge(step.word, correct, "listen");
             finishStep(1, correct ? [] : [step.word]);
+          }}
+        />
+      ) : null}
+
+      {step?.type === "cloze" ? (
+        <ClozeChallenge
+          key={`${step.word.id}-${clozeAttemptsRef.current.get(step.word.id) ?? 0}`}
+          word={step.word}
+          sentence={step.sentence}
+          answer={step.answer}
+          onAnswer={(correct) => {
+            const attempts =
+              (clozeAttemptsRef.current.get(step.word.id) ?? 0) + 1;
+            clozeAttemptsRef.current.set(step.word.id, attempts);
+            if (shouldRecordClozeResult(attempts)) {
+              noteChallenge(step.word, correct, "cloze");
+            }
+            finishStep(
+              shouldRecordClozeResult(attempts) ? 1 : 0,
+              [],
+              shouldRequeueCloze(attempts, correct) ? step : undefined
+            );
           }}
         />
       ) : null}

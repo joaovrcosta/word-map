@@ -65,6 +65,57 @@ describe("buildFlashcardQueue", () => {
     }
   });
 
+  it("não dá completar para nome com mais de uma palavra", () => {
+    const words = [
+      word(1, "pick up", "pegar", 2),
+      word(2, "run", "correr", 2),
+    ];
+
+    const steps = buildFlashcardQueue(words, () => 0, [
+      { wordId: 1, sentence: "Please pick up the book.", answer: "pick up" },
+      { wordId: 2, sentence: "I run every day.", answer: "run" },
+    ]);
+
+    expect(steps.filter((step) => step.type === "cloze")).toHaveLength(1);
+    expect(
+      steps.some((step) => step.type === "cloze" && step.word.id === 1)
+    ).toBe(false);
+  });
+
+  it("inclui completar só quando a frase existe e separa a mesma palavra", () => {
+    const words = [
+      word(1, "run", "correr", 1),
+      word(2, "walk", "andar", 3),
+    ];
+
+    const withCloze = buildFlashcardQueue(words, () => 0, [
+      { wordId: 1, sentence: "I run every day.", answer: "run" },
+    ]);
+    const without = buildFlashcardQueue(
+      [word(2, "walk", "andar", 3)],
+      () => 0,
+      []
+    );
+
+    expect(withCloze.some((step) => step.type === "cloze")).toBe(true);
+    expect(without.some((step) => step.type === "cloze")).toBe(false);
+
+    for (let index = 1; index < withCloze.length; index += 1) {
+      const previous = withCloze[index - 1];
+      const current = withCloze[index];
+      const previousIds =
+        previous.type === "match"
+          ? previous.pairs.map((pair) => pair.word.id)
+          : [previous.word.id];
+      const currentIds =
+        current.type === "match"
+          ? current.pairs.map((pair) => pair.word.id)
+          : [current.word.id];
+      const shares = currentIds.some((id) => previousIds.includes(id));
+      expect(shares).toBe(false);
+    }
+  });
+
   it("cai no card quando o vault não tem traduções diferentes", () => {
     const words = [
       word(1, "hi", "olá", 3),

@@ -1,11 +1,16 @@
 import { prisma } from "@/lib/prisma";
 import { passageExplanationKey } from "@/lib/tutor";
 
+export type SavedPassage = {
+  explanation: string;
+  translation: string | null;
+};
+
 export async function readPassageExplanation(
   userId: number,
   span: string,
   sentence: string
-): Promise<string | null> {
+): Promise<SavedPassage | null> {
   const row = await prisma.wordPassageExplanation.findUnique({
     where: {
       userId_passageKey: {
@@ -14,7 +19,11 @@ export async function readPassageExplanation(
       },
     },
   });
-  return row?.explanation ?? null;
+  if (!row?.explanation) return null;
+  return {
+    explanation: row.explanation,
+    translation: row.translation,
+  };
 }
 
 export async function writePassageExplanation(input: {
@@ -22,6 +31,7 @@ export async function writePassageExplanation(input: {
   span: string;
   sentence: string;
   explanation: string;
+  translation?: string | null;
   wordId?: number | null;
 }): Promise<void> {
   const passageKey = passageExplanationKey(input.span, input.sentence);
@@ -43,9 +53,11 @@ export async function writePassageExplanation(input: {
       span: input.span.trim(),
       sentence: input.sentence.trim(),
       explanation: input.explanation,
+      translation: input.translation ?? null,
     },
     update: {
       explanation: input.explanation,
+      translation: input.translation ?? null,
       span: input.span.trim(),
       sentence: input.sentence.trim(),
       ...(wordId ? { wordId } : {}),

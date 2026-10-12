@@ -9,7 +9,7 @@ import {
   buildTutorPrompt,
   createOpenAITutor,
   explanationCacheKey,
-  parseTutorExplanation,
+  parseTutorContext,
 } from "@/lib/tutor";
 
 const FIELD_LIMITS = {
@@ -73,9 +73,17 @@ export async function POST(request: NextRequest) {
     where: { cacheKey },
   });
   if (cached) {
-    await rememberPassage(user.id, span, sentence, cached.explanation, wordId);
+    await rememberPassage(
+      user.id,
+      span,
+      sentence,
+      cached.explanation,
+      cached.translation,
+      wordId
+    );
     return NextResponse.json({
       explanation: cached.explanation,
+      translation: cached.translation,
       cached: true,
     });
   }
@@ -96,7 +104,7 @@ export async function POST(request: NextRequest) {
       previousParagraph,
     });
     const result = await explainWithRetry(prompt);
-    const parsed = parseTutorExplanation(result.text, result.blocked);
+    const parsed = parseTutorContext(result.text, result.blocked);
     if (!parsed.ok || result.truncated) {
       return NextResponse.json(
         { error: "Não foi possível explicar este trecho." },
@@ -110,19 +118,29 @@ export async function POST(request: NextRequest) {
         cacheKey,
         promptVersion: PROMPT_VERSION,
         model: TUTOR_MODEL,
-        explanation: parsed.text,
+        explanation: parsed.explanation,
+        translation: parsed.translation,
       },
       update: {
         promptVersion: PROMPT_VERSION,
         model: TUTOR_MODEL,
-        explanation: parsed.text,
+        explanation: parsed.explanation,
+        translation: parsed.translation,
       },
     });
 
-    await rememberPassage(user.id, span, sentence, saved.explanation, wordId);
+    await rememberPassage(
+      user.id,
+      span,
+      sentence,
+      saved.explanation,
+      saved.translation,
+      wordId
+    );
 
     return NextResponse.json({
       explanation: saved.explanation,
+      translation: saved.translation,
       cached: false,
     });
   } catch (error) {
@@ -139,6 +157,7 @@ async function rememberPassage(
   span: string,
   sentence: string,
   explanation: string,
+  translation: string | null,
   wordId: number | null
 ) {
   try {
@@ -147,6 +166,7 @@ async function rememberPassage(
       span,
       sentence,
       explanation,
+      translation,
       wordId,
     });
   } catch (error) {
@@ -158,7 +178,7 @@ async function explainWithRetry(prompt: string) {
   let lastError: unknown;
   for (let attempt = 0; attempt < 3; attempt += 1) {
     try {
-      return await createOpenAITutor().explain(prompt);
+      return await createOpenAITutor().completeJson(prompt, 700);
     } catch (error) {
       lastError = error;
       const unavailable =

@@ -59,7 +59,12 @@ const mockConsume = consumeTutorQuota as jest.MockedFunction<
 const mockCreateTutor = createOpenAITutor as jest.MockedFunction<
   typeof createOpenAITutor
 >;
-const explain = jest.fn();
+const completeJson = jest.fn();
+
+const contextBody = JSON.stringify({
+  explanation: "Aqui save significa exceto.",
+  translation: "exceto",
+});
 
 const user = {
   id: 4,
@@ -89,18 +94,21 @@ describe("POST /api/contextualize", () => {
     mockGetCurrentUser.mockResolvedValue(user);
     mockPrisma.readingExplanation.findUnique.mockResolvedValue(null);
     mockPrisma.readingExplanation.upsert.mockImplementation(
-      async (args: { create: { explanation: string; cacheKey: string } }) =>
+      async (args: {
+        create: { explanation: string; translation: string; cacheKey: string };
+      }) =>
         ({
           explanation: args.create.explanation,
+          translation: args.create.translation,
           cacheKey: args.create.cacheKey,
         }) as never
     );
     mockConsume.mockResolvedValue(true);
-    explain.mockResolvedValue({
-      text: "Aqui save significa exceto.",
+    completeJson.mockResolvedValue({
+      text: contextBody,
       blocked: false,
     });
-    mockCreateTutor.mockReturnValue({ explain });
+    mockCreateTutor.mockReturnValue({ completeJson } as never);
   });
 
   it("responde 401 sem usuário", async () => {
@@ -113,7 +121,7 @@ describe("POST /api/contextualize", () => {
   it("responde 400 sem span", async () => {
     const response = await POST(request({ sentence: "x", paragraph: "y" }));
     expect(response.status).toBe(400);
-    expect(explain).not.toHaveBeenCalled();
+    expect(completeJson).not.toHaveBeenCalled();
   });
 
   it("não chama o modelo nem a cota quando o cache acerta", async () => {
@@ -123,6 +131,7 @@ describe("POST /api/contextualize", () => {
       promptVersion: "1",
       model: "gpt-4o-mini",
       explanation: "Significa exceto.",
+      translation: "exceto",
       createdAt: new Date(),
       updatedAt: new Date(),
     });
@@ -132,7 +141,8 @@ describe("POST /api/contextualize", () => {
 
     expect(response.status).toBe(200);
     expect(data.explanation).toBe("Significa exceto.");
-    expect(explain).not.toHaveBeenCalled();
+    expect(data.translation).toBe("exceto");
+    expect(completeJson).not.toHaveBeenCalled();
     expect(mockConsume).not.toHaveBeenCalled();
   });
 
@@ -142,7 +152,8 @@ describe("POST /api/contextualize", () => {
 
     expect(response.status).toBe(200);
     expect(data.explanation).toBe("Aqui save significa exceto.");
-    expect(explain).toHaveBeenCalledTimes(1);
+    expect(data.translation).toBe("exceto");
+    expect(completeJson).toHaveBeenCalledTimes(1);
     expect(mockConsume).toHaveBeenCalledWith(user.id);
     expect(mockPrisma.readingExplanation.upsert).toHaveBeenCalledTimes(1);
     expect(mockPrisma.readingExplanation.create).not.toHaveBeenCalled();
@@ -164,10 +175,10 @@ describe("POST /api/contextualize", () => {
   it("tenta de novo quando a primeira ligação com o modelo falha", async () => {
     const unavailable = new Error("fetch failed");
     unavailable.name = "TutorUnavailable";
-    explain
+    completeJson
       .mockRejectedValueOnce(unavailable)
       .mockResolvedValueOnce({
-        text: "Aqui save significa exceto.",
+        text: contextBody,
         blocked: false,
         truncated: false,
       });
@@ -177,23 +188,24 @@ describe("POST /api/contextualize", () => {
 
     expect(response.status).toBe(200);
     expect(data.explanation).toBe("Aqui save significa exceto.");
-    expect(explain).toHaveBeenCalledTimes(2);
+    expect(data.translation).toBe("exceto");
+    expect(completeJson).toHaveBeenCalledTimes(2);
   });
 
   it("responde 429 sem chamar o modelo quando a cota estoura", async () => {
     mockConsume.mockResolvedValue(false);
     const response = await POST(request());
     expect(response.status).toBe(429);
-    expect(explain).not.toHaveBeenCalled();
+    expect(completeJson).not.toHaveBeenCalled();
     expect(mockPrisma.readingExplanation.upsert).not.toHaveBeenCalled();
   });
 
   it("não grava resposta vazia nem bloqueada", async () => {
-    explain.mockResolvedValueOnce({ text: "", blocked: false });
+    completeJson.mockResolvedValueOnce({ text: "", blocked: false });
     const empty = await POST(request());
     expect(empty.status).toBe(502);
 
-    explain.mockResolvedValueOnce({ text: "bloqueado", blocked: true });
+    completeJson.mockResolvedValueOnce({ text: "bloqueado", blocked: true });
     const blocked = await POST(request());
     expect(blocked.status).toBe(502);
     expect(mockPrisma.readingExplanation.upsert).not.toHaveBeenCalled();

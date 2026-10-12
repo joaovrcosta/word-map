@@ -11,6 +11,7 @@ import {
   type ResolvedSelection,
   type SelectionSaveType,
 } from "@/lib/word-matching.server";
+import { addedMeanings, writeWordOrigins } from "@/lib/word-origin-store";
 
 export interface Vault {
   id: number;
@@ -48,6 +49,11 @@ export interface CreateWordData {
   isSaved?: boolean; // Opcional, padrão true
   createdAt?: Date; // Opcional, será definido automaticamente
   updatedAt?: Date; // Opcional, será definido automaticamente
+  origin?: {
+    sentence?: string | null;
+    sourceTitle?: string | null;
+    sourceKind?: "book" | "text" | "manual";
+  };
 }
 
 export interface SearchResult {
@@ -308,6 +314,8 @@ export async function createWord(data: CreateWordData): Promise<Word> {
     const newWord = await prisma.word.create({
       data: wordData as any, // Type assertion para resolver problema de tipo
     });
+
+    await writeWordOrigins(newWord.id, data.translations, data.origin);
 
     console.log("Palavra criada no banco com sucesso:", newWord);
     console.log("=== FIM createWord - SUCESSO ===");
@@ -692,6 +700,11 @@ export async function updateWord(
     translations?: string[];
     notes?: string | null;
     confidence?: number;
+    origin?: {
+      sentence?: string | null;
+      sourceTitle?: string | null;
+      sourceKind?: "book" | "text" | "manual";
+    };
   }
 ): Promise<Word> {
   try {
@@ -745,6 +758,14 @@ export async function updateWord(
       where: { id: wordId },
       data: updateData,
     });
+
+    if (data.translations) {
+      await writeWordOrigins(
+        wordId,
+        addedMeanings(existingWord.translations, data.translations),
+        data.origin
+      );
+    }
 
     console.log("Palavra atualizada com sucesso:", updatedWord);
     console.log("=== FIM updateWord - SUCESSO ===");

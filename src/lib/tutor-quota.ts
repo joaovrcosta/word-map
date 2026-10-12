@@ -34,3 +34,13 @@ export async function consumeTutorQuota(userId: number): Promise<boolean> {
   `;
   return Number(updated) > 0;
 }
+
+export async function refundTutorQuota(userId: number): Promise<void> {
+  await prisma.$executeRaw`
+    UPDATE "TutorQuota"
+    SET
+      "minuteCount" = GREATEST("minuteCount" - 1, 0),
+      "dayCount" = GREATEST("dayCount" - 1, 0)
+    WHERE "userId" = ${userId}
+  `;
+}
