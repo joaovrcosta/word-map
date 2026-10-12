@@ -2,6 +2,7 @@ import {
   PROMPT_VERSION,
   TUTOR_MODEL,
   buildTutorPrompt,
+  createOpenAITutor,
   explanationCacheKey,
   parseTutorExplanation,
 } from "../tutor";
@@ -43,6 +44,30 @@ describe("explanationCacheKey", () => {
         sentence: "Save   upon those occasions.",
       })
     ).toBe(current);
+  });
+});
+
+describe("createOpenAITutor", () => {
+  const previousKey = process.env.OPENAI_API_KEY;
+
+  afterEach(() => {
+    process.env.OPENAI_API_KEY = previousKey;
+  });
+
+  it("marca falha de rede para uma nova tentativa", async () => {
+    process.env.OPENAI_API_KEY = "test-key";
+    const fetchError = new TypeError("fetch failed");
+    fetchError.cause = Object.assign(
+      new Error("self-signed certificate in certificate chain"),
+      { code: "SELF_SIGNED_CERT_IN_CHAIN" }
+    );
+    const fetchImpl = jest.fn(async () => {
+      throw fetchError;
+    });
+
+    await expect(
+      createOpenAITutor(fetchImpl as unknown as typeof fetch).explain("oi")
+    ).rejects.toMatchObject({ name: "TutorUnavailable" });
   });
 });
 

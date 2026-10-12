@@ -2,7 +2,16 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
-import { Volume2, X, Trash2, Plus, Check, ChevronDown, ChevronUp } from "lucide-react";
+import {
+  Volume2,
+  X,
+  Trash2,
+  Plus,
+  Check,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+} from "lucide-react";
 import { translateDefinitions } from "@/lib/translate";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -38,8 +47,20 @@ export type SavedReadingWord = {
 export type SelectedReadingWord = {
   surface: string;
   clean: string;
+  occurrence?: number;
   saved?: SavedReadingWord;
 };
+
+export function readingWordMark(
+  selected: { clean: string; occurrence?: number } | null,
+  clean: string,
+  occurrence: number
+): "selected" | "similar" | null {
+  if (!selected || selected.occurrence == null || selected.clean !== clean) {
+    return null;
+  }
+  return selected.occurrence === occurrence ? "selected" : "similar";
+}
 
 export function findSavedReadingWord(
   foundWords: Array<{
@@ -180,27 +201,42 @@ function hasMeaning(list: string[], value: string): boolean {
 export function ReadingWordToken({
   surface,
   selected,
+  similar,
   inVault,
   onClick,
 }: {
   surface: string;
   selected: boolean;
+  similar?: boolean;
   inVault: boolean;
   onClick: () => void;
 }) {
+  const marked = Boolean(inVault || similar || selected);
+
   return (
     <button
       type="button"
       onClick={onClick}
       className={cn(
-        "mx-px inline rounded-[3px] px-[2px] py-[1px] !text-zinc-900 dark:!text-zinc-100",
+        "mx-px rounded-[3px] !text-zinc-900 dark:!text-zinc-100",
+        marked
+          ? "inline-block px-1.5 py-0.5 leading-none"
+          : "inline px-[2px] py-[1px]",
         inVault &&
           "bg-[#ddf4ff] text-[#1cb0f6] dark:bg-[#1cb0f6]/25 dark:text-[#7ed0fb]",
-        !inVault && "hover:bg-black/[0.04] dark:hover:bg-white/10",
+        !marked && "hover:bg-black/[0.04] dark:hover:bg-white/10",
+        similar &&
+          "bg-[#edf9df] !text-zinc-900 dark:bg-[#58cc02]/15 dark:!text-zinc-100",
         selected &&
-          "bg-[#e8e8e8] shadow-[inset_0_0_0_1px_#cfcfcf] dark:bg-zinc-600 dark:text-zinc-50 dark:shadow-[inset_0_0_0_1px_#888]"
+          "relative bg-[#58cc02] !text-white shadow-none dark:bg-[#58cc02] dark:!text-white dark:shadow-none"
       )}
     >
+      {selected && (
+        <span
+          aria-hidden
+          className="pointer-events-none absolute left-1/2 top-0 h-0 w-0 -translate-x-1/2 -translate-y-[calc(100%-1px)] border-x-[6px] border-b-[7px] border-x-transparent border-b-[#58cc02]"
+        />
+      )}
       {surface}
     </button>
   );
@@ -649,28 +685,43 @@ export function ReadingWordPanel({
               </div>
             )}
 
-            {showContextualize && (
-              <div className="mt-4">
-                <button
-                  type="button"
-                  onClick={handleContextualize}
-                  disabled={!contextPayload}
-                  className="text-[13px] font-medium text-[#1cb0f6] hover:underline disabled:opacity-40"
-                >
-                  {isExplaining ? "Explicando..." : "Explicar contexto"}
-                </button>
-                {explanation && (
-                  <p className="mt-2 text-[13px] leading-snug text-[#444] dark:text-zinc-200">
+            {showContextualize &&
+              (explanation && !isExplaining ? (
+                <div className="mt-4 rounded-md border border-violet-200 bg-violet-50/80 px-3 py-2.5 dark:border-violet-400/15 dark:bg-violet-400/[0.06]">
+                  <button
+                    type="button"
+                    onClick={handleContextualize}
+                    disabled={!contextPayload}
+                    className="inline-flex items-center gap-1.5 text-[12px] font-medium text-violet-700 hover:text-violet-900 dark:text-violet-300 dark:hover:text-violet-200"
+                  >
+                    <Sparkles className="h-3.5 w-3.5" aria-hidden />
+                    Explicar contexto
+                  </button>
+                  <p className="mt-2 text-[13px] leading-snug text-[#444] dark:text-zinc-300">
                     {explanation}
                   </p>
-                )}
-                {explanationError && (
-                  <p className="mt-2 text-[12px] leading-snug text-[#c2410c]">
-                    {explanationError}
-                  </p>
-                )}
-              </div>
-            )}
+                </div>
+              ) : (
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    onClick={handleContextualize}
+                    disabled={!contextPayload || isExplaining}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-md border border-violet-200 bg-violet-50/80 px-3 py-2 text-[13px] font-medium text-violet-700 hover:bg-violet-100 disabled:opacity-70 dark:border-violet-400/20 dark:bg-violet-400/[0.08] dark:text-violet-300 dark:hover:bg-violet-400/[0.14]"
+                  >
+                    <Sparkles
+                      className={cn("h-3.5 w-3.5", isExplaining && "ai-sparkle")}
+                      aria-hidden
+                    />
+                    {isExplaining ? "Explicando..." : "Explicar contexto"}
+                  </button>
+                  {explanationError && (
+                    <p className="mt-2 text-[12px] leading-snug text-rose-700 dark:text-rose-300">
+                      {explanationError}
+                    </p>
+                  )}
+                </div>
+              ))}
 
             {extras}
 

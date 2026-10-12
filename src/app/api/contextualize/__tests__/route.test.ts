@@ -161,6 +161,25 @@ describe("POST /api/contextualize", () => {
     expect(mockPrisma.readingExplanation.create).not.toHaveBeenCalled();
   });
 
+  it("tenta de novo quando a primeira ligação com o modelo falha", async () => {
+    const unavailable = new Error("fetch failed");
+    unavailable.name = "TutorUnavailable";
+    explain
+      .mockRejectedValueOnce(unavailable)
+      .mockResolvedValueOnce({
+        text: "Aqui save significa exceto.",
+        blocked: false,
+        truncated: false,
+      });
+
+    const response = await POST(request());
+    const data = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(data.explanation).toBe("Aqui save significa exceto.");
+    expect(explain).toHaveBeenCalledTimes(2);
+  });
+
   it("responde 429 sem chamar o modelo quando a cota estoura", async () => {
     mockConsume.mockResolvedValue(false);
     const response = await POST(request());

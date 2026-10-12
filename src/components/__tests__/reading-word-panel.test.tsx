@@ -1,5 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { ReadingWordPanel } from "../reading-word-panel";
+import { ReadingWordPanel, readingWordMark } from "../reading-word-panel";
 import { resetContextualizeClient } from "@/lib/contextualize-client";
 import { getPassageExplanation } from "@/actions/passage-explanations";
 
@@ -38,6 +38,15 @@ function renderPanel(showContextualize: boolean) {
     />
   );
 }
+
+describe("readingWordMark", () => {
+  it("deixa forte só a ocorrência clicada", () => {
+    const selected = { clean: "holmes", occurrence: 1 };
+    expect(readingWordMark(selected, "holmes", 1)).toBe("selected");
+    expect(readingWordMark(selected, "holmes", 0)).toBe("similar");
+    expect(readingWordMark(selected, "watson", 0)).toBeNull();
+  });
+});
 
 describe("ReadingWordPanel contextualize", () => {
   beforeEach(() => {

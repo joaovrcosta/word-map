@@ -149,3 +149,17 @@
     opacity: 0;
   }
 }
+
+@keyframes ai-sparkle {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.ai-sparkle {
+  animation: ai-sparkle 1.4s ease-in-out infinite;
+}

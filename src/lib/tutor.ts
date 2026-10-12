@@ -87,22 +87,30 @@ export function createOpenAITutor(
         throw new Error("Explicação indisponível");
       }
 
-      const response = await fetchImpl(
-        "https://api.openai.com/v1/chat/completions",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: TUTOR_MODEL,
-            temperature: 0.2,
-            max_tokens: 512,
-            messages: [{ role: "user", content: prompt }],
-          }),
-        }
-      );
+      let response: Response;
+      try {
+        response = await fetchImpl(
+          "https://api.openai.com/v1/chat/completions",
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model: TUTOR_MODEL,
+              temperature: 0.2,
+              max_tokens: 512,
+              messages: [{ role: "user", content: prompt }],
+            }),
+          }
+        );
+      } catch (error) {
+        const unavailable = new Error("Explicação indisponível");
+        unavailable.name = "TutorUnavailable";
+        unavailable.cause = error;
+        throw unavailable;
+      }
 
       if (response.status === 503 || response.status === 429) {
         const unavailable = new Error("Explicação indisponível");

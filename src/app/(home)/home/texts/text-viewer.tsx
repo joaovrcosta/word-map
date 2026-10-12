@@ -45,6 +45,7 @@ import { TextSelectionPopover } from "@/components/text-selection-popover";
 import {
   ReadingWordPanel,
   ReadingWordToken,
+  readingWordMark,
   findSavedReadingWord,
   playWordAudio,
   type SelectedReadingWord,
@@ -301,10 +302,11 @@ export function TextViewer({
   );
 
   const handleSelectWord = useCallback(
-    (surface: string, clean: string) => {
+    (surface: string, clean: string, occurrence: number) => {
       setSelectedWord({
         surface,
         clean,
+        occurrence,
         saved: findSavedReadingWord(foundWords, clean),
       });
       playWordAudio(clean);
@@ -549,6 +551,12 @@ export function TextViewer({
         });
 
       const parts = splitHighlightParts(content);
+      const seen = new Map<string, number>();
+      const takeOccurrence = (clean: string) => {
+        const occurrence = seen.get(clean) ?? 0;
+        seen.set(clean, occurrence + 1);
+        return occurrence;
+      };
 
       return parts.map((part, index) => {
         const highlightedWord = parseHighlightMarker(part);
@@ -559,13 +567,18 @@ export function TextViewer({
 
           if (wordData) {
             const clean = normalizeToken(wordData.word);
+            const occurrence = takeOccurrence(clean);
+            const mark = readingWordMark(selectedWord, clean, occurrence);
             return (
               <span key={`chunk-${chunkIndex}-${index}`}>
                 <ReadingWordToken
                   surface={highlightedWord}
                   inVault
-                  selected={selectedWord?.clean === clean}
-                  onClick={() => handleSelectWord(highlightedWord, clean)}
+                  selected={mark === "selected"}
+                  similar={mark === "similar"}
+                  onClick={() =>
+                    handleSelectWord(highlightedWord, clean, occurrence)
+                  }
                 />
               </span>
             );
@@ -576,13 +589,22 @@ export function TextViewer({
             if (word.trim() && word.length > 2) {
               const cleanWordText = normalizeToken(word);
               if (cleanWordText.length >= 3) {
+                const occurrence = takeOccurrence(cleanWordText);
+                const mark = readingWordMark(
+                  selectedWord,
+                  cleanWordText,
+                  occurrence
+                );
                 return (
                   <span key={`chunk-${chunkIndex}-${index}-${wordIndex}`}>
                     <ReadingWordToken
                       surface={word}
                       inVault={false}
-                      selected={selectedWord?.clean === cleanWordText}
-                      onClick={() => handleSelectWord(word, cleanWordText)}
+                      selected={mark === "selected"}
+                      similar={mark === "similar"}
+                      onClick={() =>
+                        handleSelectWord(word, cleanWordText, occurrence)
+                      }
                     />
                   </span>
                 );
@@ -594,11 +616,7 @@ export function TextViewer({
         return part;
       });
     },
-    [
-      foundWords,
-      selectedWord?.clean,
-      handleSelectWord,
-    ]
+    [foundWords, selectedWord, handleSelectWord]
   );
 
   // Memoizar a renderização do texto interativo
