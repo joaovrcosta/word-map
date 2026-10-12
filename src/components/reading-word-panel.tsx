@@ -22,7 +22,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { extractRelatedSentences } from "@/lib/word-matching";
+import { extractRelatedSentences, splitTokenEdges } from "@/lib/word-matching";
 import { getPassageExplanation } from "@/actions/passage-explanations";
 import {
   listWordOrigins,
@@ -256,32 +256,35 @@ export function ReadingWordToken({
   onClick: () => void;
 }) {
   const marked = Boolean(inVault || similar || selected);
+  const { leading, core, trailing } = splitTokenEdges(surface);
 
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "mx-px rounded-[3px] !text-zinc-900 dark:!text-zinc-100",
-        marked
-          ? "inline-block px-1.5 py-0.5 leading-none"
-          : "inline px-[2px] py-[1px]",
-        inVault &&
-        "bg-[#ddf4ff] text-[#1cb0f6] dark:bg-[#1cb0f6]/25 dark:text-[#7ed0fb]",
-        !marked && "hover:bg-black/[0.04] dark:hover:bg-white/10",
-        similar &&
-        "bg-[#edf9df] !text-zinc-900 dark:bg-[#58cc02]/15 dark:!text-zinc-100",
-        selected &&
-        "relative bg-[#58cc02] !text-white shadow-none dark:bg-[#58cc02] dark:!text-white dark:shadow-none"
-      )}
-    >
-      {selected && (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute left-1/2 top-0 h-0 w-0 -translate-x-1/2 -translate-y-[calc(100%-1px)] border-x-[6px] border-b-[7px] border-x-transparent border-b-[#58cc02]"
-        />
-      )}
-      {surface}
+    <button type="button" onClick={onClick} className="inline bg-transparent p-0">
+      {leading}
+      <span
+        className={cn(
+          "mx-px rounded-[3px] !text-zinc-900 dark:!text-zinc-100",
+          marked
+            ? "inline-block px-1.5 py-0.5 leading-none"
+            : "inline px-[2px] py-[1px]",
+          inVault &&
+          "bg-[#ddf4ff] text-[#1cb0f6] dark:bg-[#1cb0f6]/25 dark:text-[#7ed0fb]",
+          !marked && "hover:bg-black/[0.04] dark:hover:bg-white/10",
+          similar &&
+          "bg-[#edf9df] !text-zinc-900 dark:bg-[#58cc02]/15 dark:!text-zinc-100",
+          selected &&
+          "relative bg-[#58cc02] !text-white shadow-none dark:bg-[#58cc02] dark:!text-white dark:shadow-none"
+        )}
+      >
+        {selected && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute left-1/2 top-0 h-0 w-0 -translate-x-1/2 -translate-y-[calc(100%-1px)] border-x-[6px] border-b-[7px] border-x-transparent border-b-[#58cc02]"
+          />
+        )}
+        {core}
+      </span>
+      {trailing}
     </button>
   );
 }

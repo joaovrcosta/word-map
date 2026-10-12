@@ -32,11 +32,35 @@ export function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+const WORD_EDGE_CHAR = /[\p{L}\p{N}'’-]/u;
+
 export function normalizeToken(token: string): string {
   return token
     .toLowerCase()
     .replace(/^[^a-z0-9'-]+|[^a-z0-9'-]+$/gi, "")
     .trim();
+}
+
+export function splitTokenEdges(surface: string): {
+  leading: string;
+  core: string;
+  trailing: string;
+} {
+  let start = 0;
+  let end = surface.length;
+
+  while (start < end && !WORD_EDGE_CHAR.test(surface[start] ?? "")) start += 1;
+  while (end > start && !WORD_EDGE_CHAR.test(surface[end - 1] ?? "")) end -= 1;
+
+  if (start >= end) {
+    return { leading: "", core: surface, trailing: "" };
+  }
+
+  return {
+    leading: surface.slice(0, start),
+    core: surface.slice(start, end),
+    trailing: surface.slice(end),
+  };
 }
 
 export function normalizePhrase(text: string): string {

@@ -16,6 +16,7 @@ import {
   isTwoWordPhrase,
   isValidSelectionForSave,
   normalizeToken,
+  splitTokenEdges,
   parseHighlightMarker,
   parseSelectionTokens,
   splitHighlightParts,
@@ -73,6 +74,39 @@ describe("word-matching", () => {
     it("preserva hífen e apóstrofo internos", () => {
       expect(normalizeToken("well-known")).toBe("well-known");
       expect(normalizeToken("don't")).toBe("don't");
+    });
+  });
+
+  describe("splitTokenEdges", () => {
+    it("tira ponto e aspas da palavra marcada", () => {
+      expect(splitTokenEdges("extent.")).toEqual({
+        leading: "",
+        core: "extent",
+        trailing: ".",
+      });
+      expect(splitTokenEdges('"hello"')).toEqual({
+        leading: '"',
+        core: "hello",
+        trailing: '"',
+      });
+      expect(splitTokenEdges("“word,”")).toEqual({
+        leading: "“",
+        core: "word",
+        trailing: ",”",
+      });
+    });
+
+    it("mantém hífen, apóstrofo e acento dentro da palavra", () => {
+      expect(splitTokenEdges("don't.")).toEqual({
+        leading: "",
+        core: "don't",
+        trailing: ".",
+      });
+      expect(splitTokenEdges("café.")).toEqual({
+        leading: "",
+        core: "café",
+        trailing: ".",
+      });
     });
   });
 
