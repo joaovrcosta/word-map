@@ -52,11 +52,6 @@ function OwlAvatar() {
 
 const menuLinks = [
   {
-    name: "Novo vault",
-    path: "/create-vault",
-    icon: Plus,
-  },
-  {
     name: "Textos",
     path: "/home/texts",
     icon: FileText,
@@ -80,6 +75,11 @@ const menuLinks = [
     name: "Conexões",
     path: "/home/connections",
     icon: Network,
+  },
+  {
+    name: "Novo vault",
+    path: "/create-vault",
+    icon: Plus,
   },
   {
     name: "Configurações",
@@ -107,10 +107,10 @@ export default function AppSidebar({
 
   const vaults: VaultNavItem[] = mounted
     ? (data?.map((vault) => ({
-        id: vault.id,
-        name: vault.name,
-        wordCount: vault.words?.length ?? 0,
-      })) ?? initialVaults)
+      id: vault.id,
+      name: vault.name,
+      wordCount: vault.words?.length ?? 0,
+    })) ?? initialVaults)
     : initialVaults;
 
   useEffect(() => {
@@ -180,14 +180,12 @@ export default function AppSidebar({
               <li key={vault.id}>
                 <button
                   type="button"
-                  onClick={() => router.push(`/home?vaultId=${vault.id}`)}
-                  className={`flex w-full items-center gap-3 h-12 text-left ${
-                    isOpen ? "px-5" : "justify-center px-0"
-                  } ${
-                    active
+                  onClick={() => router.push(`/home/vault/${vault.id}`)}
+                  className={`flex w-full items-center gap-3 h-12 text-left ${isOpen ? "px-5" : "justify-center px-0"
+                    } ${active
                       ? "bg-[#ddf4ff] text-[#1cb0f6] dark:bg-[#1cb0f6]/15"
                       : "text-[#afafaf] hover:bg-black/[0.03] dark:hover:bg-white/5"
-                  }`}
+                    }`}
                 >
                   <ClassFlag />
                   {isOpen && (
@@ -216,13 +214,11 @@ export default function AppSidebar({
                 <button
                   type="button"
                   onClick={() => router.push(link.path)}
-                  className={`flex w-full items-center gap-3 min-h-12 py-3 text-left ${
-                    isOpen ? "px-5" : "justify-center px-0"
-                  } ${
-                    active
+                  className={`flex w-full items-center gap-3 min-h-12 py-3 text-left ${isOpen ? "px-5" : "justify-center px-0"
+                    } ${active
                       ? "bg-[#ddf4ff] text-[#1cb0f6] dark:bg-[#1cb0f6]/15"
                       : "text-[#afafaf] hover:bg-black/[0.03] dark:hover:bg-white/5"
-                  }`}
+                    }`}
                 >
                   <Icon className="size-5 shrink-0" strokeWidth={2} />
                   {isOpen && (
@@ -244,9 +240,8 @@ export default function AppSidebar({
         <button
           type="button"
           onClick={() => router.push("/home/profile")}
-          className={`flex w-full items-center gap-3 py-4 text-left hover:bg-black/[0.03] dark:hover:bg-white/5 ${
-            isOpen ? "px-5" : "justify-center px-0"
-          }`}
+          className={`flex w-full items-center gap-3 py-4 text-left hover:bg-black/[0.03] dark:hover:bg-white/5 ${isOpen ? "px-5" : "justify-center px-0"
+            }`}
         >
           <OwlAvatar />
           {isOpen && (

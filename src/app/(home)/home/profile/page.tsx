@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState, type ReactNode } from "react";
+import { GrammarClassLink } from "@/components/grammar-class-link";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import {
@@ -455,9 +456,10 @@ export default function ProfilePage() {
                     return (
                       <div key={item.grammaticalClass}>
                         <div className="mb-2 flex items-center justify-between gap-2">
-                          <span className="text-sm font-extrabold text-[#3c3c3c]">
-                            {item.grammaticalClass}
-                          </span>
+                          <GrammarClassLink
+                            value={item.grammaticalClass}
+                            className="text-sm font-extrabold text-[#3c3c3c] hover:text-[#1cb0f6] dark:text-white"
+                          />
                           <span className="text-xs font-extrabold uppercase tracking-wide text-[#afafaf]">
                             {item.count} ({percentage.toFixed(1)}%)
                           </span>

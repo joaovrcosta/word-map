@@ -35,6 +35,7 @@ import {
 } from "@/lib/contextualize-client";
 import { requestSuggestTranslation } from "@/lib/suggest-translation-client";
 import { normalizeGrammaticalClass } from "@/lib/dictionary";
+import { GrammarClassLink } from "@/components/grammar-class-link";
 import type { Vault } from "@/actions/actions";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -788,12 +789,11 @@ export function ReadingWordPanel({
             </span>
           )}
           {partOfSpeechBadges.map((badge) => (
-            <span
+            <GrammarClassLink
               key={badge}
-              className="rounded bg-[#f3f3f3] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#888] dark:bg-white/10 dark:text-gray-400"
-            >
-              {badge}
-            </span>
+              value={badge}
+              className="rounded bg-[#f3f3f3] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#888] hover:bg-[#eef6ff] hover:text-[#1cb0f6] dark:bg-white/10 dark:text-gray-400 dark:hover:text-sky-300"
+            />
           ))}
         </div>
 
@@ -879,7 +879,7 @@ export function ReadingWordPanel({
         {origins.length > 0 && (
           <div className="mt-4">
             <p className="text-[11px] font-medium text-[#8a8a8a] dark:text-zinc-400">
-              Origem
+              Origem dos significados
             </p>
             <ol className="mt-2 space-y-3">
               {origins.map((item) => (

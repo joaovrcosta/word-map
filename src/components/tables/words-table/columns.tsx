@@ -10,6 +10,7 @@ import {
 } from "@/actions/actions";
 import { XCircle, Plus, ArrowRight, Trash } from "lucide-react";
 import { ColumnDef } from "@tanstack/react-table";
+import { GrammarClassLink } from "@/components/grammar-class-link";
 import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
@@ -404,9 +405,10 @@ export const columns: ColumnDef<Word>[] = [
     cell: ({ row }) => {
       const grammaticalClass = row.getValue("grammaticalClass") as string;
       return (
-        <span className="inline-flex rounded-full bg-[#ddf4ff] px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-[#1cb0f6]">
-          {grammaticalClass}
-        </span>
+        <GrammarClassLink
+          value={grammaticalClass}
+          className="inline-flex rounded-full bg-[#ddf4ff] px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-[#1cb0f6] hover:bg-[#1cb0f6] hover:text-white"
+        />
       );
     },
   },

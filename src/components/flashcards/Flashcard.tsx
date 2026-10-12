@@ -1,6 +1,7 @@
 "use client";
 
 import { FlashcardWord } from "@/actions/flashcards";
+import { GrammarClassLink } from "@/components/grammar-class-link";
 import { FlashcardSkeleton } from "./FlashcardSkeleton";
 
 interface FlashcardProps {
@@ -9,19 +10,6 @@ interface FlashcardProps {
   onToggleAnswer: () => void;
   onAnswer: (confidence: number) => void;
 }
-
-const GRAMMATICAL_CLASS_LABELS: Record<string, string> = {
-  substantivo: "Substantivo",
-  verbo: "Verbo",
-  adjetivo: "Adjetivo",
-  adverbio: "Advérbio",
-  pronome: "Pronome",
-  preposicao: "Preposição",
-  conjuncao: "Conjunção",
-  interjeicao: "Interjeição",
-  "phrasal-verb": "Phrasal verb",
-  frase: "Frase",
-};
 
 const RATINGS = [
   { confidence: 1, label: "Não lembro" },
@@ -40,15 +28,13 @@ export function Flashcard({
     return <FlashcardSkeleton />;
   }
 
-  const grammaticalClass =
-    GRAMMATICAL_CLASS_LABELS[word.grammaticalClass] ?? word.grammaticalClass;
-
   return (
     <div className="mx-auto flex w-full max-w-xl flex-col items-center px-2 py-10">
-      {grammaticalClass ? (
-        <p className="text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf]">
-          {grammaticalClass}
-        </p>
+      {word.grammaticalClass ? (
+        <GrammarClassLink
+          value={word.grammaticalClass}
+          className="text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf] hover:text-[#1cb0f6]"
+        />
       ) : null}
 
       <button

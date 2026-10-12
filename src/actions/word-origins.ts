@@ -17,7 +17,7 @@ export type WordOriginEntry = {
 async function readOrigins(wordId: number): Promise<WordOriginEntry[]> {
   const rows = await prisma.wordOrigin.findMany({
     where: { wordId },
-    orderBy: { createdAt: "asc" },
+    orderBy: { createdAt: "desc" },
     select: {
       id: true,
       meaning: true,

@@ -82,7 +82,7 @@ export function CreateVaultWizard() {
       });
       await queryClient.invalidateQueries({ queryKey: ["vaults"] });
 
-      router.push(`/home?vaultId=${createdVault.id}`);
+      router.push(`/home/vault/${createdVault.id}`);
       router.refresh();
     } catch (err) {
       setError(
