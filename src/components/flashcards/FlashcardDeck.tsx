@@ -1,15 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   FlashcardWord,
   FlashcardSession,
   getFlashcardWords,
   createFlashcardSession,
   updateWordProgress,
+  recordChallengeResult,
   filterWordsForReview,
+  type ChallengeKind,
 } from "@/actions/flashcards";
+import {
+  buildFlashcardQueue,
+  type FlashcardStep,
+} from "@/lib/flashcard-queue";
 import { Flashcard } from "./Flashcard";
+import { ListenChallenge } from "./ListenChallenge";
+import { MatchChallenge } from "./MatchChallenge";
 import { SessionSummary } from "./SessionSummary";
 import { FlashcardDeckSkeleton } from "./FlashcardDeckSkeleton";
 
@@ -21,11 +29,19 @@ interface FlashcardDeckProps {
 export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
   const [words, setWords] = useState<FlashcardWord[]>([]);
   const [session, setSession] = useState<FlashcardSession | null>(null);
-  const [currentWordIndex, setCurrentWordIndex] = useState(0);
+  const [steps, setSteps] = useState<FlashcardStep[]>([]);
+  const [stepIndex, setStepIndex] = useState(0);
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [showAnswer, setShowAnswer] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showSummary, setShowSummary] = useState(false);
+  const [challengeStats, setChallengeStats] = useState({
+    correct: 0,
+    total: 0,
+  });
+  const stepsRef = useRef<FlashcardStep[]>([]);
+  const indexRef = useRef(0);
+  const studiedRef = useRef(0);
 
   useEffect(() => {
     loadWords();
@@ -44,62 +60,100 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
     }
   };
 
+  const syncQueue = (nextSteps: FlashcardStep[], nextIndex: number) => {
+    stepsRef.current = nextSteps;
+    indexRef.current = nextIndex;
+    setSteps(nextSteps);
+    setStepIndex(nextIndex);
+  };
+
   const startSession = async () => {
     try {
       const newSession = await createFlashcardSession(vaultId);
+      const queue = buildFlashcardQueue(words);
+      studiedRef.current = 0;
+      setChallengeStats({ correct: 0, total: 0 });
       setSession(newSession);
+      syncQueue(queue, 0);
       setIsSessionActive(true);
-      setCurrentWordIndex(0);
       setShowAnswer(false);
+      setShowSummary(false);
     } catch (error) {
       console.error("Erro ao iniciar sessão:", error);
     }
   };
 
   const closeSession = (completedWords: number) => {
-    if (session) {
-      setSession({
-        ...session,
-        endTime: new Date(),
-        completedWords,
-      });
-    }
+    setSession((current) =>
+      current
+        ? {
+            ...current,
+            endTime: new Date(),
+            completedWords,
+          }
+        : current
+    );
     setIsSessionActive(false);
     setShowSummary(true);
     setShowAnswer(false);
   };
 
   const endSession = () => {
-    closeSession(currentWordIndex);
+    closeSession(studiedRef.current);
   };
 
   const restartSession = () => {
     setShowSummary(false);
-    setCurrentWordIndex(0);
     startSession();
   };
 
-  const handleAnswer = async (confidence: number) => {
-    if (currentWordIndex >= words.length) return;
+  const finishStep = (wordCount: number, requeue: FlashcardWord[]) => {
+    studiedRef.current += wordCount;
+    let nextSteps = stepsRef.current;
+    const nextIndex = indexRef.current + 1;
 
-    const currentWord = words[currentWordIndex];
-
-    try {
-      await updateWordProgress(currentWord.id, confidence, 1);
-
-      if (currentWordIndex + 1 < words.length) {
-        setCurrentWordIndex((prev) => prev + 1);
-        setShowAnswer(false);
-      } else {
-        closeSession(words.length);
+    for (const word of requeue) {
+      const alreadyQueued = nextSteps
+        .slice(nextIndex)
+        .some((step) => step.type === "recall" && step.word.id === word.id);
+      if (!alreadyQueued) {
+        nextSteps = [...nextSteps, { type: "recall", word }];
       }
-    } catch (error) {
-      console.error("Erro ao atualizar progresso:", error);
+    }
+
+    syncQueue(nextSteps, nextIndex);
+    setShowAnswer(false);
+
+    if (nextIndex >= nextSteps.length) {
+      closeSession(studiedRef.current);
     }
   };
 
-  const toggleAnswer = () => {
-    setShowAnswer(!showAnswer);
+  const noteChallenge = (
+    word: FlashcardWord,
+    correct: boolean,
+    kind: ChallengeKind
+  ) => {
+    setChallengeStats((stats) => ({
+      total: stats.total + 1,
+      correct: stats.correct + (correct ? 1 : 0),
+    }));
+    void recordChallengeResult(word.id, correct, kind).catch((error) => {
+      console.error("Erro ao registrar desafio:", error);
+    });
+  };
+
+  const handleAnswer = async (confidence: number) => {
+    const step = stepsRef.current[indexRef.current];
+    if (!step || step.type !== "recall") return;
+
+    try {
+      await updateWordProgress(step.word.id, confidence, 1);
+    } catch (error) {
+      console.error("Erro ao atualizar progresso:", error);
+    }
+
+    finishStep(1, []);
   };
 
   if (loading) {
@@ -121,7 +175,12 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
 
   if (showSummary && session) {
     return (
-      <SessionSummary session={session} onRestartSession={restartSession} />
+      <SessionSummary
+        session={session}
+        challengeCorrect={challengeStats.correct}
+        challengeTotal={challengeStats.total}
+        onRestartSession={restartSession}
+      />
     );
   }
 
@@ -150,19 +209,20 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
     );
   }
 
-  const currentWord = words[currentWordIndex];
-  const progress = ((currentWordIndex + 1) / words.length) * 100;
+  const step = steps[stepIndex];
+  const progress =
+    steps.length > 0 ? ((stepIndex + 1) / steps.length) * 100 : 0;
 
   return (
     <div>
       <div className="flex items-center gap-4">
         <p className="shrink-0 text-[13px] font-extrabold tabular-nums text-[#afafaf]">
-          {currentWordIndex + 1} / {words.length}
+          {Math.min(stepIndex + 1, steps.length)} / {steps.length}
         </p>
         <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#e5e5e5] dark:bg-[#373e47]">
           <div
             className="h-full rounded-full bg-[#1cb0f6]"
-            style={{ width: `${progress}%` }}
+            style={{ width: `${Math.min(progress, 100)}%` }}
           />
         </div>
         <button
@@ -174,12 +234,35 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
         </button>
       </div>
 
-      <Flashcard
-        word={currentWord}
-        showAnswer={showAnswer}
-        onToggleAnswer={toggleAnswer}
-        onAnswer={handleAnswer}
-      />
+      {step?.type === "recall" ? (
+        <Flashcard
+          word={step.word}
+          showAnswer={showAnswer}
+          onToggleAnswer={() => setShowAnswer((current) => !current)}
+          onAnswer={handleAnswer}
+        />
+      ) : null}
+
+      {step?.type === "listen" ? (
+        <ListenChallenge
+          key={step.word.id}
+          word={step.word}
+          options={step.options}
+          onAnswer={(correct) => {
+            noteChallenge(step.word, correct, "listen");
+            finishStep(1, correct ? [] : [step.word]);
+          }}
+        />
+      ) : null}
+
+      {step?.type === "match" ? (
+        <MatchChallenge
+          key={step.pairs.map((pair) => pair.word.id).join("-")}
+          pairs={step.pairs}
+          onPair={(word, correct) => noteChallenge(word, correct, "match")}
+          onComplete={(missed) => finishStep(step.pairs.length, missed)}
+        />
+      ) : null}
     </div>
   );
 }

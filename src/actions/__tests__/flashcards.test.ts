@@ -2,6 +2,7 @@ import {
   getFlashcardWords,
   getVaultForFlashcards,
   updateWordProgress,
+  recordChallengeResult,
   createFlashcardSession,
   calculateNextReview,
   filterWordsForReview,
@@ -19,6 +20,9 @@ jest.mock("@/lib/prisma", () => ({
       findMany: jest.fn(),
       findUnique: jest.fn(),
       update: jest.fn(),
+    },
+    wordReview: {
+      create: jest.fn(),
     },
     vault: {
       findUnique: jest.fn(),
@@ -94,7 +98,6 @@ describe("Flashcards Actions", () => {
       expect(mockPrisma.word.findMany).toHaveBeenCalledWith({
         where: {
           vaultId: 1,
-          isSaved: true,
           vault: {
             userId: 1,
           },
@@ -106,6 +109,7 @@ describe("Flashcards Actions", () => {
           category: true,
           translations: true,
           confidence: true,
+          lastPractice: true,
           vaultId: true,
           createdAt: true,
           updatedAt: true,
@@ -216,6 +220,7 @@ describe("Flashcards Actions", () => {
         where: { id: 1 },
         data: {
           confidence: 4,
+          lastPractice: expect.any(Date),
           updatedAt: expect.any(Date),
         },
       });
@@ -349,41 +354,97 @@ describe("Flashcards Actions", () => {
   });
 
   describe("filterWordsForReview", () => {
-    it("deve retornar todas as palavras para revisão", async () => {
+    const baseWord = {
+      name: "hello",
+      grammaticalClass: "interjection",
+      category: "greeting",
+      translations: ["olá"],
+      vaultId: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    };
+
+    it("deve incluir palavra nova e palavra nunca praticada", async () => {
       const mockWords: FlashcardWord[] = [
+        { ...baseWord, id: 1, confidence: 1, lastPractice: new Date() },
+        { ...baseWord, id: 2, name: "goodbye", confidence: 3 },
+      ];
+
+      const result = await filterWordsForReview(mockWords);
+
+      expect(result.map((word) => word.id)).toEqual([1, 2]);
+    });
+
+    it("deve deixar de fora palavra fácil praticada há pouco", async () => {
+      const recent = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
+      const due = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+      const mockWords: FlashcardWord[] = [
+        { ...baseWord, id: 1, confidence: 4, lastPractice: recent },
         {
-          id: 1,
-          name: "hello",
-          grammaticalClass: "interjection",
-          category: "greeting",
-          translations: ["olá", "oi"],
-          confidence: 1,
-          vaultId: 1,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        },
-        {
+          ...baseWord,
           id: 2,
           name: "goodbye",
-          grammaticalClass: "interjection",
-          category: "greeting",
-          translations: ["tchau", "até logo"],
-          confidence: 3,
-          vaultId: 1,
-          createdAt: new Date(),
-          updatedAt: new Date(),
+          confidence: 4,
+          lastPractice: due,
         },
       ];
 
       const result = await filterWordsForReview(mockWords);
 
-      expect(result).toEqual(mockWords);
+      expect(result.map((word) => word.id)).toEqual([2]);
     });
 
     it("deve retornar array vazio se não houver palavras", async () => {
       const result = await filterWordsForReview([]);
 
       expect(result).toEqual([]);
+    });
+  });
+
+  describe("recordChallengeResult", () => {
+    it("deve subir a confiança quando o desafio está certo", async () => {
+      mockPrisma.word.findUnique.mockResolvedValue({
+        id: 1,
+        confidence: 2,
+      });
+      mockPrisma.word.update.mockResolvedValue({});
+      mockPrisma.wordReview.create.mockResolvedValue({});
+
+      await recordChallengeResult(1, true, "listen");
+
+      expect(mockPrisma.word.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: {
+          confidence: 3,
+          lastPractice: expect.any(Date),
+        },
+      });
+      expect(mockPrisma.wordReview.create).toHaveBeenCalledWith({
+        data: {
+          wordId: 1,
+          correct: true,
+          challenge: "listen",
+        },
+      });
+    });
+
+    it("deve descer a confiança quando o desafio está errado", async () => {
+      mockPrisma.word.findUnique.mockResolvedValue({
+        id: 1,
+        confidence: 1,
+      });
+      mockPrisma.word.update.mockResolvedValue({});
+      mockPrisma.wordReview.create.mockResolvedValue({});
+
+      await recordChallengeResult(1, false, "match");
+
+      expect(mockPrisma.word.update).toHaveBeenCalledWith({
+        where: { id: 1 },
+        data: {
+          confidence: 1,
+          lastPractice: expect.any(Date),
+        },
+      });
     });
   });
 });

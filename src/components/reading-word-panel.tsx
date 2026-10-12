@@ -125,12 +125,16 @@ const LEVEL_COLORS = [
   "bg-[#58cc02] text-white",
 ];
 
-export function playWordAudio(word: string) {
-  if (!("speechSynthesis" in window)) return;
+export function playWordAudio(word: string, onEnd?: () => void) {
+  if (!("speechSynthesis" in window)) {
+    onEnd?.();
+    return;
+  }
   window.speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(word);
   utterance.lang = "en-US";
   utterance.rate = 0.8;
+  utterance.onend = () => onEnd?.();
   window.speechSynthesis.speak(utterance);
 }
 

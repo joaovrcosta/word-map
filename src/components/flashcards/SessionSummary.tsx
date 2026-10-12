@@ -5,11 +5,15 @@ import { FlashcardSession } from "@/actions/flashcards";
 
 interface SessionSummaryProps {
   session: FlashcardSession;
+  challengeCorrect?: number;
+  challengeTotal?: number;
   onRestartSession: () => void;
 }
 
 export function SessionSummary({
   session,
+  challengeCorrect = 0,
+  challengeTotal = 0,
   onRestartSession,
 }: SessionSummaryProps) {
   const duration = session.endTime
@@ -33,6 +37,12 @@ export function SessionSummary({
       <p className="mt-1 text-[15px] text-[#777] dark:text-[#8b949e]">
         {durationLabel}
       </p>
+      {challengeTotal > 0 ? (
+        <p className="mt-1 text-[15px] text-[#777] dark:text-[#8b949e]">
+          {challengeCorrect} de {challengeTotal}{" "}
+          {challengeTotal === 1 ? "desafio certo" : "desafios certos"}
+        </p>
+      ) : null}
 
       <button
         type="button"

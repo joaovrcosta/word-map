@@ -30,6 +30,7 @@ export interface Word {
   translations: string[];
   notes?: string | null;
   confidence: number; // 1-4
+  lastPractice?: Date | null;
   isSaved: boolean;
   frequency: number; // Contador de frequência
   vaultId: number; // ID do vault onde a palavra está
@@ -84,6 +85,7 @@ export async function getVaults(): Promise<Vault[]> {
             notes: true,
             confidence: true,
             isSaved: true,
+            lastPractice: true,
             frequency: true,
             vaultId: true,
             createdAt: true,

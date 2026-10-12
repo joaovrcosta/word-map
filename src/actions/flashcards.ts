@@ -1,6 +1,7 @@
 "use server";
 
 import { prisma } from "@/lib/prisma";
+import { isWordDue } from "@/lib/flashcard-schedule";
 import { revalidatePath } from "next/cache";
 import { getCurrentUser } from "@/actions/auth";
 
@@ -11,10 +12,13 @@ export interface FlashcardWord {
   category: string | null;
   translations: string[];
   confidence: number;
+  lastPractice?: Date | null;
   vaultId: number;
   createdAt: Date;
   updatedAt: Date;
 }
+
+export type ChallengeKind = "listen" | "match";
 
 export interface FlashcardProgress {
   wordId: number;
@@ -52,9 +56,8 @@ export async function getFlashcardWords(
     const words = await prisma.word.findMany({
       where: {
         vaultId: vaultId,
-        isSaved: true,
         vault: {
-          userId: user.id, // Filtrar apenas palavras dos vaults do usuário atual
+          userId: user.id,
         },
       },
       select: {
@@ -64,6 +67,7 @@ export async function getFlashcardWords(
         category: true,
         translations: true,
         confidence: true,
+        lastPractice: true,
         vaultId: true,
         createdAt: true,
         updatedAt: true,
@@ -152,6 +156,7 @@ export async function updateWordProgress(
       where: { id: wordId },
       data: {
         confidence: confidence,
+        lastPractice: new Date(),
         updatedAt: new Date(),
       },
     });
@@ -160,6 +165,57 @@ export async function updateWordProgress(
   } catch (error) {
     console.error("Erro ao atualizar progresso da palavra:", error);
     throw new Error("Erro ao atualizar progresso da palavra");
+  }
+}
+
+export async function recordChallengeResult(
+  wordId: number,
+  correct: boolean,
+  challenge: ChallengeKind
+): Promise<void> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    const existingWord = await prisma.word.findUnique({
+      where: {
+        id: wordId,
+        vault: {
+          userId: user.id,
+        },
+      },
+    });
+
+    if (!existingWord) {
+      throw new Error("Palavra não encontrada ou não pertence ao usuário");
+    }
+
+    const nextConfidence = correct
+      ? Math.min(4, existingWord.confidence + 1)
+      : Math.max(1, existingWord.confidence - 1);
+
+    await prisma.word.update({
+      where: { id: wordId },
+      data: {
+        confidence: nextConfidence,
+        lastPractice: new Date(),
+      },
+    });
+
+    await prisma.wordReview.create({
+      data: {
+        wordId,
+        correct,
+        challenge,
+      },
+    });
+
+    revalidatePath("/home/flashcards");
+  } catch (error) {
+    console.error("Erro ao registrar desafio:", error);
+    throw new Error("Erro ao registrar desafio");
   }
 }
 
@@ -222,7 +278,5 @@ export async function calculateNextReview(
 export async function filterWordsForReview(
   words: FlashcardWord[]
 ): Promise<FlashcardWord[]> {
-  // Por enquanto, retornar todas as palavras
-  // Depois implementaremos o filtro de repetição espaçada
-  return words;
+  return words.filter((word) => isWordDue(word));
 }

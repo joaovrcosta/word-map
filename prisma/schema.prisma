@@ -73,6 +73,18 @@ model Word {
   Word_B           Word[]        @relation("RelatedWords")
   semanticConnections SemanticConnectionWord[]
   sentenceWords    SentenceWord[]
+  reviews          WordReview[]
+}
+
+model WordReview {
+  id        Int      @id @default(autoincrement())
+  wordId    Int
+  correct   Boolean
+  challenge String
+  createdAt DateTime @default(now())
+  word      Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  @@index([wordId])
 }
 
 model WordHistory {

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { getVaults, type Vault } from "@/actions/actions";
+import { isWordDue } from "@/lib/flashcard-schedule";
 
 export default function FlashcardsPage() {
   const [vaults, setVaults] = useState<Vault[]>([]);
@@ -29,8 +30,7 @@ export default function FlashcardsPage() {
       for (const vault of vaultsData) {
         stats[vault.id] = {
           totalWords: vault.words.length,
-          wordsToReview: vault.words.filter((word) => word.confidence <= 2)
-            .length,
+          wordsToReview: vault.words.filter((word) => isWordDue(word)).length,
         };
       }
 
@@ -105,6 +105,10 @@ export default function FlashcardsPage() {
                   {stats.totalWords === 0 ? (
                     <span className="shrink-0 text-[13px] font-extrabold uppercase tracking-wide text-[#afafaf]">
                       Vazio
+                    </span>
+                  ) : stats.wordsToReview === 0 ? (
+                    <span className="shrink-0 text-[13px] font-extrabold uppercase tracking-wide text-[#afafaf]">
+                      Em dia
                     </span>
                   ) : (
                     <Link
