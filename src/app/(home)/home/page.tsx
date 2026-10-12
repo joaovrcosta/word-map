@@ -50,6 +50,7 @@ function HomePageContent() {
   const [activeTab, setActiveTab] = useState<"words" | "report" | "settings">(
     "words"
   );
+  const [hasMounted, setHasMounted] = useState(false);
   const [firstName, setFirstName] = useState("");
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [newWord, setNewWord] = useState({
@@ -67,6 +68,10 @@ function HomePageContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const queryClient = useQueryClient();
+
+  useEffect(() => {
+    setHasMounted(true);
+  }, []);
 
   useEffect(() => {
     getCurrentUser().then((user) => {
@@ -282,8 +287,10 @@ function HomePageContent() {
     [currentWords]
   );
 
-  // Loading state
-  if (isLoading) {
+  // O cache de vaults pode já existir no cliente (a sidebar busca antes),
+  // enquanto o servidor ainda renderiza sem dados. O primeiro render precisa
+  // ser igual nos dois lados para não quebrar a hidratação.
+  if (!hasMounted || isLoading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
