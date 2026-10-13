@@ -1,0 +1,21 @@
+import "server-only";
+import { serverApi } from "@/lib/api/server";
+export type { BookListItem, BookDetail, ChapterDetail, ChapterSummary, ReadingPosition } from "./books";
+
+export const createBook = serverApi.createBook;
+export const createOfficialBook = serverApi.createOfficialBook;
+export const updateBook = serverApi.updateBook;
+export const deleteBook = serverApi.deleteBook;
+export const listOfficialBooks = serverApi.listOfficialBooks;
+export const listMyBooks = serverApi.listMyBooks;
+export const listLibraryBooks = serverApi.listLibraryBooks;
+export const addBookToLibrary = serverApi.addBookToLibrary;
+export const removeFromLibrary = serverApi.removeFromLibrary;
+export const addChapter = serverApi.addChapter;
+export const updateChapter = serverApi.updateChapter;
+export const deleteChapter = serverApi.deleteChapter;
+export const reorderChapters = serverApi.reorderChapters;
+export const getBookById = serverApi.getBookById;
+export const getChapterById = serverApi.getChapterById;
+export const getReadingProgress = serverApi.getReadingProgress;
+export const saveReadingProgress = serverApi.saveReadingProgress;

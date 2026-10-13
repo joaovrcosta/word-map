@@ -1,0 +1,4 @@
+
+> @word-map/shared@0.1.0 build C:\Desenv\word-map\packages\shared
+> tsc && node write-shims.js
+
