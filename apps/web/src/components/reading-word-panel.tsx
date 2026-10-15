@@ -248,20 +248,39 @@ export function ReadingWordToken({
   similar,
   inVault,
   onClick,
+  wordStart,
+  wordEnd,
 }: {
   surface: string;
   selected: boolean;
   similar?: boolean;
   inVault: boolean;
   onClick: () => void;
+  wordStart?: number;
+  wordEnd?: number;
 }) {
   const marked = Boolean(inVault || similar || selected);
   const { leading, core, trailing } = splitTokenEdges(surface);
 
   return (
-    <button type="button" onClick={onClick} className="inline bg-transparent p-0">
+    <button
+      type="button"
+      onClick={(event) => {
+        onClick();
+        if (window.matchMedia("(max-width: 1023px)").matches) {
+          event.currentTarget.scrollIntoView({
+            block: "center",
+            inline: "nearest",
+            behavior: "smooth",
+          });
+        }
+      }}
+      className="inline bg-transparent p-0"
+    >
       {leading}
       <span
+        data-word-start={wordStart}
+        data-word-end={wordEnd}
         className={cn(
           "mx-px rounded-[3px] !text-zinc-900 dark:!text-zinc-100",
           marked
@@ -310,7 +329,6 @@ export function ReadingWordPanel({
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [snapOffscreen, setSnapOffscreen] = useState(false);
-  const closeTimerRef = useRef<number>(0);
   const [selectedMeanings, setSelectedMeanings] = useState<string[]>([]);
   const [customMeaning, setCustomMeaning] = useState("");
   const [candidateMeanings, setCandidateMeanings] = useState<string[]>([]);
@@ -375,7 +393,6 @@ export function ReadingWordPanel({
       panelWidthRef.current = applyReadingPanelWidth(stored);
     }
     return () => {
-      window.clearTimeout(closeTimerRef.current);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
@@ -617,12 +634,6 @@ export function ReadingWordPanel({
     (item) => !hasMeaning(selectedMeanings, item)
   );
 
-  const handleClose = () => {
-    setOpen(false);
-    window.clearTimeout(closeTimerRef.current);
-    closeTimerRef.current = window.setTimeout(() => onClose(), 320);
-  };
-
   if (!selected) return null;
 
   const panel = (
@@ -636,20 +647,12 @@ export function ReadingWordPanel({
           ? "max-lg:translate-y-0 lg:translate-x-0"
           : "pointer-events-none max-lg:translate-y-[110%] lg:translate-x-full",
         "fixed z-[80]",
-        "max-lg:inset-x-3 max-lg:bottom-3 max-lg:top-auto max-lg:h-fit max-lg:w-auto max-lg:rounded-2xl max-lg:border max-lg:shadow-2xl",
+        "max-lg:inset-x-3 max-lg:bottom-24 max-lg:top-auto max-lg:h-fit max-lg:w-auto max-lg:rounded-2xl max-lg:border max-lg:shadow-2xl",
         expanded
           ? "max-lg:max-h-[min(72dvh,560px)]"
           : "max-lg:max-h-none",
         "lg:inset-x-auto lg:top-14 lg:right-0 lg:bottom-auto lg:h-[calc(100dvh-3.5rem)] lg:w-[var(--reading-panel-width)] lg:max-h-none lg:rounded-none lg:border-l lg:shadow-none"
       )}
-      onTransitionEnd={(event) => {
-        if (event.target !== event.currentTarget) return;
-        if (event.propertyName !== "transform") return;
-        if (!open) {
-          window.clearTimeout(closeTimerRef.current);
-          onClose();
-        }
-      }}
     >
       <div
         role="separator"
@@ -732,7 +735,7 @@ export function ReadingWordPanel({
           )}
           <button
             type="button"
-            onClick={handleClose}
+            onClick={onClose}
             className="inline-flex h-7 w-7 items-center justify-center rounded text-[#b0b0b0] hover:bg-black/5 hover:text-[#555] dark:hover:bg-white/10 dark:hover:text-white"
             aria-label="Fechar painel"
           >

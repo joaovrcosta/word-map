@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback, memo, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useCallback, memo, useRef } from "react";
 import {
   Text,
   checkTextWords,
@@ -11,13 +11,7 @@ import {
   removeWordFromVault,
 } from "@/actions/actions";
 import { Vault, Word } from "@/actions/actions";
-import {
-  ChevronLeft,
-  ChevronRight,
-  Edit2,
-  Save,
-  X,
-} from "lucide-react";
+import { Edit2, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -33,13 +27,7 @@ import { lookupWordInfo } from "@/lib/dictionary-client";
 import { normalizeGrammaticalClass } from "@/lib/dictionary";
 import { useLoadUserSettings } from "@/hooks/use-user-settings";
 import useUserSettingsStore from "@/store/userSettingsStore";
-import {
-  createHighlightMarker,
-  escapeRegExp,
-  normalizeToken,
-  parseHighlightMarker,
-  splitHighlightParts,
-} from "@/lib/word-matching";
+import { normalizeToken } from "@/lib/word-matching";
 import { useTextSelection } from "@/hooks/use-text-selection";
 import { TextSelectionPopover } from "@/components/text-selection-popover";
 import {
@@ -57,6 +45,12 @@ import {
   resolveReadingPage,
   splitParagraphs,
 } from "@/lib/reading-pages";
+import {
+  PageSpeechControls,
+  usePageSpeech,
+} from "@/components/page-speech-button";
+import { paintSpokenWord, type SpokenRange } from "@/lib/spoken-word";
+import { cn } from "@/lib/utils";
 
 interface TextViewerProps {
   text: Text;
@@ -128,6 +122,30 @@ export function TextViewer({
     () => (paged ? paginateReading(editContent) : []),
     [paged, editContent]
   );
+  const speechText = paged && !isEditing ? (pages[pageIndex]?.text ?? "") : "";
+  const speech = usePageSpeech(speechText);
+  const spokenRangeRef = useRef<SpokenRange | null>(null);
+  const spokenRootRef = useRef<HTMLDivElement | null>(null);
+  const setReadingRoot = useCallback(
+    (node: HTMLDivElement | null) => {
+      spokenRootRef.current = node;
+      selectionContainerRef(node);
+    },
+    [selectionContainerRef]
+  );
+  useEffect(() => {
+    return speech.subscribe((range) => {
+      spokenRangeRef.current = range;
+      const root = spokenRootRef.current;
+      if (!root) return;
+      paintSpokenWord(root, range);
+    });
+  }, [speech.subscribe]);
+  useLayoutEffect(() => {
+    const root = spokenRootRef.current;
+    if (!root) return;
+    paintSpokenWord(root, spokenRangeRef.current);
+  });
   const appliedPositionKey = useRef("");
 
   useEffect(() => {
@@ -156,7 +174,7 @@ export function TextViewer({
   useEffect(() => {
     if (!paged) return;
     const onKeyDown = (event: KeyboardEvent) => {
-      if (isEditing || selectedWord || selection) return;
+      if (isEditing) return;
       const target = event.target as HTMLElement | null;
       const tag = target?.tagName;
       if (
@@ -177,7 +195,7 @@ export function TextViewer({
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [paged, isEditing, selectedWord, selection, pages.length]);
+  }, [paged, isEditing, pages.length]);
 
   useEffect(() => {
     const loadData = async () => {
@@ -559,78 +577,58 @@ export function TextViewer({
   // Função para renderizar um pedaço de texto
   const renderTextChunk = useCallback(
     (content: string, chunkIndex: number = 0) => {
-      [...foundWords]
-        .sort((a, b) => b.word.length - a.word.length)
-        .forEach(({ word }) => {
-          const regex = new RegExp(`\\b${escapeRegExp(word)}\\b`, "gi");
-          content = content.replace(regex, createHighlightMarker(word));
-        });
-
-      const parts = splitHighlightParts(content);
+      const nodes: React.ReactNode[] = [];
       const seen = new Map<string, number>();
       const takeOccurrence = (clean: string) => {
         const occurrence = seen.get(clean) ?? 0;
         seen.set(clean, occurrence + 1);
         return occurrence;
       };
+      const vaultWords = new Set(
+        foundWords.map((item) => normalizeToken(item.word))
+      );
 
-      return parts.map((part, index) => {
-        const highlightedWord = parseHighlightMarker(part);
-        if (highlightedWord) {
-          const wordData = foundWords.find(
-            (fw) => fw.word.toLowerCase() === highlightedWord.toLowerCase()
+      let last = 0;
+      let tokenKey = 0;
+      for (const match of content.matchAll(/\S+/g)) {
+        const start = match.index ?? 0;
+        if (start > last) nodes.push(content.slice(last, start));
+        const surface = match[0];
+        const end = start + surface.length;
+        const clean = normalizeToken(surface);
+        const inVault = vaultWords.has(clean);
+        const clickable = inVault || (surface.trim().length > 2 && clean.length >= 3);
+
+        if (clickable && clean) {
+          const occurrence = takeOccurrence(clean);
+          const mark = readingWordMark(selectedWord, clean, occurrence);
+          nodes.push(
+            <ReadingWordToken
+              key={`chunk-${chunkIndex}-${tokenKey++}`}
+              surface={surface}
+              inVault={inVault}
+              selected={mark === "selected"}
+              similar={mark === "similar"}
+              wordStart={start}
+              wordEnd={end}
+              onClick={() => handleSelectWord(surface, clean, occurrence)}
+            />
           );
-
-          if (wordData) {
-            const clean = normalizeToken(wordData.word);
-            const occurrence = takeOccurrence(clean);
-            const mark = readingWordMark(selectedWord, clean, occurrence);
-            return (
-              <span key={`chunk-${chunkIndex}-${index}`}>
-                <ReadingWordToken
-                  surface={highlightedWord}
-                  inVault
-                  selected={mark === "selected"}
-                  similar={mark === "similar"}
-                  onClick={() =>
-                    handleSelectWord(highlightedWord, clean, occurrence)
-                  }
-                />
-              </span>
-            );
-          }
-        } else if (part.trim() && part.length > 0) {
-          const words = part.split(/(\s+)/);
-          return words.map((word, wordIndex) => {
-            if (word.trim() && word.length > 2) {
-              const cleanWordText = normalizeToken(word);
-              if (cleanWordText.length >= 3) {
-                const occurrence = takeOccurrence(cleanWordText);
-                const mark = readingWordMark(
-                  selectedWord,
-                  cleanWordText,
-                  occurrence
-                );
-                return (
-                  <span key={`chunk-${chunkIndex}-${index}-${wordIndex}`}>
-                    <ReadingWordToken
-                      surface={word}
-                      inVault={false}
-                      selected={mark === "selected"}
-                      similar={mark === "similar"}
-                      onClick={() =>
-                        handleSelectWord(word, cleanWordText, occurrence)
-                      }
-                    />
-                  </span>
-                );
-              }
-            }
-            return word;
-          });
+        } else {
+          nodes.push(
+            <span
+              key={`chunk-${chunkIndex}-${tokenKey++}`}
+              data-word-start={start}
+              data-word-end={end}
+            >
+              {surface}
+            </span>
+          );
         }
-        return part;
-      });
+        last = end;
+      }
+      if (last < content.length) nodes.push(content.slice(last));
+      return nodes;
     },
     [foundWords, selectedWord, handleSelectWord]
   );
@@ -660,6 +658,9 @@ export function TextViewer({
     return renderTextChunk(visibleText);
   }, [visibleText, renderTextChunk]);
 
+  const readingProgress =
+    pages.length <= 1 ? 0 : (pageIndex / (pages.length - 1)) * 100;
+
   if (isLoading) {
     return (
       <div className="text-center py-8">
@@ -672,7 +673,12 @@ export function TextViewer({
   return (
     <div>
     <div className="flex items-start">
-      <div className="min-w-0 flex-1 px-6 sm:px-8 lg:px-16 xl:px-24 2xl:px-32">
+      <div
+        className={cn(
+          "min-w-0 flex-1 px-6 sm:px-8 lg:px-16 xl:px-24 2xl:px-32",
+          paged && !isEditing && "flex min-h-[calc(100dvh-8rem)] flex-col"
+        )}
+      >
         <div className="mb-4 flex items-center justify-between gap-3">
           {isEditing ? (
             <Input
@@ -737,7 +743,7 @@ export function TextViewer({
               placeholder="Digite ou cole o texto aqui..."
             />
             <div
-              ref={selectionContainerRef}
+              ref={setReadingRoot}
               data-text-selection-container
               className="select-text text-[20px] leading-[2.05] text-zinc-900 dark:text-zinc-100"
             >
@@ -746,7 +752,7 @@ export function TextViewer({
           </div>
         ) : (
           <div
-            ref={selectionContainerRef}
+            ref={setReadingRoot}
             data-text-selection-container
             className="select-text text-[20px] leading-[2.05] text-zinc-900 dark:text-zinc-100"
           >
@@ -754,35 +760,7 @@ export function TextViewer({
           </div>
         )}
         {paged && !isEditing && pages.length > 0 && (
-          <div className="mt-10 flex items-center justify-between gap-3 text-[13px] text-[#777] dark:text-zinc-400">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={pageIndex === 0}
-              onClick={() => setPageIndex((current) => Math.max(0, current - 1))}
-              className="gap-1"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              Anterior
-            </Button>
-            <span>
-              {pageIndex + 1} de {pages.length}
-            </span>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              disabled={pageIndex >= pages.length - 1}
-              onClick={() =>
-                setPageIndex((current) => Math.min(pages.length - 1, current + 1))
-              }
-              className="gap-1"
-            >
-              Próxima
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </div>
+          <div className="h-28 shrink-0" />
         )}
       </div>
       <div
@@ -795,9 +773,7 @@ export function TextViewer({
         sourceText={visibleText}
         userVaults={userVaults}
         wordInfo={selectedWord ? wordInfoMap[selectedWord.clean] : null}
-        isLoadingInfo={
-          !!selectedWord && loadingWords.has(selectedWord.clean)
-        }
+        isLoadingInfo={!!selectedWord && loadingWords.has(selectedWord.clean)}
         isSaving={isAddingWord}
         autoTranslateWordPreview={autoTranslateWordPreview}
         showContextualize={paged && !isEditing}
@@ -812,6 +788,52 @@ export function TextViewer({
         onRemove={handleRemoveWordFromVault}
       />
       </div>
+
+      {paged && !isEditing && pages.length > 0 && (
+        <div
+          className={cn(
+            "fixed top-14 left-0 z-20 h-1.5 bg-black/10 dark:bg-white/10",
+            selectedWord ? "right-0 lg:right-[var(--reading-panel-width)]" : "right-0"
+          )}
+          role="progressbar"
+          aria-valuenow={Math.round(readingProgress)}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-label="Progresso da leitura"
+        >
+          <div
+            className="h-full bg-[#24c875] transition-[width] duration-300"
+            style={{ width: `${readingProgress}%` }}
+          />
+        </div>
+      )}
+
+      {paged && !isEditing && pages.length > 0 && (
+        <div
+          className={cn(
+            "fixed bottom-5 z-30 flex w-[min(92vw,26rem)] -translate-x-1/2 flex-col items-center",
+            selectedWord
+              ? "left-1/2 lg:left-[calc((100%-var(--reading-panel-width))/2)]"
+              : "left-1/2"
+          )}
+        >
+          <div className="rounded-full border border-white/10 bg-[#181818] px-4 py-2 shadow-[0_12px_32px_rgba(0,0,0,0.55)]">
+            <PageSpeechControls
+              status={speech.status}
+              canPlay={speech.canPlay}
+              onToggle={speech.toggle}
+              canNext={pageIndex < pages.length - 1}
+              canPrevious={pageIndex > 0}
+              onNextPart={() =>
+                setPageIndex((current) => Math.min(pages.length - 1, current + 1))
+              }
+              onPreviousPart={() =>
+                setPageIndex((current) => Math.max(0, current - 1))
+              }
+            />
+          </div>
+        </div>
+      )}
 
       {/* Modal de edição de palavra */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
