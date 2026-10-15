@@ -29,7 +29,7 @@ export function NotesSection({
   onRightClick,
 }: NotesSectionProps) {
   return (
-    <div className="rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 dark:bg-gray-950">
+    <div className="rounded-2xl border border-[#e8eaed] shadow-sm bg-white p-5 dark:bg-gray-950">
       <h3 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
         Anotações
       </h3>
@@ -59,7 +59,7 @@ export function NotesSection({
           </div>
         ) : (
           <div
-            className="min-h-64 cursor-pointer rounded-2xl border-2 border-[#e5e5e5] p-4 transition-colors hover:border-[#1cb0f6]/40"
+            className="min-h-64 cursor-pointer rounded-2xl border border-[#e8eaed] shadow-sm p-4 transition-colors hover:border-[#24c875]/40"
             onClick={onStartEditing}
           >
             {notes ? (
@@ -74,7 +74,7 @@ export function NotesSection({
                       e.stopPropagation();
                       onStartEditing();
                     }}
-                    className="text-xs font-extrabold uppercase tracking-wide text-[#1cb0f6]"
+                    className="text-xs font-extrabold uppercase tracking-wide text-[#14804a] dark:text-[#7ddea8]"
                   >
                     Editar
                   </button>
@@ -85,7 +85,7 @@ export function NotesSection({
                       return (
                         <span
                           key={part.key}
-                          className="rounded-full bg-[#1cb0f6] px-2 py-0.5 font-extrabold text-white"
+                          className="rounded-full bg-[#24c875] px-2 py-0.5 font-extrabold text-white"
                         >
                           @{part.content}
                         </span>
@@ -121,7 +121,7 @@ export function NotesSection({
             .map((wordItem) => (
               <div
                 key={wordItem.id}
-                className={`flex items-center justify-between gap-2 rounded-2xl border-2 border-[#e5e5e5] p-3 ${getColorClasses(
+                className={`flex items-center justify-between gap-2 rounded-2xl border border-[#e8eaed] shadow-sm p-3 ${getColorClasses(
                   wordItem.highlightColor || ""
                 )}`}
                 onContextMenu={(e) => onRightClick(e, wordItem.id)}

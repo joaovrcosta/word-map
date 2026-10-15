@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Volume2 } from "lucide-react";
 import type { FlashcardWord } from "@/actions/flashcards";
 import { playWordAudio } from "@/components/reading-word-panel";
 import type { MatchPair } from "@/lib/flashcard-queue";
+import { AnswerBurst, playAnswerSound, pulseClass } from "./answer-feedback";
 
 interface MatchChallengeProps {
   pairs: MatchPair[];
@@ -32,8 +33,24 @@ export function MatchChallenge({
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [matched, setMatched] = useState<number[]>([]);
   const [wrongChoiceId, setWrongChoiceId] = useState<number | null>(null);
+  const [burstKey, setBurstKey] = useState(0);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const aliveRef = useRef(true);
   const scoredRef = useRef(new Set<number>());
   const missedRef = useRef<FlashcardWord[]>([]);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (burstKey === 0) return;
+    const timer = window.setTimeout(() => setBurstKey(0), 700);
+    return () => window.clearTimeout(timer);
+  }, [burstKey]);
 
   const mark = (word: FlashcardWord, correct: boolean) => {
     if (scoredRef.current.has(word.id)) return;
@@ -61,14 +78,21 @@ export function MatchChallenge({
       setMatched(nextMatched);
       setSelectedId(null);
       setWrongChoiceId(null);
+      playAnswerSound(true);
+      pulseClass(rootRef.current, "flashcard-pop");
+      setBurstKey((current) => current + 1);
       mark(audio.word, true);
       if (nextMatched.length === pairs.length) {
-        onComplete(missedRef.current);
+        window.setTimeout(() => {
+          if (!aliveRef.current) return;
+          onComplete(missedRef.current);
+        }, 650);
       }
       return;
     }
 
     setWrongChoiceId(choice.word.id);
+    playAnswerSound(false);
     mark(audio.word, false);
     window.setTimeout(() => {
       setSelectedId(null);
@@ -78,17 +102,18 @@ export function MatchChallenge({
 
   const rowClass = (active: boolean, done: boolean, wrong: boolean) => {
     if (done) {
-      return "border-[#58cc02] bg-[#58cc02]/10 text-[#3c3c3c] dark:text-white";
+      return "border-[#24c875] bg-[#24c875]/10 text-[#3c3c3c] dark:text-white";
     }
     if (wrong) return "border-red-400 text-[#3c3c3c] dark:text-white";
     if (active) {
-      return "border-[#1cb0f6] bg-[#ddf4ff] text-[#1cb0f6] dark:bg-[#1cb0f6]/15";
+      return "border-[#24c875] bg-[#e7f8ee] text-[#14804a] dark:text-[#7ddea8] dark:bg-[#24c875]/15";
     }
     return "border-[#e5e5e5] bg-white text-[#3c3c3c] hover:bg-[#f7f7f7] dark:border-[#373e47] dark:bg-transparent dark:text-white dark:hover:bg-white/5";
   };
 
   return (
-    <div className="mx-auto w-full max-w-3xl px-2 py-8">
+    <div ref={rootRef} className="relative mx-auto w-full max-w-3xl px-2 py-8">
+      {burstKey > 0 ? <AnswerBurst key={burstKey} /> : null}
       <p className="text-[15px] font-extrabold text-[#3c3c3c] dark:text-white">
         Combine os pares
       </p>
@@ -112,7 +137,7 @@ export function MatchChallenge({
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-current text-[12px] font-extrabold">
                   {index + 1}
                 </span>
-                <Volume2 className="size-4 shrink-0 text-[#1cb0f6]" />
+                <Volume2 className="size-4 shrink-0 text-[#14804a] dark:text-[#7ddea8]" />
               </button>
             );
           })}
@@ -130,7 +155,7 @@ export function MatchChallenge({
                   false,
                   done,
                   wrongChoiceId === choice.word.id
-                )}`}
+                )} ${wrongChoiceId === choice.word.id ? "flashcard-shake" : ""}`}
               >
                 <span className="flex size-7 shrink-0 items-center justify-center rounded-lg border border-[#e5e5e5] text-[12px] font-extrabold text-[#afafaf] dark:border-[#373e47]">
                   {pairs.length + index + 1}

@@ -254,7 +254,7 @@ export function LinkWordsDialog({
                 filteredLinkableWords.map((linkableWord) => (
                   <div
                     key={linkableWord.id}
-                    className="flex items-center justify-between p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg"
+                    className="flex items-center justify-between p-3 bg-[#e7f8ee] dark:bg-[#143022] rounded-lg"
                   >
                     <div className="flex-1">
                       <div className="font-medium text-gray-900 dark:text-white">
@@ -271,7 +271,7 @@ export function LinkWordsDialog({
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-blue-600 hover:text-blue-700 hover:bg-blue-100"
+                      className="text-[#14804a] hover:text-[#1eaf68] hover:bg-[#e7f8ee]"
                       onClick={() => handleLinkWord(linkableWord.id)}
                       disabled={isLoading}
                     >

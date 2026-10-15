@@ -423,7 +423,7 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                       <div className="flex items-start justify-between">
                         <div className="flex-1">
                           <div className="flex items-center gap-2 mb-1">
-                            <BookOpen className="h-4 w-4 text-blue-500" />
+                            <BookOpen className="h-4 w-4 text-[#14804a]" />
                             <span className="font-medium text-sm text-gray-900 dark:text-white">
                               {result.word.name}
                             </span>
@@ -554,7 +554,7 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                                         disabled={isAddingToVault}
                                       >
                                         <div className="flex items-center w-full">
-                                          <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center mr-3">
+                                          <div className="w-8 h-8 bg-[#e7f8ee]0 rounded flex items-center justify-center mr-3">
                                             <BookOpen className="h-4 w-4 text-white" />
                                           </div>
                                           <span className="text-sm text-gray-900 dark:text-white flex-1">
@@ -566,7 +566,7 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                                               className="!h-5 !w-5 text-green-600 cursor-pointer hover:text-green-600 transition-colors"
                                             />
                                           ) : isAddingToVault ? (
-                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500"></div>
+                                            <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-[#24c875]"></div>
                                           ) : (
                                             <div className="w-5 h-5 border border-gray-300 dark:border-gray-600 rounded-full"></div>
                                           )}
@@ -730,7 +730,7 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                                         disabled={isAddingToVault}
                                       >
                                         <div className="flex items-center w-full">
-                                          <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center mr-3">
+                                          <div className="w-8 h-8 bg-[#e7f8ee]0 rounded flex items-center justify-center mr-3">
                                             <BookOpen className="h-4 w-4 text-white" />
                                           </div>
                                           <span className="text-sm text-gray-900 dark:text-white flex-1">
@@ -739,7 +739,7 @@ export function SearchWord({ onWordSelect }: SearchWordProps) {
                                           {isInVault ? (
                                             <Check className="h-4 w-4 text-green-500 cursor-pointer hover:text-green-600 transition-colors" />
                                           ) : isAddingToVault ? (
-                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+                                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#24c875]"></div>
                                           ) : (
                                             <div className="w-4 h-4 border border-gray-300 dark:border-gray-600 rounded-full"></div>
                                           )}

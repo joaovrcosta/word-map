@@ -88,14 +88,14 @@ describe("Utils", () => {
 
     it("deve lidar com classes complexas do Tailwind", () => {
       const result = cn(
-        "bg-gradient-to-r from-blue-500 to-purple-600",
+        "bg-gradient-to-r from-[#e7f8ee]0 to-purple-600",
         "hover:from-blue-600 hover:to-purple-700",
         "focus:ring-2 focus:ring-blue-500",
         "disabled:opacity-50 disabled:cursor-not-allowed"
       );
 
       expect(result).toBe(
-        "bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        "bg-gradient-to-r from-[#e7f8ee]0 to-purple-600 hover:from-blue-600 hover:to-purple-700 focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
       );
     });
 

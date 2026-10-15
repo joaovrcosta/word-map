@@ -39,14 +39,14 @@ export default function VaultFlashcardsPage() {
   if (loading) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-[#1cb0f6]" />
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-[#24c875]" />
       </div>
     );
   }
 
   if (error || !vaultInfo) {
     return (
-      <div className="min-h-full bg-white px-8 pt-10 dark:bg-[#22272e]">
+      <div className="min-h-full bg-[#f6f7f9] px-8 pt-10 dark:bg-[#22272e]">
         <p className="text-[15px] font-extrabold text-[#3c3c3c] dark:text-white">
           Vault não encontrado
         </p>
@@ -55,7 +55,7 @@ export default function VaultFlashcardsPage() {
         </p>
         <Link
           href="/home/flashcards"
-          className="mt-6 inline-flex text-[13px] font-extrabold uppercase tracking-wide text-[#1cb0f6]"
+          className="mt-6 inline-flex text-[13px] font-extrabold uppercase tracking-wide text-[#14804a] dark:text-[#7ddea8]"
         >
           Voltar
         </Link>
@@ -64,7 +64,7 @@ export default function VaultFlashcardsPage() {
   }
 
   return (
-    <div className="min-h-full bg-white dark:bg-[#22272e]">
+    <div className="min-h-full bg-[#f6f7f9] dark:bg-[#22272e]">
       <div className="px-8 pt-5 pb-10">
         <Link
           href={`/home/vault/${vaultId}`}

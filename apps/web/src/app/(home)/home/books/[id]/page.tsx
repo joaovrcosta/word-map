@@ -56,7 +56,7 @@ export default function BookPage() {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1cb0f6] mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#24c875] mx-auto"></div>
           <p className="mt-4 text-gray-600">Carregando livro...</p>
         </div>
       </div>
@@ -78,7 +78,7 @@ export default function BookPage() {
   }
 
   return (
-    <div className="min-h-full bg-white dark:bg-gray-950">
+    <div className="min-h-full bg-[#f6f7f9] dark:bg-gray-950">
       <div className="px-8 pt-5 pb-8">
         <Button
           variant="ghost"
@@ -91,7 +91,7 @@ export default function BookPage() {
 
         <div className="flex items-start justify-between gap-4">
           <div>
-            <p className="text-xs font-extrabold uppercase tracking-wide text-[#1cb0f6]">
+            <p className="text-xs font-extrabold uppercase tracking-wide text-[#14804a] dark:text-[#7ddea8]">
               {book.isOfficial ? "Livro oficial" : "Meu livro"}
             </p>
             <h1 className="mt-1 text-[26px] font-extrabold text-[#3c3c3c] dark:text-white">
@@ -120,7 +120,7 @@ export default function BookPage() {
             book.chapters.map((chapter, index) => (
               <li
                 key={chapter.id}
-                className="flex items-center justify-between gap-4 rounded-2xl border-2 border-[#e5e5e5] px-5 py-4 hover:border-[#1cb0f6]/40 dark:border-gray-800"
+                className="flex items-center justify-between gap-4 rounded-2xl border border-[#e8eaed] shadow-sm px-5 py-4 hover:border-[#24c875]/40 dark:border-gray-800"
               >
                 <button
                   type="button"
@@ -131,7 +131,7 @@ export default function BookPage() {
                     )
                   }
                 >
-                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#ddf4ff] text-sm font-extrabold text-[#1cb0f6]">
+                  <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-[#e7f8ee] text-sm font-extrabold text-[#14804a] dark:text-[#7ddea8]">
                     {index + 1}
                   </span>
                   <span className="truncate text-[16px] font-extrabold text-[#3c3c3c] dark:text-white">

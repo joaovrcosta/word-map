@@ -2,8 +2,14 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
+import { useQuery } from "@tanstack/react-query";
 import { useVaults } from "@/hooks/use-words";
-import { Crown, ChevronDown } from "lucide-react";
+import { getRanking } from "@/actions/actions";
+import { withPendingPoints } from "@/lib/points-optimistic";
+import { readingBackHref } from "@/lib/reading-route";
+import { CountUp } from "@/components/count-up";
+import { BookOpen, ChevronLeft, Crown, ChevronDown, Trophy } from "lucide-react";
 import type { VaultNavItem } from "@/types/vault-nav";
 
 function UkFlag() {
@@ -34,6 +40,10 @@ export function AppHeader({
   initialVaults?: VaultNavItem[];
 }) {
   const { data } = useVaults();
+  const { data: ranking } = useQuery({
+    queryKey: ["ranking", "lifetime"],
+    queryFn: async () => withPendingPoints(await getRanking("lifetime")),
+  });
   const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
@@ -46,15 +56,37 @@ export function AppHeader({
         0
       )
     : countSavedWords(initialVaults);
+  const backHref = readingBackHref(usePathname());
 
   return (
-    <header className="flex h-12 shrink-0 items-center justify-end gap-3 border-b border-[#e5e5e5] bg-white px-4 dark:border-[#373e47] dark:bg-[#1c2128]">
+    <header className="flex h-14 shrink-0 items-center justify-end gap-3 border-b border-[#e8eaed] bg-white px-4 dark:border-[#373e47] dark:bg-[#1c2128]">
+      {backHref ? (
+        <Link
+          href={backHref}
+          aria-label="Voltar"
+          className="mr-auto inline-flex h-9 items-center gap-2 rounded-lg px-1 text-[#8b949e] hover:text-[#1a1a1a] dark:hover:text-white"
+        >
+          <ChevronLeft className="size-5" strokeWidth={2.5} />
+          <span className="flex size-8 items-center justify-center rounded-md bg-[#e8eaed] text-[#3c3c3c] dark:bg-[#4a515a] dark:text-[#e6edf3]">
+            <BookOpen className="size-4" />
+          </span>
+        </Link>
+      ) : null}
       <Link
         href="/home/profile"
-        className="inline-flex h-8 items-center gap-1.5 rounded-md bg-[#f5a623] px-3 text-[12px] font-extrabold uppercase tracking-wide text-[#1a1208] hover:bg-[#ffb83a]"
+        className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-[#24c875] px-3 text-[13px] font-bold text-white hover:bg-[#1eaf68]"
       >
         <Crown className="h-3.5 w-3.5" strokeWidth={2.5} />
         Seja Premium
+      </Link>
+
+      <Link
+        href="/home/ranking"
+        className="inline-flex h-8 items-center gap-1.5 rounded-md px-2 text-[13px] font-bold text-[#14804a] hover:bg-[#e7f8ee] dark:text-[#7ddea8] dark:hover:bg-[#24c875]/15"
+        title="Seus pontos"
+      >
+        <Trophy className="h-3.5 w-3.5" />
+        {ranking ? <CountUp value={ranking.me.points} /> : <span>0</span>}
       </Link>
 
       <Link

@@ -14,7 +14,7 @@ describe("Button Component", () => {
     render(<Button>Botão</Button>);
 
     const button = screen.getByRole("button");
-    expect(button).toHaveClass("bg-[#1cb0f6]", "text-white", "rounded-full");
+    expect(button).toHaveClass("bg-[#24c875]", "text-white", "rounded-xl");
   });
 
   it("deve aplicar variante destructive", () => {
@@ -29,10 +29,10 @@ describe("Button Component", () => {
 
     const button = screen.getByRole("button");
     expect(button).toHaveClass(
-      "border-2",
-      "border-[#1cb0f6]",
+      "border-[#24c875]",
       "bg-transparent",
-      "rounded-full"
+      "text-[#14804a]",
+      "rounded-xl"
     );
   });
 
@@ -59,7 +59,7 @@ describe("Button Component", () => {
 
     const button = screen.getByRole("button");
     expect(button).toHaveClass(
-      "text-[#1cb0f6]",
+      "text-[#14804a]",
       "underline-offset-4",
       "rounded-none"
     );

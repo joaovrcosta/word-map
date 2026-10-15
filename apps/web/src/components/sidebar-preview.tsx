@@ -193,7 +193,7 @@ export function SidebarPreview() {
             <>
               <Button
                 variant="outline"
-                className="w-full justify-start gap-3 bg-gradient-to-r from-blue-50 to-indigo-50 hover:from-blue-100 hover:to-indigo-100 border-blue-200"
+                className="w-full justify-start gap-3 bg-gradient-to-r from-[#e7f8ee] to-[#e7f8ee] hover:from-[#d8f5e6] hover:to-[#d8f5e6] border-[#c8ead6]"
               >
                 <Plus size={18} />
                 Criar Novo

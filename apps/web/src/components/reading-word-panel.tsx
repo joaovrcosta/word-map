@@ -200,7 +200,7 @@ const LEVEL_COLORS = [
   "bg-[#ff4b4b] text-white",
   "bg-[#ff9600] text-white",
   "bg-[#ffc800] text-[#3c3c3c]",
-  "bg-[#58cc02] text-white",
+  "bg-[#24c875] text-white",
 ];
 
 export function playWordAudio(word: string, onEnd?: () => void) {
@@ -268,18 +268,18 @@ export function ReadingWordToken({
             ? "inline-block px-1.5 py-0.5 leading-none"
             : "inline px-[2px] py-[1px]",
           inVault &&
-          "bg-[#ddf4ff] text-[#1cb0f6] dark:bg-[#1cb0f6]/25 dark:text-[#7ed0fb]",
+          "bg-[#e7f8ee] text-[#14804a] dark:text-[#7ddea8] dark:bg-[#24c875]/25 ",
           !marked && "hover:bg-black/[0.04] dark:hover:bg-white/10",
           similar &&
-          "bg-[#edf9df] !text-zinc-900 dark:bg-[#58cc02]/15 dark:!text-zinc-100",
+          "bg-[#edf9df] !text-zinc-900 dark:bg-[#24c875]/15 dark:!text-zinc-100",
           selected &&
-          "relative bg-[#58cc02] !text-white shadow-none dark:bg-[#58cc02] dark:!text-white dark:shadow-none"
+          "relative bg-[#24c875] !text-white shadow-none dark:bg-[#24c875] dark:!text-white dark:shadow-none"
         )}
       >
         {selected && (
           <span
             aria-hidden
-            className="pointer-events-none absolute left-1/2 top-0 h-0 w-0 -translate-x-1/2 -translate-y-[calc(100%-1px)] border-x-[6px] border-b-[7px] border-x-transparent border-b-[#58cc02]"
+            className="pointer-events-none absolute left-1/2 top-0 h-0 w-0 -translate-x-1/2 -translate-y-[calc(100%-1px)] border-x-[6px] border-b-[7px] border-x-transparent border-b-[#24c875]"
           />
         )}
         {core}
@@ -640,7 +640,7 @@ export function ReadingWordPanel({
         expanded
           ? "max-lg:max-h-[min(72dvh,560px)]"
           : "max-lg:max-h-none",
-        "lg:inset-x-auto lg:top-12 lg:right-0 lg:bottom-auto lg:h-[calc(100dvh-3rem)] lg:w-[var(--reading-panel-width)] lg:max-h-none lg:rounded-none lg:border-l lg:shadow-none"
+        "lg:inset-x-auto lg:top-14 lg:right-0 lg:bottom-auto lg:h-[calc(100dvh-3.5rem)] lg:w-[var(--reading-panel-width)] lg:max-h-none lg:rounded-none lg:border-l lg:shadow-none"
       )}
       onTransitionEnd={(event) => {
         if (event.target !== event.currentTarget) return;
@@ -704,7 +704,7 @@ export function ReadingWordPanel({
         }}
         className={cn(
           "absolute inset-y-0 left-0 z-20 hidden w-3 cursor-col-resize touch-none lg:block",
-          "after:absolute after:inset-y-0 after:left-0 after:w-0.5 after:bg-[#58cc02] after:opacity-0 hover:after:opacity-80",
+          "after:absolute after:inset-y-0 after:left-0 after:w-0.5 after:bg-[#24c875] after:opacity-0 hover:after:opacity-80",
           isResizing && "after:opacity-100"
         )}
       />
@@ -726,7 +726,7 @@ export function ReadingWordPanel({
         </div>
         <div className="flex shrink-0 items-center gap-1">
           {selected.saved && (
-            <span className="inline-flex h-7 w-7 items-center justify-center text-[#58cc02]">
+            <span className="inline-flex h-7 w-7 items-center justify-center text-[#24c875]">
               <Check className="h-4 w-4" strokeWidth={2.5} />
             </span>
           )}
@@ -795,7 +795,7 @@ export function ReadingWordPanel({
             <GrammarClassLink
               key={badge}
               value={badge}
-              className="rounded bg-[#f3f3f3] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#888] hover:bg-[#eef6ff] hover:text-[#1cb0f6] dark:bg-white/10 dark:text-gray-400 dark:hover:text-sky-300"
+              className="rounded bg-[#f3f3f3] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#888] hover:bg-[#e7f8ee] hover:text-[#14804a] dark:hover:text-[#7ddea8] dark:bg-white/10 dark:text-gray-400 dark:hover:text-[#7ddea8]"
             />
           ))}
         </div>
@@ -808,13 +808,13 @@ export function ReadingWordPanel({
             {selectedMeanings.map((item) => (
               <div
                 key={item}
-                className="flex items-start justify-between gap-2 rounded bg-[#eef6ff] px-2.5 py-1.5 text-[13px] text-[#2b7de9] dark:bg-sky-950 dark:text-sky-300"
+                className="flex items-start justify-between gap-2 rounded bg-[#e7f8ee] px-2.5 py-1.5 text-[13px] text-[#14804a] dark:bg-[#143022] dark:text-[#7ddea8]"
               >
                 <span className="min-w-0 leading-snug">{item}</span>
                 <button
                   type="button"
                   onClick={() => void handleRemoveMeaning(item)}
-                  className="shrink-0 text-[#2b7de9]/70 hover:text-[#2b7de9]"
+                  className="shrink-0 text-[#14804a]/70 hover:text-[#14804a]"
                   aria-label={`Remover ${item}`}
                 >
                   <X className="h-3.5 w-3.5" />
@@ -853,7 +853,7 @@ export function ReadingWordPanel({
             type="button"
             disabled={!customMeaning.trim() || isSaving || !vaultId}
             onClick={() => void handleAddMeaning(customMeaning)}
-            className="inline-flex h-9 w-8 shrink-0 items-center justify-center text-[#b0b0b0] hover:text-[#2b7de9] disabled:opacity-30"
+            className="inline-flex h-9 w-8 shrink-0 items-center justify-center text-[#b0b0b0] hover:text-[#14804a] disabled:opacity-30"
             aria-label="Adicionar significado"
           >
             <Plus className="h-4 w-4" />
@@ -888,7 +888,7 @@ export function ReadingWordPanel({
               {origins.map((item) => (
                 <li
                   key={item.id}
-                  className="border-l-2 border-[#1cb0f6] pl-3"
+                  className="border-l-2 border-[#24c875] pl-3"
                 >
                   <p className="text-[11px] text-[#8a8a8a] dark:text-zinc-400">
                     {formatOriginDate(item.createdAt)}
@@ -898,7 +898,7 @@ export function ReadingWordPanel({
                   <p className="mt-0.5 text-[12px] leading-snug text-[#555] dark:text-zinc-300">
                     {item.sentence || "Adicionada no vault"}
                   </p>
-                  <p className="mt-0.5 text-[13px] font-medium text-[#2b7de9] dark:text-sky-300">
+                  <p className="mt-0.5 text-[13px] font-medium text-[#14804a] dark:text-[#7ddea8]">
                     Significado: {item.meaning}
                   </p>
                 </li>
@@ -932,7 +932,7 @@ export function ReadingWordPanel({
                 type="button"
                 disabled={isSaving || !vaultId}
                 onClick={() => void handleAddMeaning(item)}
-                className="flex w-full items-center justify-between gap-2 rounded bg-[#f6f6f6] px-2.5 py-1.5 text-left text-[13px] text-[#2b7de9] hover:bg-[#eef6ff] disabled:opacity-40 dark:bg-zinc-800 dark:text-sky-300 dark:hover:bg-zinc-700"
+                className="flex w-full items-center justify-between gap-2 rounded bg-[#f6f6f6] px-2.5 py-1.5 text-left text-[13px] text-[#14804a] hover:bg-[#e7f8ee] disabled:opacity-40 dark:bg-zinc-800 dark:text-[#7ddea8] dark:hover:bg-zinc-700"
               >
                 <span className="line-clamp-2 min-w-0 leading-snug">{item}</span>
                 <Plus className="h-3.5 w-3.5 shrink-0 text-[#b0b0b0]" />

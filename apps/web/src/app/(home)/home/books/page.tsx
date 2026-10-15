@@ -105,7 +105,7 @@ export default function BooksPage() {
     cn(
       "py-3 text-[13px] font-extrabold uppercase tracking-wide border-b-4 transition-colors",
       activeTab === tab
-        ? "border-[#1cb0f6] text-[#1cb0f6]"
+        ? "border-[#24c875] text-[#14804a] dark:text-[#7ddea8]"
         : "border-transparent text-[#afafaf] hover:text-[#777]"
     );
 
@@ -115,7 +115,7 @@ export default function BooksPage() {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1cb0f6] mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#24c875] mx-auto"></div>
           <p className="mt-4 text-gray-600">Carregando livros...</p>
         </div>
       </div>
@@ -123,7 +123,7 @@ export default function BooksPage() {
   }
 
   return (
-    <div className="min-h-full bg-white dark:bg-gray-950 max-w-full overflow-x-hidden">
+    <div className="min-h-full bg-[#f6f7f9] dark:bg-gray-950 max-w-full overflow-x-hidden">
       <div className="px-8 pt-5">
         <div className="flex items-center gap-3">
           <span className="text-[26px] leading-none" aria-hidden="true">
@@ -170,7 +170,7 @@ export default function BooksPage() {
 
             {officialBooks.length === 0 ? (
               <div className="flex flex-col items-center py-16 text-center">
-                <Store className="size-12 text-[#1cb0f6]" />
+                <Store className="size-12 text-[#14804a] dark:text-[#7ddea8]" />
                 <p className="mt-4 text-[15px] font-bold text-[#3c3c3c]">
                   A loja ainda não tem livros
                 </p>
@@ -194,7 +194,7 @@ export default function BooksPage() {
                     }}
                     action={
                       book.inLibrary ? (
-                        <span className="text-xs font-extrabold uppercase tracking-wide text-[#58cc02]">
+                        <span className="text-xs font-extrabold uppercase tracking-wide text-[#24c875]">
                           Na biblioteca
                         </span>
                       ) : (
@@ -324,7 +324,7 @@ function BookCard({
   action: React.ReactNode;
 }) {
   return (
-    <div className="rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 transition-colors hover:border-[#1cb0f6]/40 dark:border-[#373e47] dark:bg-[#2d333b]">
+    <div className="rounded-2xl border border-[#e8eaed] shadow-sm bg-white p-5 transition-colors hover:border-[#24c875]/40 dark:border-[#373e47] dark:bg-[#2d333b]">
       <div className="flex items-start justify-between gap-2">
         <button type="button" onClick={onOpen} className="text-left min-w-0">
           <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">

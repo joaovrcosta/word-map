@@ -64,7 +64,7 @@ export function VaultReport({ words }: { words: Word[] }) {
                   <span className="text-[15px] font-extrabold text-[#3c3c3c] dark:text-white">
                     {level.label}
                   </span>
-                  <span className="text-[15px] font-bold text-[#1cb0f6]">
+                  <span className="text-[15px] font-bold text-[#14804a] dark:text-[#7ddea8]">
                     {level.count}
                   </span>
                 </li>
@@ -85,7 +85,7 @@ export function VaultReport({ words }: { words: Word[] }) {
                   <span className="text-[15px] font-extrabold text-[#3c3c3c] dark:text-white">
                     {label}
                   </span>
-                  <span className="text-[15px] font-bold text-[#1cb0f6]">
+                  <span className="text-[15px] font-bold text-[#14804a] dark:text-[#7ddea8]">
                     {count}
                   </span>
                 </li>

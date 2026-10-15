@@ -21,7 +21,7 @@ export function MentionDropdown({
 
   return (
     <div
-      className="fixed z-50 max-h-48 min-w-[200px] overflow-y-auto rounded-2xl border-2 border-[#e5e5e5] bg-white py-1 shadow-lg dark:bg-gray-950"
+      className="fixed z-50 max-h-48 min-w-[200px] overflow-y-auto rounded-2xl border border-[#e8eaed] shadow-sm bg-white py-1 shadow-lg dark:bg-gray-950"
       style={{
         left: mentionPosition.x,
         top: mentionPosition.y,
@@ -34,7 +34,7 @@ export function MentionDropdown({
         <button
           key={index}
           onClick={() => onInsertMention(option.name)}
-          className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[#ddf4ff]"
+          className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-[#e7f8ee]"
         >
           <span className="text-sm font-extrabold text-[#3c3c3c]">
             {option.name}

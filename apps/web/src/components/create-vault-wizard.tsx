@@ -96,7 +96,7 @@ export function CreateVaultWizard() {
   };
 
   return (
-    <div className="min-h-screen bg-white dark:bg-gray-950 flex flex-col">
+    <div className="min-h-screen bg-[#f6f7f9] dark:bg-gray-950 flex flex-col">
       <header className="flex items-center gap-4 px-4 sm:px-8 pt-5 pb-3">
         <button
           type="button"
@@ -108,7 +108,7 @@ export function CreateVaultWizard() {
         </button>
         <div className="flex-1 h-4 rounded-full bg-[#e5e5e5] overflow-hidden">
           <div
-            className="h-full rounded-full bg-[#58cc02] transition-all duration-300"
+            className="h-full rounded-full bg-[#24c875] transition-all duration-300"
             style={{ width: "14%" }}
           />
         </div>
@@ -123,7 +123,7 @@ export function CreateVaultWizard() {
 
           <div className="mt-8">
             <label className="flex items-start gap-3 cursor-pointer">
-              <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-[5px] border-[#1cb0f6] bg-white" />
+              <span className="mt-0.5 flex size-5 shrink-0 items-center justify-center rounded-full border-[5px] border-[#24c875] bg-white" />
               <span className="text-[15px] font-bold text-[#3c3c3c] dark:text-gray-100">
                 Começar novo vault do zero
               </span>
@@ -152,7 +152,7 @@ export function CreateVaultWizard() {
                 placeholder="Ex: Inglês 1"
                 autoFocus
                 disabled={isLoading}
-                className="w-full h-12 rounded-2xl bg-[#f7f7f7] dark:bg-gray-800 border-0 px-4 text-[15px] text-[#3c3c3c] dark:text-white placeholder:text-[#afafaf] outline-none focus:ring-2 focus:ring-[#1cb0f6]/40"
+                className="w-full h-12 rounded-2xl bg-[#f7f7f7] dark:bg-gray-800 border-0 px-4 text-[15px] text-[#3c3c3c] dark:text-white placeholder:text-[#afafaf] outline-none focus:ring-2 focus:ring-[#24c875]/40"
               />
             </div>
           </div>
@@ -168,10 +168,10 @@ export function CreateVaultWizard() {
           type="button"
           onClick={handleContinue}
           disabled={!canContinue}
-          className={`min-w-[160px] h-[50px] rounded-2xl px-6 text-sm font-extrabold uppercase tracking-wide transition-all ${
+          className={`min-w-[160px] h-[50px] rounded-xl px-6 text-sm font-bold transition-all ${
             canContinue
-              ? "bg-[#58cc02] text-white border-b-4 border-[#46a302] hover:brightness-105 active:translate-y-[2px] active:border-b-2"
-              : "bg-[#e5e5e5] text-[#afafaf] border-b-4 border-[#e5e5e5] cursor-not-allowed"
+              ? "bg-[#24c875] text-white hover:bg-[#1eaf68]"
+              : "cursor-not-allowed bg-[#e5e5e5] text-[#afafaf]"
           }`}
         >
           {isLoading ? "Criando..." : "Continuar"}

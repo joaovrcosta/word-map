@@ -151,7 +151,7 @@ export const EditableTranslationsCell = memo(function EditableTranslationsCell({
           </Button>
         </div>
         {isLoading && (
-          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-500"></div>
+          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#24c875]"></div>
         )}
       </div>
     );
@@ -171,7 +171,7 @@ export const EditableTranslationsCell = memo(function EditableTranslationsCell({
             return (
               <span
                 key={index}
-                className="px-2.5 py-1 text-xs font-bold rounded-full bg-[#ddf4ff] text-[#1cb0f6] lowercase cursor-default"
+                className="px-2.5 py-1 text-xs font-bold rounded-full bg-[#e7f8ee] text-[#14804a] dark:text-[#7ddea8] lowercase cursor-default"
                 title={isLong ? translation : undefined}
               >
                 {displayText}
@@ -184,7 +184,7 @@ export const EditableTranslationsCell = memo(function EditableTranslationsCell({
         size="sm"
         variant="ghost"
         onClick={handleEdit}
-        className="p-0 opacity-0 !h-[32px] text-[#1cb0f6] group-hover:opacity-100 transition-opacity hover:bg-blue-100 hover:text-[#1cb1f6d7]"
+        className="p-0 opacity-0 !h-[32px] text-[#14804a] dark:text-[#7ddea8] group-hover:opacity-100 transition-opacity hover:bg-[#e7f8ee] hover:text-[#14804a]"
         title="Editar traduções"
       >
         <p className="text-sm">Editar traduções</p>

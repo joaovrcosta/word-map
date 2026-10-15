@@ -60,7 +60,7 @@ export function DeleteVaultSettings({
   };
 
   return (
-    <section className="rounded-2xl border-2 border-[#e5e5e5] p-5 dark:border-[#373e47]">
+    <section className="rounded-2xl border border-[#e8eaed] shadow-sm p-5 dark:border-[#373e47]">
       <h2 className="text-[15px] font-extrabold text-[#3c3c3c] dark:text-white">
         Deletar vault
       </h2>
@@ -71,7 +71,7 @@ export function DeleteVaultSettings({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="mt-4 inline-flex h-12 items-center justify-center rounded-2xl border-b-4 border-[#ea2b2b] bg-[#ff4b4b] px-5 text-sm font-extrabold uppercase tracking-wide text-white hover:brightness-105 active:translate-y-0.5 active:border-b-2"
+        className="mt-4 inline-flex h-12 items-center justify-center rounded-xl bg-[#ff4b4b] px-5 text-sm font-bold text-white hover:brightness-105"
       >
         Deletar vault
       </button>
@@ -128,7 +128,7 @@ export function DeleteVaultSettings({
               <button
                 type="submit"
                 disabled={!canDelete}
-                className="inline-flex h-12 items-center justify-center rounded-2xl border-b-4 border-[#ea2b2b] bg-[#ff4b4b] px-5 text-sm font-extrabold uppercase tracking-wide text-white hover:brightness-105 disabled:opacity-50 active:translate-y-0.5 active:border-b-2"
+                className="inline-flex h-12 items-center justify-center rounded-xl bg-[#ff4b4b] px-5 text-sm font-bold text-white hover:brightness-105 disabled:opacity-50"
               >
                 {isDeleting ? "Deletando..." : "Deletar"}
               </button>

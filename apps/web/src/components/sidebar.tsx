@@ -7,11 +7,13 @@ import {
   ChevronRight,
   BookOpen,
   FileText,
+  Home,
   Lightbulb,
   Lock,
   Network,
   PencilLine,
   Plus,
+  Trophy,
 } from "lucide-react";
 import { getCurrentUser } from "@/actions/auth";
 import { useVaults } from "@/hooks/use-words";
@@ -52,6 +54,11 @@ function OwlAvatar() {
 
 const menuLinks = [
   {
+    name: "Início",
+    path: "/home",
+    icon: Home,
+  },
+  {
     name: "Textos",
     path: "/home/texts",
     icon: FileText,
@@ -75,6 +82,11 @@ const menuLinks = [
     name: "Conexões",
     path: "/home/connections",
     icon: Network,
+  },
+  {
+    name: "Ranking",
+    path: "/home/ranking",
+    icon: Trophy,
   },
   {
     name: "Novo vault",
@@ -127,13 +139,11 @@ export default function AppSidebar({
     ? Number(vaultIdFromPath)
     : vaultIdFromQuery
       ? Number(vaultIdFromQuery)
-      : pathName === "/home"
-        ? vaults?.[0]?.id
-        : undefined;
+      : undefined;
 
   return (
     <aside
-      className="relative hidden lg:flex h-screen shrink-0 flex-col bg-[#f7f7f7] dark:bg-[#1c2128] border-r border-[#e5e5e5] dark:border-[#373e47]"
+      className="relative hidden lg:flex h-screen shrink-0 flex-col border-r border-[#e8eaed] bg-white dark:border-[#373e47] dark:bg-[#1c2128]"
       style={{
         width: isOpen ? 300 : 72,
         minWidth: isOpen ? 300 : 72,
@@ -160,7 +170,7 @@ export default function AppSidebar({
             onClick={() => router.push("/home")}
             className="text-left"
           >
-            <span className="text-[22px] font-extrabold tracking-tight text-[#1cb0f6]">
+            <span className="text-[22px] font-extrabold tracking-tight text-[#24c875]">
               wordmap
             </span>{" "}
             <span className="text-[22px] font-extrabold tracking-tight text-[#afafaf]">
@@ -168,7 +178,7 @@ export default function AppSidebar({
             </span>
           </button>
         ) : (
-          <p className="text-center text-[#1cb0f6] font-extrabold text-lg">w</p>
+          <p className="text-center text-[#24c875] font-extrabold text-lg">w</p>
         )}
       </div>
 
@@ -183,13 +193,13 @@ export default function AppSidebar({
                   onClick={() => router.push(`/home/vault/${vault.id}`)}
                   className={`flex w-full items-center gap-3 h-12 text-left ${isOpen ? "px-5" : "justify-center px-0"
                     } ${active
-                      ? "bg-[#ddf4ff] text-[#1cb0f6] dark:bg-[#1cb0f6]/15"
-                      : "text-[#afafaf] hover:bg-black/[0.03] dark:hover:bg-white/5"
+                      ? "bg-[#e7f8ee] text-[#14804a] dark:bg-[#24c875]/15 dark:text-[#7ddea8]"
+                      : "text-[#6e7780] hover:bg-black/[0.03] dark:text-[#8b949e] dark:hover:bg-white/5"
                     }`}
                 >
                   <ClassFlag />
                   {isOpen && (
-                    <span className="truncate text-[13px] font-extrabold uppercase tracking-wide">
+                    <span className="truncate text-[15px] font-bold">
                       {vault.name}
                     </span>
                   )}
@@ -216,13 +226,13 @@ export default function AppSidebar({
                   onClick={() => router.push(link.path)}
                   className={`flex w-full items-center gap-3 min-h-12 py-3 text-left ${isOpen ? "px-5" : "justify-center px-0"
                     } ${active
-                      ? "bg-[#ddf4ff] text-[#1cb0f6] dark:bg-[#1cb0f6]/15"
-                      : "text-[#afafaf] hover:bg-black/[0.03] dark:hover:bg-white/5"
+                      ? "bg-[#e7f8ee] text-[#14804a] dark:bg-[#24c875]/15 dark:text-[#7ddea8]"
+                      : "text-[#6e7780] hover:bg-black/[0.03] dark:text-[#8b949e] dark:hover:bg-white/5"
                     }`}
                 >
                   <Icon className="size-5 shrink-0" strokeWidth={2} />
                   {isOpen && (
-                    <span className="text-[13px] font-extrabold uppercase tracking-wide leading-tight">
+                    <span className="text-[15px] font-bold leading-tight">
                       {link.name}
                     </span>
                   )}
@@ -249,7 +259,7 @@ export default function AppSidebar({
               <p className="truncate text-[15px] font-bold text-[#777] leading-tight">
                 {userLabel}
               </p>
-              <p className="text-[12px] font-extrabold uppercase tracking-wide text-[#1cb0f6]">
+              <p className="text-[13px] font-bold text-[#14804a] dark:text-[#7ddea8]">
                 Editar
               </p>
             </div>

@@ -4,8 +4,8 @@ export const HIGHLIGHT_COLORS: HighlightColor[] = [
   {
     name: "Padrão",
     value: "",
-    bg: "bg-[#ddf4ff]",
-    text: "text-[#1cb0f6]",
+    bg: "bg-[#e7f8ee]",
+    text: "text-[#14804a] dark:text-[#7ddea8]",
   },
   { name: "Vermelho", value: "red", bg: "bg-red-100", text: "text-red-800" },
   { name: "Azul", value: "blue", bg: "bg-blue-100", text: "text-blue-800" },

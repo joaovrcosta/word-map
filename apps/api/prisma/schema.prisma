@@ -33,6 +33,7 @@ model User {
   readingProgress  ReadingProgress[]
   tutorQuota       TutorQuota?
   passageExplanations WordPassageExplanation[]
+  pointAwards      PointAward[]
 }
 
 model UserSettings {
@@ -80,6 +81,19 @@ model Word {
   passageExplanations WordPassageExplanation[]
   clozes           WordCloze[]
   origins          WordOrigin[]
+  pointAward       PointAward?
+}
+
+model PointAward {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  wordId    Int?     @unique
+  points    Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  word      Word?    @relation(fields: [wordId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
 }
 
 model WordOrigin {

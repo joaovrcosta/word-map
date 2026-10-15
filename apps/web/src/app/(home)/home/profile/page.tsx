@@ -54,8 +54,8 @@ const confidenceLabels: Record<number, string> = {
 };
 
 const duoBarColors = [
-  "bg-[#1cb0f6]",
-  "bg-[#58cc02]",
+  "bg-[#24c875]",
+  "bg-[#24c875]",
   "bg-[#ffc800]",
   "bg-[#ce82ff]",
   "bg-[#ff9600]",
@@ -71,7 +71,7 @@ function DuoCard({
 }) {
   return (
     <div
-      className={`rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 dark:border-[#373e47] dark:bg-[#2d333b] ${className}`}
+      className={`rounded-2xl border border-[#e8eaed] shadow-sm bg-white p-5 dark:border-[#373e47] dark:bg-[#2d333b] ${className}`}
     >
       {children}
     </div>
@@ -80,7 +80,7 @@ function DuoCard({
 
 function ProgressBar({
   percent,
-  color = "bg-[#1cb0f6]",
+  color = "bg-[#24c875]",
 }: {
   percent: number;
   color?: string;
@@ -232,7 +232,7 @@ export default function ProfilePage() {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="text-center">
-          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-[#1cb0f6]" />
+          <div className="mx-auto h-12 w-12 animate-spin rounded-full border-b-2 border-[#24c875]" />
           <p className="mt-4 text-gray-600">Carregando perfil...</p>
         </div>
       </div>
@@ -264,16 +264,16 @@ export default function ProfilePage() {
       value: stats.totalWords,
       hint: "Aprendidas",
       icon: BookOpen,
-      color: "text-[#1cb0f6]",
-      bg: "bg-[#ddf4ff]",
+      color: "text-[#14804a] dark:text-[#7ddea8]",
+      bg: "bg-[#e7f8ee]",
     },
     {
       label: "Vaults",
       value: stats.totalVaults,
       hint: "Coleções",
       icon: Brain,
-      color: "text-[#58cc02]",
-      bg: "bg-[#d7ffb8]",
+      color: "text-[#24c875]",
+      bg: "bg-[#e7f8ee]",
     },
     {
       label: "Conexões",
@@ -294,7 +294,7 @@ export default function ProfilePage() {
   ];
 
   return (
-    <div className="min-h-full max-w-full overflow-x-hidden bg-white dark:bg-gray-950">
+    <div className="min-h-full max-w-full overflow-x-hidden bg-[#f6f7f9] dark:bg-gray-950">
       <div className="px-8 pt-5 pb-4">
         <div className="flex items-center gap-3">
           <span className="text-[26px] leading-none" aria-hidden="true">
@@ -367,8 +367,8 @@ export default function ProfilePage() {
                   Sequência
                 </p>
               </div>
-              <div className="rounded-2xl bg-[#ddf4ff] px-4 py-3 text-center">
-                <p className="text-2xl font-extrabold text-[#1cb0f6]">
+              <div className="rounded-2xl bg-[#e7f8ee] px-4 py-3 text-center">
+                <p className="text-2xl font-extrabold text-[#14804a] dark:text-[#7ddea8]">
                   {gamificationStats.bestStreak}
                 </p>
                 <p className="mt-1 text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf]">
@@ -381,7 +381,7 @@ export default function ProfilePage() {
                 {gamificationStats.achievements.map((achievement) => (
                   <span
                     key={achievement}
-                    className="rounded-full bg-[#d7ffb8] px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-[#58cc02]"
+                    className="rounded-full bg-[#e7f8ee] px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-[#24c875]"
                   >
                     {achievement}
                   </span>
@@ -395,7 +395,7 @@ export default function ProfilePage() {
           <div className="space-y-4 lg:col-span-2">
             <DuoCard>
               <div className="flex items-center gap-2">
-                <Target className="h-5 w-5 text-[#1cb0f6]" />
+                <Target className="h-5 w-5 text-[#14804a] dark:text-[#7ddea8]" />
                 <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
                   Nível de confiança
                 </h2>
@@ -458,7 +458,7 @@ export default function ProfilePage() {
                         <div className="mb-2 flex items-center justify-between gap-2">
                           <GrammarClassLink
                             value={item.grammaticalClass}
-                            className="text-sm font-extrabold text-[#3c3c3c] hover:text-[#1cb0f6] dark:text-white"
+                            className="text-sm font-extrabold text-[#3c3c3c] hover:text-[#14804a] dark:hover:text-[#7ddea8] dark:text-white"
                           />
                           <span className="text-xs font-extrabold uppercase tracking-wide text-[#afafaf]">
                             {item.count} ({percentage.toFixed(1)}%)
@@ -487,7 +487,7 @@ export default function ProfilePage() {
                   {stats.wordsByCategory.map((item) => (
                     <span
                       key={item.category}
-                      className="rounded-full bg-[#ddf4ff] px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-[#1cb0f6]"
+                      className="rounded-full bg-[#e7f8ee] px-3 py-1 text-[11px] font-extrabold uppercase tracking-wide text-[#14804a] dark:text-[#7ddea8]"
                     >
                       {item.category} ({item.count})
                     </span>
@@ -500,7 +500,7 @@ export default function ProfilePage() {
           <div className="space-y-4">
             <DuoCard>
               <div className="flex items-center gap-2">
-                <Settings className="h-5 w-5 text-[#1cb0f6]" />
+                <Settings className="h-5 w-5 text-[#14804a] dark:text-[#7ddea8]" />
                 <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
                   Configurações
                 </h2>
@@ -529,7 +529,7 @@ export default function ProfilePage() {
                     checked={settings.useAllVaultsForLinks}
                     onCheckedChange={handleUseAllVaultsChange}
                     disabled={saving}
-                    className="data-[state=checked]:bg-[#58cc02]"
+                    className="data-[state=checked]:bg-[#24c875]"
                   />
                 </div>
 
@@ -555,7 +555,7 @@ export default function ProfilePage() {
                     onCheckedChange={(checked) =>
                       setTheme(checked ? "dark" : "light")
                     }
-                    className="data-[state=checked]:bg-[#58cc02]"
+                    className="data-[state=checked]:bg-[#24c875]"
                   />
                 </div>
 
@@ -580,7 +580,7 @@ export default function ProfilePage() {
                     checked={settings.autoTranslateWordPreview}
                     onCheckedChange={handleAutoTranslateChange}
                     disabled={saving}
-                    className="data-[state=checked]:bg-[#58cc02]"
+                    className="data-[state=checked]:bg-[#24c875]"
                   />
                 </div>
 

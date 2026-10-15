@@ -117,7 +117,7 @@ export default function ChapterPage() {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#1cb0f6] mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#24c875] mx-auto"></div>
           <p className="mt-4 text-gray-600">Carregando capítulo...</p>
         </div>
       </div>
@@ -139,18 +139,8 @@ export default function ChapterPage() {
   }
 
   return (
-    <div className="min-h-full bg-white dark:bg-gray-950">
-      <div className="w-full pt-6 pb-12">
-        <div className="px-6 sm:px-8">
-          <Button
-            variant="ghost"
-            onClick={() => router.push(`/home/books/${bookId}`)}
-            className="mb-3 -ml-2"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            {bookTitle || "Livro"}
-          </Button>
-        </div>
+    <div className="min-h-full bg-[#f6f7f9] dark:bg-gray-950">
+      <div className="w-full pb-12 pt-4">
         {progressReady && (
           <TextViewer
             text={text}

@@ -62,6 +62,7 @@ jest.mock("../../prisma/client", () => ({
       findMany: jest.fn().mockResolvedValue([]),
       createMany: jest.fn(),
     },
+    $executeRaw: jest.fn().mockResolvedValue(1),
   },
 }));
 

@@ -195,6 +195,9 @@ export function createResources(request: Request) {
       }),
     filterWordsForReview: (words: unknown) =>
       request("POST", "/flashcards/filter", { words }),
+
+    getRanking: (period: "week" | "month" | "lifetime") =>
+      request("GET", `/ranking?period=${period}`),
   };
 }
 

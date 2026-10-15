@@ -35,7 +35,7 @@ const CONFIDENCE_COLORS = [
   "bg-[#ff4b4b] text-white",
   "bg-[#ff9600] text-white",
   "bg-[#ffc800] text-[#3c3c3c]",
-  "bg-[#58cc02] text-white",
+  "bg-[#24c875] text-white",
 ];
 
 const CONFIDENCE_LABELS = ["Não lembro", "Difícil", "Bom", "Fácil"];
@@ -123,7 +123,7 @@ function WordExtras({ word }: { word: Word }) {
                   {related.name}
                 </span>
                 {related.translations[0] && (
-                  <span className="mt-0.5 block text-[12px] text-[#2b7de9] dark:text-sky-300">
+                  <span className="mt-0.5 block text-[12px] text-[#14804a] dark:text-[#7ddea8]">
                     {related.translations[0]}
                   </span>
                 )}
@@ -145,7 +145,7 @@ function WordExtras({ word }: { word: Word }) {
             await incrementWordFrequency(word.id);
             queryClient.invalidateQueries({ queryKey: ["vaults"] });
           }}
-          className="rounded bg-[#f3f3f3] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#888] hover:bg-[#eef6ff] hover:text-[#1cb0f6] dark:bg-white/10 dark:text-gray-400"
+          className="rounded bg-[#f3f3f3] px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-[#888] hover:bg-[#e7f8ee] hover:text-[#14804a] dark:hover:text-[#7ddea8] dark:bg-white/10 dark:text-gray-400"
           title="Incrementar frequência"
         >
           Freq. {word.frequency}
@@ -227,13 +227,13 @@ export function VaultWordsList({
               value={query}
               onChange={(event) => setQuery(event.target.value)}
               placeholder="Buscar palavra ou tradução"
-              className="h-10 w-full rounded-md border border-[#e5e5e5] bg-transparent pl-10 pr-3 text-[14px] text-[#3c3c3c] outline-none placeholder:text-[#afafaf] focus:border-[#1cb0f6] dark:border-[#373e47] dark:text-zinc-100"
+              className="h-10 w-full rounded-md border border-[#e5e5e5] bg-transparent pl-10 pr-3 text-[14px] text-[#3c3c3c] outline-none placeholder:text-[#afafaf] focus:border-[#24c875] dark:border-[#373e47] dark:text-zinc-100"
             />
           </div>
           <button
             type="button"
             onClick={onAddWord}
-            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md bg-[#1cb0f6] px-3 text-[12px] font-extrabold uppercase tracking-wide text-white hover:bg-[#1a9ee0]"
+            className="inline-flex h-10 shrink-0 items-center gap-1.5 rounded-md bg-[#24c875] px-3 text-[12px] font-extrabold uppercase tracking-wide text-white hover:bg-[#1eaf68]"
           >
             <Plus className="size-4" />
             Nova
@@ -260,7 +260,7 @@ export function VaultWordsList({
                     className={cn(
                       "flex w-full items-center gap-3 rounded-md px-3 py-3 text-left",
                       active
-                        ? "bg-[#ddf4ff] dark:bg-[#1cb0f6]/15"
+                        ? "bg-[#e7f8ee] dark:bg-[#24c875]/15"
                         : "hover:bg-black/[0.03] dark:hover:bg-white/5"
                     )}
                   >
@@ -273,7 +273,7 @@ export function VaultWordsList({
                           {word.translations.map((item) => (
                             <span
                               key={item}
-                              className="rounded bg-[#eef6ff] px-2 py-0.5 text-[13px] text-[#2b7de9] dark:bg-sky-950 dark:text-sky-300"
+                              className="rounded bg-[#e7f8ee] px-2 py-0.5 text-[13px] text-[#14804a] dark:bg-[#143022] dark:text-[#7ddea8]"
                             >
                               {item}
                             </span>

@@ -104,7 +104,7 @@ function SavedCell({ word }: { word: Word }) {
               <CheckCircleIcon
                 weight={word.isSaved ? "fill" : "regular"}
                 className={`!h-5 !w-5 ${
-                  word.isSaved ? "text-[#58cc02]" : "text-[#afafaf]"
+                  word.isSaved ? "text-[#24c875]" : "text-[#afafaf]"
                 }`}
               />
             </Button>
@@ -142,12 +142,12 @@ function SavedCell({ word }: { word: Word }) {
                     disabled={isLoading}
                   >
                     <div className="flex items-center w-full">
-                      <ArrowRight className="h-4 w-4 mr-2 text-blue-500" />
+                      <ArrowRight className="h-4 w-4 mr-2 text-[#14804a]" />
                       <span className="text-sm text-gray-900 dark:text-white flex-1">
                         {vault.name}
                       </span>
                       {isLoading && (
-                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-blue-500"></div>
+                        <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-[#24c875]"></div>
                       )}
                     </div>
                   </DropdownMenuItem>
@@ -204,7 +204,7 @@ function RelatedWordsCell({ word }: { word: Word }) {
     <div className="space-y-1">
       {relatedWords.slice(0, 3).map((relatedWord) => (
         <div key={relatedWord.id} className="flex items-center gap-2 text-sm">
-          <div className="w-2 h-2 bg-[#1cb0f6] rounded-full"></div>
+          <div className="w-2 h-2 bg-[#24c875] rounded-full"></div>
           <span className="font-extrabold text-[#3c3c3c] dark:text-white">
             {relatedWord.name}
           </span>
@@ -340,7 +340,7 @@ export const columns: ColumnDef<Word>[] = [
             variant="outline"
             size="icon-sm"
             title={`Ouvir pronúncia de "${wordName}"`}
-            className="!h-9 !w-9 rounded-full border-2 border-[#e5e5e5] bg-[#ddf4ff] text-[#1cb0f6] hover:bg-[#1cb0f6] hover:text-white"
+            className="!h-9 !w-9 rounded-full border-2 border-[#e5e5e5] bg-[#e7f8ee] text-[#14804a] dark:text-[#7ddea8] hover:bg-[#24c875] hover:text-white"
           >
             <svg
               className="w-4 h-4"
@@ -407,7 +407,7 @@ export const columns: ColumnDef<Word>[] = [
       return (
         <GrammarClassLink
           value={grammaticalClass}
-          className="inline-flex rounded-full bg-[#ddf4ff] px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-[#1cb0f6] hover:bg-[#1cb0f6] hover:text-white"
+          className="inline-flex rounded-full bg-[#e7f8ee] px-3 py-1 text-xs font-extrabold uppercase tracking-wide text-[#14804a] dark:text-[#7ddea8] hover:bg-[#24c875] hover:text-white"
         />
       );
     },
@@ -465,7 +465,7 @@ export const columns: ColumnDef<Word>[] = [
           case 2:
             return "text-yellow-500";
           case 3:
-            return "text-blue-500";
+            return "text-[#14804a]";
           case 4:
             return "text-green-500";
           default:

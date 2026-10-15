@@ -18,6 +18,13 @@ import {
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { exportVaultWords, importWordsToVault } from "@/actions/actions";
+import {
+  awardPoints,
+  POINTS_PER_SAVED_WORD,
+  rollbackPoints,
+  savedImportCount,
+  settlePoints,
+} from "@/lib/points-optimistic";
 import { useQueryClient } from "@tanstack/react-query";
 
 interface ImportExportWordsProps {
@@ -117,7 +124,17 @@ export function ImportExportWords({
 
     try {
       const text = await file.text();
-      const result = await importWordsToVault(vaultId, text);
+      const saved = savedImportCount(text);
+      const points = saved * POINTS_PER_SAVED_WORD;
+      if (points > 0) awardPoints(points);
+      let result;
+      try {
+        result = await importWordsToVault(vaultId, text);
+      } catch (error) {
+        if (points > 0) rollbackPoints(points);
+        throw error;
+      }
+      if (points > 0) settlePoints(points);
 
       setImportResult(result);
 
@@ -195,13 +212,13 @@ export function ImportExportWords({
           {/* Conteúdo da aba Exportar */}
           {activeTab === "export" && (
             <div className="space-y-4">
-              <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <Download className="mx-auto h-8 w-8 text-blue-600 mb-2" />
-                <h3 className="font-medium text-blue-900">Exportar Palavras</h3>
-                <p className="text-sm text-blue-700 mt-1">
+              <div className="text-center p-4 bg-[#e7f8ee] rounded-lg">
+                <Download className="mx-auto h-8 w-8 text-[#14804a] mb-2" />
+                <h3 className="font-medium text-[#14804a]">Exportar Palavras</h3>
+                <p className="text-sm text-[#14804a] mt-1">
                   Exporte todas as {wordCount} palavra(s) do vault "{vaultName}"
                 </p>
-                <p className="text-xs text-blue-600 mt-2">
+                <p className="text-xs text-[#14804a] mt-2">
                   O arquivo será salvo em formato JSON
                 </p>
               </div>
@@ -258,7 +275,7 @@ export function ImportExportWords({
               >
                 {isImporting ? (
                   <>
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600 mr-2"></div>
+                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-[#24c875] mr-2"></div>
                     Importando...
                   </>
                 ) : (

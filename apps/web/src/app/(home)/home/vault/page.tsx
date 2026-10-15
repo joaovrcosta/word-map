@@ -68,13 +68,13 @@ export default function VaultPage() {
   if (isLoadingVaults) {
     return (
       <div className="flex min-h-[50vh] items-center justify-center">
-        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-[#1cb0f6]" />
+        <div className="h-12 w-12 animate-spin rounded-full border-b-2 border-[#24c875]" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-full bg-white dark:bg-[#22272e]">
+    <div className="min-h-full bg-[#f6f7f9] dark:bg-[#22272e]">
       <div className="px-8 pt-5">
         <div className="flex items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -88,7 +88,7 @@ export default function VaultPage() {
           {vaults && vaults.length > 0 ? (
             <Link
               href="/create-vault"
-              className="inline-flex h-12 shrink-0 items-center justify-center rounded-2xl border-b-4 border-[#1899d6] bg-[#1cb0f6] px-5 text-sm font-extrabold uppercase tracking-wide text-white hover:brightness-105 active:translate-y-0.5 active:border-b-2"
+              className="inline-flex h-12 shrink-0 items-center justify-center rounded-2xl bg-[#24c875] px-5 text-sm font-extrabold uppercase tracking-wide text-white hover:brightness-105"
             >
               Novo vault
             </Link>
@@ -105,7 +105,7 @@ export default function VaultPage() {
             </p>
             <Link
               href="/create-vault"
-              className="mt-8 inline-flex h-12 min-w-[210px] items-center justify-center rounded-2xl border-b-4 border-[#1899d6] bg-[#1cb0f6] px-5 text-sm font-extrabold uppercase tracking-wide text-white hover:brightness-105 active:translate-y-0.5 active:border-b-2"
+              className="mt-8 inline-flex h-12 min-w-[210px] items-center justify-center rounded-2xl bg-[#24c875] px-5 text-sm font-extrabold uppercase tracking-wide text-white hover:brightness-105"
             >
               Criar vault
             </Link>
@@ -177,7 +177,7 @@ export default function VaultPage() {
                     </button>
                     <Link
                       href={`/home/vault/${vault.id}`}
-                      className="inline-flex h-12 items-center justify-center rounded-2xl border-b-4 border-[#1899d6] bg-[#1cb0f6] px-5 text-sm font-extrabold uppercase tracking-wide text-white hover:brightness-105 active:translate-y-0.5 active:border-b-2"
+                      className="inline-flex h-12 items-center justify-center rounded-2xl bg-[#24c875] px-5 text-sm font-extrabold uppercase tracking-wide text-white hover:brightness-105"
                     >
                       Abrir
                     </Link>

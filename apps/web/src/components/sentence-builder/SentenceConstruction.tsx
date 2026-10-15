@@ -30,7 +30,7 @@ export function SentenceConstruction({
   onRightClick,
 }: SentenceConstructionProps) {
   return (
-    <div className="rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 dark:bg-gray-950">
+    <div className="rounded-2xl border border-[#e8eaed] shadow-sm bg-white p-5 dark:bg-gray-950">
       <h3 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
         Sua frase
       </h3>
@@ -41,7 +41,7 @@ export function SentenceConstruction({
       <div className="mt-4 min-h-32 rounded-2xl border-2 border-dashed border-[#e5e5e5] bg-[#f7f7f7] p-4">
         {sentenceWords.length === 0 ? (
           <div className="py-8 text-center">
-            <BookOpen size={32} className="mx-auto mb-2 text-[#1cb0f6]" />
+            <BookOpen size={32} className="mx-auto mb-2 text-[#14804a] dark:text-[#7ddea8]" />
             <p className="text-sm font-bold text-[#777]">
               Arraste palavras aqui ou clique nelas para montar a frase.
             </p>
@@ -58,7 +58,7 @@ export function SentenceConstruction({
                   key={wordItem.id}
                   className={
                     dragOverIndex === index
-                      ? "rounded-2xl ring-2 ring-[#1cb0f6]"
+                      ? "rounded-2xl ring-2 ring-[#24c875]"
                       : ""
                   }
                   onDragOver={(e) => onDragOver(e, index)}
@@ -85,8 +85,8 @@ export function SentenceConstruction({
       </div>
 
       {sentenceText && (
-        <div className="mt-4 rounded-2xl bg-[#ddf4ff] p-4">
-          <p className="text-lg font-extrabold text-[#1cb0f6]">
+        <div className="mt-4 rounded-2xl bg-[#e7f8ee] p-4">
+          <p className="text-lg font-extrabold text-[#14804a] dark:text-[#7ddea8]">
             &ldquo;{sentenceText}&rdquo;
           </p>
         </div>

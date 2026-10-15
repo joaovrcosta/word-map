@@ -200,7 +200,7 @@ export function EditSemanticConnectionDialog({
         <Button
           size="sm"
           variant="ghost"
-          className="text-blue-600 hover:text-blue-700 hover:bg-blue-50"
+          className="text-[#14804a] hover:text-[#1eaf68] hover:bg-[#e7f8ee]"
         >
           <Edit2 className="w-4 h-4" />
         </Button>
@@ -278,7 +278,7 @@ export function EditSemanticConnectionDialog({
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center space-x-3">
-                        <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-medium">
+                        <div className="w-6 h-6 bg-[#e7f8ee]0 text-white rounded-full flex items-center justify-center text-sm font-medium">
                           {index + 1}
                         </div>
                         <div>

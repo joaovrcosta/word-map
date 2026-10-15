@@ -243,7 +243,7 @@ export function VaultScreen() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#24c875] mx-auto"></div>
           <p className="mt-4 text-gray-600">Carregando vaults...</p>
         </div>
       </div>
@@ -252,13 +252,13 @@ export function VaultScreen() {
 
   if (!selectedVault) {
     return (
-      <div className="min-h-full bg-white px-8 pt-10 dark:bg-[#22272e]">
+      <div className="min-h-full bg-[#f6f7f9] px-8 pt-10 dark:bg-[#22272e]">
         <p className="text-[15px] font-extrabold text-[#3c3c3c] dark:text-white">
           Vault não encontrado
         </p>
         <Link
           href="/home/vault"
-          className="mt-6 inline-flex text-[13px] font-extrabold uppercase tracking-wide text-[#1cb0f6]"
+          className="mt-6 inline-flex text-[13px] font-extrabold uppercase tracking-wide text-[#14804a] dark:text-[#7ddea8]"
         >
           Voltar
         </Link>
@@ -272,12 +272,12 @@ export function VaultScreen() {
     cn(
       "py-3 text-[13px] font-extrabold uppercase tracking-wide border-b-4 transition-colors",
       activeTab === tab
-        ? "border-[#1cb0f6] text-[#1cb0f6]"
+        ? "border-[#24c875] text-[#14804a] dark:text-[#7ddea8]"
         : "border-transparent text-[#afafaf] hover:text-[#777]"
     );
 
   return (
-    <div className="min-h-full bg-white dark:bg-[#22272e]">
+    <div className="min-h-full bg-[#f6f7f9] dark:bg-[#22272e]">
       <div className="px-8 pt-5">
         <div className="flex items-center gap-3">
           <span className="text-[26px] leading-none" aria-hidden="true">

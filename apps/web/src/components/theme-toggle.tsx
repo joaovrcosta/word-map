@@ -20,7 +20,7 @@ export function ThemeToggle({
       type="button"
       onClick={toggleTheme}
       className={cn(
-        "inline-flex items-center gap-2 text-[#afafaf] hover:text-[#1cb0f6]",
+        "inline-flex items-center gap-2 text-[#afafaf] hover:text-[#14804a] dark:hover:text-[#7ddea8]",
         compact ? "justify-center" : "",
         className
       )}

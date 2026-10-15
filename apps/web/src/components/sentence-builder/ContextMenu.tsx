@@ -25,7 +25,7 @@ export function ContextMenu({
 
   return (
     <div
-      className="fixed z-50 min-w-[200px] rounded-2xl border-2 border-[#e5e5e5] bg-white py-2 shadow-lg dark:bg-gray-950"
+      className="fixed z-50 min-w-[200px] rounded-2xl border border-[#e8eaed] shadow-sm bg-white py-2 shadow-lg dark:bg-gray-950"
       style={{
         left: contextMenuPosition.x,
         top: contextMenuPosition.y,

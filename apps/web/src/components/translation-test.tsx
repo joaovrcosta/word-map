@@ -153,13 +153,13 @@ export default function TranslationTest() {
       )}
 
       {/* Informações sobre o sistema */}
-      <Card className="bg-blue-50 border-blue-200">
+      <Card className="bg-[#e7f8ee] border-[#c8ead6]">
         <CardHeader>
-          <CardTitle className="text-blue-800">
+          <CardTitle className="text-[#14804a]">
             Como Funciona a Tradução Automática
           </CardTitle>
         </CardHeader>
-        <CardContent className="text-blue-700 space-y-2">
+        <CardContent className="text-[#14804a] space-y-2">
           <p>
             • <strong>API Route Local:</strong> Usamos uma API route do Next.js
             para evitar problemas de CORS

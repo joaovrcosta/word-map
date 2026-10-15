@@ -166,7 +166,7 @@ const EditWordDialog = memo(
                 <Button
                   onClick={onSave}
                   disabled={isSaving}
-                  className="bg-blue-600 hover:bg-blue-700"
+                  className="bg-[#24c875] hover:bg-[#1eaf68]"
                 >
                   {isSaving ? (
                     <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
@@ -915,16 +915,7 @@ export default function TextPage() {
       {/* Header fixo */}
       <div className="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
         <div className="w-full px-6 py-4">
-          <div className="flex items-center justify-between">
-            <Button
-              variant="ghost"
-              onClick={() => router.back()}
-              className="flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Voltar
-            </Button>
-
+          <div className="flex items-center justify-end">
             <div className="flex items-center gap-2">
               {isEditing ? (
                 <>
@@ -968,14 +959,14 @@ export default function TextPage() {
 
       {/* Conteúdo principal */}
       <div className="flex items-start">
-      <div className="min-w-0 flex-1 px-6 py-8 sm:px-8">
+      <div className="min-w-0 flex-1 px-6 py-8 sm:px-8 lg:px-16 xl:px-24 2xl:px-32">
         {/* Cabeçalho do artigo */}
         <header className="mb-8">
           {isEditing ? (
             <Input
               value={editTitle}
               onChange={(e) => setEditTitle(e.target.value)}
-              className="text-3xl font-bold border-2 border-blue-300 focus:border-blue-500 mb-4"
+              className="text-3xl font-bold border-2 border-[#8ee0b4] focus:border-[#24c875] mb-4"
               placeholder="Título do artigo"
             />
           ) : (

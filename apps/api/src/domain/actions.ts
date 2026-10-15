@@ -11,6 +11,7 @@ import {
   type SelectionSaveType,
 } from "../lib/word-matching.server";
 import { addedMeanings, writeWordOrigins } from "../lib/word-origin-store";
+import { awardSavedWordPoints } from "../lib/points";
 
 export interface Vault {
   id: number;
@@ -313,6 +314,14 @@ export async function createWord(data: CreateWordData): Promise<Word> {
     const newWord = await prisma.word.create({
       data: wordData as any, // Type assertion para resolver problema de tipo
     });
+
+    if (newWord.isSaved) {
+      await awardSavedWordPoints(
+        existingVault.userId,
+        newWord.id,
+        newWord.createdAt
+      );
+    }
 
     await writeWordOrigins(newWord.id, data.translations, data.origin);
 
@@ -1692,8 +1701,7 @@ export async function importWordsToVault(
           }
         }
 
-        // Criar a palavra
-        await prisma.word.create({
+        const created = await prisma.word.create({
           data: {
             name: wordData.name,
             grammaticalClass: wordData.grammaticalClass,
@@ -1705,6 +1713,10 @@ export async function importWordsToVault(
             vaultId: vaultId,
           },
         });
+
+        if (created.isSaved) {
+          await awardSavedWordPoints(vault.userId, created.id, created.createdAt);
+        }
 
         importedCount++;
       } catch (error) {

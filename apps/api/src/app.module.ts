@@ -17,6 +17,7 @@ import { TutorModule } from "./tutor/tutor.module";
 import { DictionaryModule } from "./dictionary/dictionary.module";
 import { TranslateModule } from "./translate/translate.module";
 import { HealthController } from "./health.controller";
+import { RankingModule } from "./ranking/ranking.module";
 
 @Module({
   imports: [
@@ -33,6 +34,7 @@ import { HealthController } from "./health.controller";
     TutorModule,
     DictionaryModule,
     TranslateModule,
+    RankingModule,
   ],
   controllers: [HealthController],
   providers: [

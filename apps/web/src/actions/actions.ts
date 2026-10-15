@@ -108,6 +108,12 @@ export interface CreateSemanticConnectionData {
 
 import { browserApi } from "@/lib/api/resources";
 
+import {
+  awardPoints,
+  rollbackPoints,
+  settlePoints,
+} from "@/lib/points-optimistic";
+
 export const getVaults = browserApi.getVaults as () => Promise<Vault[]>;
 export const createVault = browserApi.createVault as (name: string) => Promise<Vault>;
 export const deleteVault = browserApi.deleteVault as (vaultId: number) => Promise<void>;
@@ -122,9 +128,18 @@ export const importWordsToVault = browserApi.importWordsToVault as (
   vaultId: number,
   importData: string
 ) => Promise<{ success: boolean; importedCount: number; errors: string[] }>;
-export const createWord = browserApi.createWord as (
-  data: CreateWordData
-) => Promise<Word>;
+export async function createWord(data: CreateWordData): Promise<Word> {
+  const awards = data.isSaved !== false;
+  if (awards) awardPoints();
+  try {
+    const word = (await browserApi.createWord(data)) as Word;
+    if (awards) settlePoints();
+    return word;
+  } catch (error) {
+    if (awards) rollbackPoints();
+    throw error;
+  }
+}
 export const searchWordInVaults = browserApi.searchWordInVaults as (
   searchTerm: string
 ) => Promise<SearchResult[]>;
@@ -216,3 +231,22 @@ export const updateSemanticConnection = browserApi.updateSemanticConnection as (
 export const deleteSemanticConnection = browserApi.deleteSemanticConnection as (
   connectionId: number
 ) => Promise<void>;
+
+export type RankingPeriod = "week" | "month" | "lifetime";
+
+export type RankingBoard = {
+  period: RankingPeriod;
+  pointsPerWord: number;
+  me: { points: number; rank: number | null };
+  entries: Array<{
+    rank: number;
+    userId: number;
+    name: string;
+    points: number;
+    isMe: boolean;
+  }>;
+};
+
+export const getRanking = browserApi.getRanking as (
+  period: RankingPeriod
+) => Promise<RankingBoard>;

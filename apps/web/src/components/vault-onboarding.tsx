@@ -36,7 +36,7 @@ export function VaultOnboarding({
       <ol className="mt-10 w-full max-w-[360px]">
         <li className="relative flex gap-4 pb-8">
           <span className="absolute left-[15px] top-8 bottom-0 w-0.5 bg-[#e5e5e5]" />
-          <span className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#58cc02] text-white">
+          <span className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#24c875] text-white">
             <Check className="size-4" strokeWidth={3} />
           </span>
           <div className="pt-1">
@@ -48,7 +48,7 @@ export function VaultOnboarding({
 
         <li className="relative flex gap-4 pb-8">
           <span className="absolute left-[15px] top-8 bottom-0 w-0.5 bg-[#e5e5e5]" />
-          <span className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#ddf4ff] text-[13px] font-extrabold text-[#1cb0f6]">
+          <span className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#e7f8ee] text-[13px] font-extrabold text-[#14804a] dark:text-[#7ddea8]">
             2
           </span>
           <div className="pt-0.5">
@@ -62,7 +62,7 @@ export function VaultOnboarding({
             <button
               type="button"
               onClick={onAddWords}
-              className="mt-3 inline-flex h-12 min-w-[210px] items-center justify-center rounded-2xl bg-[#1cb0f6] px-5 text-sm font-extrabold uppercase tracking-wide text-white border-b-4 border-[#1899d6] hover:brightness-105 active:translate-y-0.5 active:border-b-2"
+              className="mt-3 inline-flex h-12 min-w-[210px] items-center justify-center rounded-2xl bg-[#24c875] px-5 text-sm font-extrabold uppercase tracking-wide text-white hover:brightness-105"
             >
               Adicionar palavras
             </button>
@@ -70,7 +70,7 @@ export function VaultOnboarding({
         </li>
 
         <li className="relative flex gap-4">
-          <span className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#ddf4ff] text-[13px] font-extrabold text-[#1cb0f6]">
+          <span className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#e7f8ee] text-[13px] font-extrabold text-[#14804a] dark:text-[#7ddea8]">
             3
           </span>
           <div className="pt-0.5">
@@ -84,7 +84,7 @@ export function VaultOnboarding({
             <button
               type="button"
               onClick={onCreateFlashcards}
-              className="mt-3 inline-flex h-12 min-w-[210px] items-center justify-center rounded-2xl bg-white px-5 text-sm font-extrabold uppercase tracking-wide text-[#1cb0f6] border-2 border-[#e5e5e5] hover:bg-[#f7f7f7] active:translate-y-0.5"
+              className="mt-3 inline-flex h-12 min-w-[210px] items-center justify-center rounded-2xl bg-white px-5 text-sm font-extrabold uppercase tracking-wide text-[#14804a] dark:text-[#7ddea8] border-2 border-[#e5e5e5] hover:bg-[#f7f7f7] active:translate-y-0.5"
             >
               Criar flashcards
             </button>

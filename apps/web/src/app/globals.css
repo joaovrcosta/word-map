@@ -164,3 +164,155 @@
 .ai-sparkle {
   animation: ai-sparkle 1.4s ease-in-out infinite;
 }
+
+@keyframes flashcard-pop {
+  0% {
+    transform: scale(1);
+  }
+  35% {
+    transform: scale(1.035);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes flashcard-burst {
+  0% {
+    opacity: 0;
+    transform: scale(0.55) translateY(10px);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.08) translateY(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes flashcard-dot {
+  0% {
+    opacity: 0;
+    transform: translateY(6px) scale(0.4);
+  }
+  25% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-42px) scale(1);
+  }
+}
+
+@keyframes flashcard-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  20% {
+    transform: translateX(-6px);
+  }
+  40% {
+    transform: translateX(6px);
+  }
+  60% {
+    transform: translateX(-4px);
+  }
+  80% {
+    transform: translateX(3px);
+  }
+}
+
+.flashcard-pop {
+  animation: flashcard-pop 420ms ease-out;
+}
+
+.flashcard-burst {
+  animation: flashcard-burst 280ms ease-out both;
+}
+
+.flashcard-dot {
+  opacity: 0;
+  animation: flashcard-dot 700ms ease-out forwards;
+}
+
+.flashcard-shake {
+  animation: flashcard-shake 360ms ease-out;
+}
+
+@keyframes points-rise {
+  0% {
+    transform: translateY(10px) scale(0.86);
+    color: #ffc800;
+  }
+  45% {
+    transform: translateY(-6px) scale(1.18);
+    color: #ffc800;
+  }
+  100% {
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-points-rise {
+  animation: points-rise 0.7s ease-out;
+}
+
+.mind-graph .react-flow__controls {
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: none;
+}
+
+.mind-graph .react-flow__controls-button {
+  width: 28px;
+  height: 28px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  background: #1c1c1c;
+  fill: #d4d4d4;
+}
+
+.mind-graph .react-flow__controls-button:hover {
+  background: #2a2a2a;
+}
+
+.mind-graph .react-flow,
+.mind-graph .react-flow__pane {
+  background: #161616;
+}
+
+.mind-graph .react-flow__node,
+.mind-graph .react-flow__node.selected,
+.mind-graph .react-flow__node:focus {
+  cursor: pointer;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  outline: none;
+}
+
+.mind-graph .react-flow__edge-path {
+  stroke-linecap: round;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .flashcard-pop,
+  .flashcard-burst,
+  .flashcard-shake,
+  .flashcard-dot,
+  .animate-points-rise {
+    animation: none;
+  }
+
+  .flashcard-burst {
+    opacity: 1;
+    transform: none;
+  }
+
+  .flashcard-dot {
+    opacity: 0;
+  }
+}

@@ -18,7 +18,7 @@ export function BooksOnboarding({
   return (
     <div className="flex flex-col items-center pt-6 pb-16">
       <div className="flex size-[120px] items-center justify-center">
-        <BookOpen className="size-16 text-[#1cb0f6]" strokeWidth={1.75} />
+        <BookOpen className="size-16 text-[#14804a] dark:text-[#7ddea8]" strokeWidth={1.75} />
       </div>
       <h2 className="mt-4 text-[22px] font-extrabold text-[#3c3c3c] dark:text-white">
         {greeting}{" "}
@@ -31,7 +31,7 @@ export function BooksOnboarding({
       <ol className="mt-10 w-full max-w-[360px]">
         <li className="relative flex gap-4 pb-8">
           <span className="absolute left-[15px] top-8 bottom-0 w-0.5 bg-[#e5e5e5]" />
-          <span className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#58cc02] text-white">
+          <span className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#24c875] text-white">
             <Check className="size-4" strokeWidth={3} />
           </span>
           <div className="pt-1">
@@ -43,7 +43,7 @@ export function BooksOnboarding({
 
         <li className="relative flex gap-4 pb-8">
           <span className="absolute left-[15px] top-8 bottom-0 w-0.5 bg-[#e5e5e5]" />
-          <span className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#ddf4ff] text-[13px] font-extrabold text-[#1cb0f6]">
+          <span className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#e7f8ee] text-[13px] font-extrabold text-[#14804a] dark:text-[#7ddea8]">
             2
           </span>
           <div className="pt-0.5">
@@ -56,7 +56,7 @@ export function BooksOnboarding({
             <button
               type="button"
               onClick={onCreateBook}
-              className="mt-3 inline-flex h-12 min-w-[210px] items-center justify-center rounded-2xl bg-[#1cb0f6] px-5 text-sm font-extrabold uppercase tracking-wide text-white border-b-4 border-[#1899d6] hover:brightness-105 active:translate-y-0.5 active:border-b-2"
+              className="mt-3 inline-flex h-12 min-w-[210px] items-center justify-center rounded-2xl bg-[#24c875] px-5 text-sm font-extrabold uppercase tracking-wide text-white hover:brightness-105"
             >
               Criar livro
             </button>
@@ -64,7 +64,7 @@ export function BooksOnboarding({
         </li>
 
         <li className="relative flex gap-4">
-          <span className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#ddf4ff] text-[13px] font-extrabold text-[#1cb0f6]">
+          <span className="relative z-10 flex size-8 shrink-0 items-center justify-center rounded-full bg-[#e7f8ee] text-[13px] font-extrabold text-[#14804a] dark:text-[#7ddea8]">
             3
           </span>
           <div className="pt-0.5">
@@ -78,7 +78,7 @@ export function BooksOnboarding({
             <button
               type="button"
               onClick={onOpenStore}
-              className="mt-3 inline-flex h-12 min-w-[210px] items-center justify-center gap-2 rounded-2xl bg-white px-5 text-sm font-extrabold uppercase tracking-wide text-[#1cb0f6] border-2 border-[#1cb0f6] hover:bg-[#ddf4ff]"
+              className="mt-3 inline-flex h-12 min-w-[210px] items-center justify-center gap-2 rounded-2xl bg-white px-5 text-sm font-extrabold uppercase tracking-wide text-[#14804a] dark:text-[#7ddea8] border-2 border-[#24c875] hover:bg-[#e7f8ee]"
             >
               <Store className="size-4" />
               Ver loja

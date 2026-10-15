@@ -23,7 +23,7 @@ export function GrammarGuide({ focusSlug }: { focusSlug?: string }) {
   }, [focus]);
 
   return (
-    <div className="min-h-full bg-white px-6 pb-16 pt-5 dark:bg-[#22272e] sm:px-8">
+    <div className="min-h-full bg-[#f6f7f9] px-6 pb-16 pt-5 dark:bg-[#22272e] sm:px-8">
       <Button
         variant="ghost"
         onClick={() => router.back()}
@@ -51,8 +51,8 @@ export function GrammarGuide({ focusSlug }: { focusSlug?: string }) {
               className={cn(
                 "rounded-full px-3 py-1 text-[12px] font-extrabold uppercase tracking-wide",
                 selected
-                  ? "bg-[#1cb0f6] text-white"
-                  : "bg-[#f7f7f7] text-[#777] hover:bg-[#ddf4ff] hover:text-[#1cb0f6] dark:bg-white/10 dark:text-[#8b949e] dark:hover:bg-[#1cb0f6]/15 dark:hover:text-sky-300"
+                  ? "bg-[#24c875] text-white"
+                  : "bg-[#f7f7f7] text-[#777] hover:bg-[#e7f8ee] hover:text-[#14804a] dark:bg-white/10 dark:text-[#8b949e] dark:hover:bg-[#24c875]/15 dark:hover:text-[#7ddea8]"
               )}
             >
               {item.label}
@@ -71,10 +71,10 @@ export function GrammarGuide({ focusSlug }: { focusSlug?: string }) {
               className={cn(
                 "scroll-mt-6 py-6",
                 selected &&
-                  "-mx-4 rounded-2xl bg-[#ddf4ff] px-4 dark:bg-[#1cb0f6]/10"
+                  "-mx-4 rounded-2xl bg-[#e7f8ee] px-4 dark:bg-[#24c875]/10"
               )}
             >
-              <p className="text-[11px] font-extrabold uppercase tracking-wide text-[#1cb0f6]">
+              <p className="text-[11px] font-extrabold uppercase tracking-wide text-[#14804a] dark:text-[#7ddea8]">
                 {item.label}
               </p>
               <h2 className="mt-1 text-[20px] font-extrabold text-[#3c3c3c] dark:text-white">
@@ -89,7 +89,7 @@ export function GrammarGuide({ focusSlug }: { focusSlug?: string }) {
               <p className="mt-1 text-[16px] font-extrabold text-[#3c3c3c] dark:text-white">
                 {item.exampleEn}
               </p>
-              <p className="text-[15px] font-bold text-[#2b7de9] dark:text-sky-300">
+              <p className="text-[15px] font-bold text-[#14804a] dark:text-[#7ddea8]">
                 {item.examplePt}
               </p>
               <p className="mt-1 text-[13px] leading-snug text-[#777] dark:text-[#8b949e]">

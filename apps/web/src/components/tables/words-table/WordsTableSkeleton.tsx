@@ -33,7 +33,7 @@ export function WordsTableSkeleton() {
           </div>
 
           {/* Tabela */}
-          <div className="rounded-2xl border-2 border-[#e5e5e5] overflow-hidden">
+          <div className="rounded-2xl border border-[#e8eaed] shadow-sm overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow>

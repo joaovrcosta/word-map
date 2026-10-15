@@ -47,7 +47,7 @@ function Pager({
         type="button"
         onClick={onPrevious}
         disabled={!canPrevious}
-        className="flex size-10 items-center justify-center rounded-full border-2 border-[#e5e5e5] text-[#1cb0f6] hover:bg-[#ddf4ff] disabled:opacity-40 disabled:hover:bg-transparent"
+        className="flex size-10 items-center justify-center rounded-full border-2 border-[#e5e5e5] text-[#14804a] dark:text-[#7ddea8] hover:bg-[#e7f8ee] disabled:opacity-40 disabled:hover:bg-transparent"
         aria-label="Página anterior"
       >
         <ChevronLeft className="h-4 w-4" />
@@ -62,7 +62,7 @@ function Pager({
         type="button"
         onClick={onNext}
         disabled={!canNext}
-        className="flex size-10 items-center justify-center rounded-full border-2 border-[#e5e5e5] text-[#1cb0f6] hover:bg-[#ddf4ff] disabled:opacity-40 disabled:hover:bg-transparent"
+        className="flex size-10 items-center justify-center rounded-full border-2 border-[#e5e5e5] text-[#14804a] dark:text-[#7ddea8] hover:bg-[#e7f8ee] disabled:opacity-40 disabled:hover:bg-transparent"
         aria-label="Próxima página"
       >
         <ChevronRight className="h-4 w-4" />
@@ -124,7 +124,7 @@ export function DataTable<TData, TValue = unknown>({
             placeholder="Buscar palavras..."
             value={globalFilter}
             onChange={(event) => setGlobalFilter(event.target.value)}
-            className="h-12 w-full rounded-2xl border-2 border-[#e5e5e5] bg-white pl-11 pr-4 text-sm font-bold text-[#3c3c3c] outline-none placeholder:text-[#afafaf] focus:border-[#1cb0f6]"
+            className="h-12 w-full rounded-2xl border border-[#e8eaed] shadow-sm bg-white pl-11 pr-4 text-sm font-bold text-[#3c3c3c] outline-none placeholder:text-[#afafaf] focus:border-[#24c875]"
           />
         </div>
         {pager}
@@ -133,14 +133,14 @@ export function DataTable<TData, TValue = unknown>({
       {isLoading ? (
         <div className="flex items-center justify-center py-16">
           <div className="flex flex-col items-center gap-4">
-            <Loader2 className="h-8 w-8 animate-spin text-[#1cb0f6]" />
+            <Loader2 className="h-8 w-8 animate-spin text-[#14804a] dark:text-[#7ddea8]" />
             <p className="text-sm font-bold text-[#afafaf]">
               Atualizando tabela...
             </p>
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border-2 border-[#e5e5e5] overflow-hidden">
+        <div className="rounded-2xl border border-[#e8eaed] shadow-sm overflow-hidden">
           <Table className="min-w-full">
             <TableHeader>
               {table.getHeaderGroups().map((headerGroup) => (

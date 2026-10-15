@@ -252,10 +252,10 @@ export function EditWordDialog({
         <Button
           variant="ghost"
           size="sm"
-          className="h-8 w-8 p-0 hover:bg-blue-50 dark:hover:bg-blue-900/20"
+          className="h-8 w-8 p-0 hover:bg-[#e7f8ee] dark:hover:bg-[#143022]"
           onClick={() => resetForm()}
         >
-          <Edit2 className="h-4 w-4 text-blue-600" />
+          <Edit2 className="h-4 w-4 text-[#14804a]" />
         </Button>
       </DialogTrigger>
       <DialogContent className="max-w-md">

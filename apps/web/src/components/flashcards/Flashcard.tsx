@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
 import { FlashcardWord } from "@/actions/flashcards";
 import { GrammarClassLink } from "@/components/grammar-class-link";
 import { FlashcardSkeleton } from "./FlashcardSkeleton";
+import { AnswerBurst, playAnswerSound, pulseClass } from "./answer-feedback";
 
 interface FlashcardProps {
   word: FlashcardWord;
@@ -24,16 +26,54 @@ export function Flashcard({
   onToggleAnswer,
   onAnswer,
 }: FlashcardProps) {
+  const rootRef = useRef<HTMLDivElement>(null);
+  const lockedRef = useRef(false);
+  const aliveRef = useRef(true);
+  const [burst, setBurst] = useState(false);
+
+  useEffect(() => {
+    aliveRef.current = true;
+    return () => {
+      aliveRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    lockedRef.current = false;
+    setBurst(false);
+  }, [word?.id]);
+
   if (!word || !word.name) {
     return <FlashcardSkeleton />;
   }
 
+  const rate = (confidence: number) => {
+    if (lockedRef.current) return;
+    const good = confidence >= 3;
+    playAnswerSound(good);
+    if (!good) {
+      onAnswer(confidence);
+      return;
+    }
+    lockedRef.current = true;
+    pulseClass(rootRef.current, "flashcard-pop");
+    setBurst(true);
+    window.setTimeout(() => {
+      if (!aliveRef.current) return;
+      onAnswer(confidence);
+    }, 480);
+  };
+
   return (
-    <div className="mx-auto flex w-full max-w-xl flex-col items-center px-2 py-10">
+    <div
+      ref={rootRef}
+      className="relative mx-auto flex w-full max-w-xl flex-col items-center px-2 py-10"
+    >
+      {burst ? <AnswerBurst /> : null}
       {word.grammaticalClass ? (
         <GrammarClassLink
           value={word.grammaticalClass}
-          className="text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf] hover:text-[#1cb0f6]"
+          className="text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf] hover:text-[#14804a] dark:hover:text-[#7ddea8]"
         />
       ) : null}
 
@@ -51,7 +91,7 @@ export function Flashcard({
             word.translations.map((translation, index) => (
               <p
                 key={`${translation}-${index}`}
-                className="text-[18px] font-bold text-[#2b7de9] dark:text-sky-300"
+                className="text-[18px] font-bold text-[#14804a] dark:text-[#7ddea8]"
               >
                 {translation}
               </p>
@@ -70,8 +110,8 @@ export function Flashcard({
             <button
               key={rating.confidence}
               type="button"
-              onClick={() => onAnswer(rating.confidence)}
-              className="inline-flex h-12 items-center justify-center rounded-2xl border-2 border-[#e5e5e5] bg-white px-2 text-[12px] font-extrabold uppercase tracking-wide text-[#3c3c3c] hover:bg-[#f7f7f7] active:translate-y-0.5 dark:border-[#373e47] dark:bg-transparent dark:text-white dark:hover:bg-white/5"
+              onClick={() => rate(rating.confidence)}
+              className="inline-flex h-12 items-center justify-center rounded-2xl border border-[#e8eaed] shadow-sm bg-white px-2 text-[12px] font-extrabold uppercase tracking-wide text-[#3c3c3c] hover:bg-[#f7f7f7] active:translate-y-0.5 dark:border-[#373e47] dark:bg-transparent dark:text-white dark:hover:bg-white/5"
             >
               {rating.label}
             </button>

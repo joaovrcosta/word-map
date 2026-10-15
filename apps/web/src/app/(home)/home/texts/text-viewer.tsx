@@ -672,7 +672,7 @@ export function TextViewer({
   return (
     <div>
     <div className="flex items-start">
-      <div className="min-w-0 flex-1 px-6 sm:px-8">
+      <div className="min-w-0 flex-1 px-6 sm:px-8 lg:px-16 xl:px-24 2xl:px-32">
         <div className="mb-4 flex items-center justify-between gap-3">
           {isEditing ? (
             <Input

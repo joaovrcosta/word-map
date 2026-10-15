@@ -22,7 +22,7 @@ export function SavedSentences({
   };
 
   return (
-    <div className="rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 dark:bg-gray-950">
+    <div className="rounded-2xl border border-[#e8eaed] shadow-sm bg-white p-5 dark:bg-gray-950">
       <h3 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
         Frases salvas
       </h3>
@@ -34,7 +34,7 @@ export function SavedSentences({
 
       {isLoadingSentences ? (
         <div className="flex items-center justify-center py-8">
-          <Loader2 className="h-6 w-6 animate-spin text-[#1cb0f6]" />
+          <Loader2 className="h-6 w-6 animate-spin text-[#14804a] dark:text-[#7ddea8]" />
         </div>
       ) : savedSentences.length === 0 ? (
         <p className="py-6 text-center text-sm font-bold text-[#777]">
@@ -45,7 +45,7 @@ export function SavedSentences({
           {savedSentences.map((sentence) => (
             <div
               key={sentence.id}
-              className="group flex cursor-pointer items-start justify-between gap-2 rounded-2xl border-2 border-[#e5e5e5] p-3 transition-colors hover:border-[#1cb0f6]/40"
+              className="group flex cursor-pointer items-start justify-between gap-2 rounded-2xl border border-[#e8eaed] shadow-sm p-3 transition-colors hover:border-[#24c875]/40"
               onClick={() => onLoadSentence(sentence)}
             >
               <div className="min-w-0 flex-1">

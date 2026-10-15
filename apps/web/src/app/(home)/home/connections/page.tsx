@@ -197,7 +197,7 @@ export default function ConnectionsPage() {
     return (
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center">
-          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <RefreshCw className="w-8 h-8 animate-spin mx-auto mb-4 text-[#14804a]" />
           <p className="text-lg text-gray-600">Carregando conexões...</p>
         </div>
       </div>
@@ -210,7 +210,7 @@ export default function ConnectionsPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            <Network className="w-8 h-8 text-blue-600" />
+            <Network className="w-8 h-8 text-[#14804a]" />
             Mapa de Conexões
           </h1>
           <p className="text-gray-600 mt-2">
@@ -288,11 +288,11 @@ export default function ConnectionsPage() {
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="text-center p-4 bg-blue-50 rounded-lg">
-              <div className="text-2xl font-bold text-blue-600">
+            <div className="text-center p-4 bg-[#e7f8ee] rounded-lg">
+              <div className="text-2xl font-bold text-[#14804a]">
                 {connectedWords.length}
               </div>
-              <div className="text-sm text-blue-600">Palavras Conectadas</div>
+              <div className="text-sm text-[#14804a]">Palavras Conectadas</div>
             </div>
             <div className="text-center p-4 bg-green-50 rounded-lg">
               <div className="text-2xl font-bold text-green-600">
@@ -331,7 +331,7 @@ export default function ConnectionsPage() {
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle className="flex items-center gap-2">
-                <Link className="w-5 h-5 text-blue-600" />
+                <Link className="w-5 h-5 text-[#14804a]" />
                 Conexões Semânticas
               </CardTitle>
               <CreateSemanticConnectionDialog
@@ -361,7 +361,7 @@ export default function ConnectionsPage() {
                 {semanticConnections.map((connection) => (
                   <div
                     key={connection.id}
-                    className="border rounded-lg p-6 bg-gradient-to-r from-blue-50 to-purple-50 hover:shadow-md transition-shadow"
+                    className="border rounded-lg p-6 bg-gradient-to-r from-[#e7f8ee] to-purple-50 hover:shadow-md transition-shadow"
                   >
                     <div className="mb-4">
                       <div className="flex items-center justify-center mb-3">
@@ -384,8 +384,8 @@ export default function ConnectionsPage() {
                               </div>
                               {index < connection.words.length - 1 && (
                                 <div className="flex flex-col items-center mx-2">
-                                  <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                                    <Link className="w-4 h-4 text-blue-600" />
+                                  <div className="w-8 h-8 bg-[#e7f8ee] rounded-full flex items-center justify-center">
+                                    <Link className="w-4 h-4 text-[#14804a]" />
                                   </div>
                                   <Badge
                                     variant="secondary"
@@ -416,10 +416,10 @@ export default function ConnectionsPage() {
                             key={wordItem.id}
                             className="bg-white p-3 rounded-lg border"
                           >
-                            <div className="font-medium text-blue-600 text-lg mb-1">
+                            <div className="font-medium text-[#14804a] text-lg mb-1">
                               {wordItem.word.name}
                               {wordItem.title && (
-                                <span className="text-blue-600 ml-2 text-sm">
+                                <span className="text-[#14804a] ml-2 text-sm">
                                   - {wordItem.title}
                                 </span>
                               )}
@@ -528,7 +528,7 @@ export default function ConnectionsPage() {
                         </Badge>
                       </div>
                       <div className="text-right">
-                        <div className="text-2xl font-bold text-blue-600">
+                        <div className="text-2xl font-bold text-[#14804a]">
                           {word.connections}
                         </div>
                         <div className="text-xs text-gray-500">conexões</div>
@@ -568,17 +568,16 @@ export default function ConnectionsPage() {
 
       {/* Visualização de Mapa Mental */}
       {viewMode === "mindmap" && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="w-5 h-5 text-green-600" />
-              Mapa Mental das Conexões
+        <Card className="overflow-hidden border-[#2a2a2a] bg-[#161616] text-white shadow-none">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-[18px] font-bold text-white">
+              Mapa mental
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="p-0">
             {connectedWords.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <Filter className="w-16 h-16 mx-auto mb-4 text-gray-300" />
+              <div className="py-8 text-center text-[#a3a3a3]">
+                <Filter className="mx-auto mb-4 size-16 text-[#555]" />
                 <p className="text-lg font-medium mb-2">
                   Nenhuma conexão para mapear
                 </p>
@@ -587,7 +586,7 @@ export default function ConnectionsPage() {
                 </p>
               </div>
             ) : (
-              <div className="relative min-h-[600px] overflow-auto">
+              <div className="relative">
                 <MindMapView
                   connections={convertToMindMapConnections(connectedWords)}
                   selectedVault={selectedVault}

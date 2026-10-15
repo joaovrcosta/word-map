@@ -22,7 +22,7 @@ export function WordSearch({
   onAddWord,
 }: WordSearchProps) {
   return (
-    <div className="rounded-2xl border-2 border-[#e5e5e5] bg-white p-5 dark:bg-gray-950">
+    <div className="rounded-2xl border border-[#e8eaed] shadow-sm bg-white p-5 dark:bg-gray-950">
       <h3 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
         Pesquisar palavras
       </h3>
@@ -46,7 +46,7 @@ export function WordSearch({
       <div className="mt-4 max-h-96 space-y-2 overflow-y-auto">
         {isSearching && (
           <div className="py-4 text-center">
-            <div className="mx-auto h-6 w-6 animate-spin rounded-full border-b-2 border-[#1cb0f6]" />
+            <div className="mx-auto h-6 w-6 animate-spin rounded-full border-b-2 border-[#24c875]" />
           </div>
         )}
 
@@ -64,9 +64,9 @@ export function WordSearch({
             <button
               type="button"
               key={word.id}
-              className={`w-full rounded-2xl border-2 p-3 text-left transition-colors hover:border-[#1cb0f6]/40 ${
+              className={`w-full rounded-2xl border-2 p-3 text-left transition-colors hover:border-[#24c875]/40 ${
                 isExternal
-                  ? "border-[#1cb0f6]/40 bg-[#ddf4ff]"
+                  ? "border-[#24c875]/40 bg-[#e7f8ee]"
                   : "border-[#e5e5e5] bg-white"
               }`}
               onClick={() => onAddWord(word)}
@@ -78,7 +78,7 @@ export function WordSearch({
                       {word.name}
                     </p>
                     {isExternal && (
-                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-[#1cb0f6]">
+                      <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-extrabold uppercase tracking-wide text-[#14804a] dark:text-[#7ddea8]">
                         <Globe size={12} />
                         Nova
                       </span>
@@ -99,9 +99,9 @@ export function WordSearch({
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {isTranslating && isExternal && (
-                    <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-[#1cb0f6]" />
+                    <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-[#24c875]" />
                   )}
-                  <Plus size={16} className="text-[#1cb0f6]" />
+                  <Plus size={16} className="text-[#14804a] dark:text-[#7ddea8]" />
                 </div>
               </div>
             </button>

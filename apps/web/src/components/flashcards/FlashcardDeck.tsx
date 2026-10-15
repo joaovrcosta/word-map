@@ -269,7 +269,7 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
         <button
           type="button"
           onClick={startSession}
-          className="mt-8 inline-flex h-12 min-w-[210px] items-center justify-center rounded-2xl border-b-4 border-[#1899d6] bg-[#1cb0f6] px-5 text-sm font-extrabold uppercase tracking-wide text-white hover:brightness-105 active:translate-y-0.5 active:border-b-2"
+          className="mt-8 inline-flex h-12 min-w-[210px] items-center justify-center rounded-2xl bg-[#24c875] px-5 text-sm font-extrabold uppercase tracking-wide text-white hover:brightness-105"
         >
           Começar
         </button>
@@ -289,7 +289,7 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
         </p>
         <div className="h-2 flex-1 overflow-hidden rounded-full bg-[#e5e5e5] dark:bg-[#373e47]">
           <div
-            className="h-full rounded-full bg-[#1cb0f6]"
+            className="h-full rounded-full bg-[#24c875]"
             style={{ width: `${Math.min(progress, 100)}%` }}
           />
         </div>

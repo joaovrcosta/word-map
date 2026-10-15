@@ -189,7 +189,7 @@ export function TextSelectionPopover({
 
           <div className="rounded-lg border p-2">
             <div className="flex items-center gap-2 text-sm font-medium mb-1">
-              <Type className="w-4 h-4 text-blue-600" />
+              <Type className="w-4 h-4 text-[#14804a]" />
               Palavra
             </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-2">
@@ -266,7 +266,7 @@ function SaveToVaultList({
           onClick={() => onSelectVault(vault.id)}
           className="w-full flex items-center gap-2 p-2 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-800 disabled:opacity-50"
         >
-          <BookOpen className="w-4 h-4 text-blue-600 shrink-0" />
+          <BookOpen className="w-4 h-4 text-[#14804a] shrink-0" />
           <span className="truncate">{vault.name}</span>
           {(isAddingWord || isSaving) && (
             <Loader2 className="w-3 h-3 animate-spin ml-auto shrink-0" />

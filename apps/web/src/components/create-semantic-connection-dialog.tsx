@@ -268,7 +268,7 @@ export function CreateSemanticConnectionDialog({
                   >
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center space-x-3">
-                        <div className="w-6 h-6 bg-blue-500 text-white rounded-full flex items-center justify-center text-sm font-medium">
+                        <div className="w-6 h-6 bg-[#e7f8ee]0 text-white rounded-full flex items-center justify-center text-sm font-medium">
                           {index + 1}
                         </div>
                         <div>
