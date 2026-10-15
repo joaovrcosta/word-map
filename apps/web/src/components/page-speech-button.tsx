@@ -17,7 +17,7 @@ type SpeechListener = (range: SpokenRange | null) => void;
 
 type SpeechStatus = "idle" | "playing" | "paused";
 
-export function usePageSpeech(text: string) {
+export function usePageSpeech(text: string, onPageEnd?: () => boolean) {
   const sentences = useMemo(
     () => splitSentences(text).map((sentence) => sentence.trim()).filter(Boolean),
     [text]
@@ -30,6 +30,10 @@ export function usePageSpeech(text: string) {
   const timerRef = useRef<number | null>(null);
   const clockRef = useRef<number | null>(null);
   const listenersRef = useRef(new Set<SpeechListener>());
+  const onPageEndRef = useRef(onPageEnd);
+  const resumeOnTextChangeRef = useRef(false);
+  const playFromRef = useRef<(index: number, fromWord?: number) => void>(() => {});
+  onPageEndRef.current = onPageEnd;
 
   const setSpeechStatus = (next: SpeechStatus) => {
     statusRef.current = next;
@@ -60,9 +64,15 @@ export function usePageSpeech(text: string) {
   }, []);
 
   useEffect(() => {
+    const resume = resumeOnTextChangeRef.current;
+    resumeOnTextChangeRef.current = false;
     halt();
     indexRef.current = 0;
     wordIndexRef.current = 0;
+    if (resume) {
+      playFromRef.current(0, 0);
+      return () => halt();
+    }
     setSpeechStatus("idle");
     publish(null);
     return () => halt();
@@ -73,6 +83,10 @@ export function usePageSpeech(text: string) {
       if (token !== tokenRef.current) return;
       if (!("speechSynthesis" in window)) return;
       if (index >= sentences.length) {
+        if (statusRef.current === "playing" && onPageEndRef.current?.()) {
+          resumeOnTextChangeRef.current = true;
+          return;
+        }
         indexRef.current = 0;
         wordIndexRef.current = 0;
         setSpeechStatus("idle");
@@ -152,6 +166,7 @@ export function usePageSpeech(text: string) {
     },
     [sentences.length, speakAt]
   );
+  playFromRef.current = playFrom;
 
   const toggle = useCallback(() => {
     if (statusRef.current === "playing") {

@@ -1,5 +1,20 @@
+import { useState } from "react";
 import { act, fireEvent, render, screen } from "@testing-library/react";
-import { PageSpeechButton } from "../page-speech-button";
+import { PageSpeechButton, usePageSpeech } from "../page-speech-button";
+
+function PageTurner({ pages }: { pages: string[] }) {
+  const [page, setPage] = useState(0);
+  const speech = usePageSpeech(pages[page] ?? "", () => {
+    if (page >= pages.length - 1) return false;
+    setPage((current) => current + 1);
+    return true;
+  });
+  return (
+    <button type="button" onClick={speech.toggle}>
+      {speech.status === "playing" ? "Pausar leitura" : "Ouvir esta página"} {page + 1}
+    </button>
+  );
+}
 
 class MockUtterance {
   lang = "";
@@ -104,5 +119,26 @@ describe("PageSpeechButton", () => {
     });
 
     expect(spoken.at(-1)?.text.startsWith("there")).toBe(true);
+  });
+
+  it("segue para a próxima página se não estiver pausado", () => {
+    jest.useFakeTimers();
+    render(<PageTurner pages={["First page.", "Second page."]} />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Ouvir esta página/ }));
+    act(() => {
+      jest.advanceTimersByTime(60);
+    });
+    expect(spoken.at(-1)?.text).toMatch(/First page/);
+
+    act(() => {
+      spoken.at(-1)?.onend?.();
+    });
+    act(() => {
+      jest.advanceTimersByTime(60);
+    });
+
+    expect(screen.getByRole("button", { name: /Pausar leitura 2/ })).toBeInTheDocument();
+    expect(spoken.at(-1)?.text).toMatch(/Second page/);
   });
 });

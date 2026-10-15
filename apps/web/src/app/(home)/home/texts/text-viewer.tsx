@@ -123,7 +123,18 @@ export function TextViewer({
     [paged, editContent]
   );
   const speechText = paged && !isEditing ? (pages[pageIndex]?.text ?? "") : "";
-  const speech = usePageSpeech(speechText);
+  const pageIndexRef = useRef(pageIndex);
+  const pagesRef = useRef(pages);
+  pageIndexRef.current = pageIndex;
+  pagesRef.current = pages;
+  const speech = usePageSpeech(speechText, () => {
+    if (!paged) return false;
+    const next = pageIndexRef.current + 1;
+    if (next >= pagesRef.current.length) return false;
+    setPageIndex(next);
+    document.querySelector("main")?.scrollTo({ top: 0 });
+    return true;
+  });
   const spokenRangeRef = useRef<SpokenRange | null>(null);
   const spokenRootRef = useRef<HTMLDivElement | null>(null);
   const setReadingRoot = useCallback(
