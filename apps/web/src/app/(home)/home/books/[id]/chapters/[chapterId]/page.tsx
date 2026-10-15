@@ -103,7 +103,7 @@ export default function ChapterPage() {
   const handleReadingPosition = useCallback((next: ReadingPosition) => {
     setPosition((current) =>
       current.pageIndex === next.pageIndex &&
-      current.paragraphIndex === next.paragraphIndex
+        current.paragraphIndex === next.paragraphIndex
         ? current
         : next
     );
@@ -140,7 +140,7 @@ export default function ChapterPage() {
 
   return (
     <div className="min-h-full bg-[#f6f7f9] dark:bg-gray-950">
-      <div className="w-full pb-12 pt-4">
+      <div className="w-full pt-8">
         {progressReady && (
           <TextViewer
             text={text}

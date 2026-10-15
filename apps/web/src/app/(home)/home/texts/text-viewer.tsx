@@ -676,7 +676,7 @@ export function TextViewer({
       <div
         className={cn(
           "min-w-0 flex-1 px-6 sm:px-8 lg:px-16 xl:px-24 2xl:px-32",
-          paged && !isEditing && "flex min-h-[calc(100dvh-8rem)] flex-col"
+          paged && !isEditing && "flex flex-col"
         )}
       >
         <div className="mb-4 flex items-center justify-between gap-3">
@@ -760,7 +760,7 @@ export function TextViewer({
           </div>
         )}
         {paged && !isEditing && pages.length > 0 && (
-          <div className="h-28 shrink-0" />
+          <div className={cn("h-28 shrink-0", selectedWord && "max-lg:h-4")} />
         )}
       </div>
       <div

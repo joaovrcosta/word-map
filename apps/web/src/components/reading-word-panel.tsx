@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
   Volume2,
@@ -267,13 +267,15 @@ export function ReadingWordToken({
       type="button"
       onClick={(event) => {
         onClick();
-        if (window.matchMedia("(max-width: 1023px)").matches) {
-          event.currentTarget.scrollIntoView({
+        if (!window.matchMedia("(max-width: 1023px)").matches) return;
+        const target = event.currentTarget;
+        requestAnimationFrame(() => {
+          target.scrollIntoView({
             block: "center",
             inline: "nearest",
             behavior: "smooth",
           });
-        }
+        });
       }}
       className="inline bg-transparent p-0"
     >
@@ -349,6 +351,7 @@ export function ReadingWordPanel({
   const [suggestError, setSuggestError] = useState<string | null>(null);
   const [origins, setOrigins] = useState<WordOriginEntry[]>([]);
   const [isResizing, setIsResizing] = useState(false);
+  const panelRef = useRef<HTMLElement>(null);
   const panelWidthRef = useRef(READING_PANEL_DEFAULT_WIDTH);
 
   const selectedKey = selected?.saved?.id ?? selected?.clean ?? null;
@@ -373,6 +376,35 @@ export function ReadingWordPanel({
         if (originsFetchRef.current === fetchId) setOrigins([]);
       });
   }, [savedOriginKey, selected?.saved?.id]);
+
+  useLayoutEffect(() => {
+    const aside = panelRef.current;
+    if (!aside) {
+      document.documentElement.style.setProperty("--reading-card-cover", "0px");
+      return;
+    }
+    const media = window.matchMedia("(max-width: 1023px)");
+    const apply = () => {
+      if (!media.matches) {
+        document.documentElement.style.setProperty("--reading-card-cover", "0px");
+        return;
+      }
+      const bottom = Number.parseFloat(getComputedStyle(aside).bottom) || 0;
+      const cover = Math.ceil(aside.offsetHeight + bottom + 12);
+      document.documentElement.style.setProperty("--reading-card-cover", `${cover}px`);
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(aside);
+    media.addEventListener("change", apply);
+    window.addEventListener("resize", apply);
+    return () => {
+      observer.disconnect();
+      media.removeEventListener("change", apply);
+      window.removeEventListener("resize", apply);
+      document.documentElement.style.setProperty("--reading-card-cover", "0px");
+    };
+  }, [selectedKey, expanded]);
 
   useEffect(() => {
     if (!selectedKey) return;
@@ -638,6 +670,7 @@ export function ReadingWordPanel({
 
   const panel = (
     <aside
+      ref={panelRef}
       className={cn(
         "flex min-h-0 flex-col overflow-hidden border-[#ececec] bg-white dark:border-[#373e47] dark:bg-[#22272e] will-change-transform",
         snapOffscreen

@@ -30,7 +30,7 @@ export function HomeShell({
       )}
       <div className="flex min-w-0 flex-1 flex-col">
         <AppHeader initialVaults={initialVaults} />
-        <main className="flex-1 overflow-y-auto bg-[#f6f7f9] dark:bg-[#22272e]">
+        <main className="min-h-0 flex-1 overflow-y-auto bg-[#f6f7f9] dark:bg-[#22272e] max-lg:mb-[var(--reading-card-cover)]">
           {children}
         </main>
       </div>
