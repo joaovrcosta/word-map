@@ -1,7 +1,11 @@
 
 import { revalidatePath } from "../common/revalidate";
 import { prisma } from "../prisma/client";
-import { getCurrentUser, type User } from "../auth/current-user";
+import {
+  getCurrentUser,
+  isContentStaff,
+  type User,
+} from "../auth/current-user";
 import { publicErrorMessage } from "../lib/public-error";
 import {
   normalizeReadingPosition,
@@ -17,7 +21,7 @@ const PUBLIC_BOOK_MESSAGES = new Set([
   "Título obrigatório",
   "Conteúdo obrigatório",
   "Este livro já está na sua biblioteca",
-  "Apenas administradores podem criar livros oficiais",
+  "Apenas administradores e moderadores podem criar livros oficiais",
 ]);
 
 export type BookListItem = {
@@ -63,8 +67,11 @@ export type ChapterDetail = {
   bookTitle: string;
 };
 
-function isAdmin(user: User) {
-  return user.role === "ADMIN";
+function canManageBook(
+  user: User,
+  book: { ownerId: number; isOfficial: boolean }
+) {
+  return book.ownerId === user.id || (book.isOfficial && isContentStaff(user.role));
 }
 
 function wrapError(error: unknown): never {
@@ -110,7 +117,7 @@ async function getAccessibleBook(user: User, bookId: number) {
 
   if (book.isOfficial) {
     const inLibrary = await canReadOfficial(user, book.id);
-    if (inLibrary || isAdmin(user)) {
+    if (inLibrary || isContentStaff(user.role)) {
       return { book, isOwner: false, inLibrary };
     }
   }
@@ -178,8 +185,10 @@ export async function createBook(title: string, description?: string) {
 export async function createOfficialBook(title: string, description?: string) {
   try {
     const user = await requireUser();
-    if (!isAdmin(user)) {
-      throw new Error("Apenas administradores podem criar livros oficiais");
+    if (!isContentStaff(user.role)) {
+      throw new Error(
+        "Apenas administradores e moderadores podem criar livros oficiais"
+      );
     }
 
     const trimmed = title.trim();
@@ -211,7 +220,7 @@ export async function updateBook(
   try {
     const user = await requireUser();
     const existing = await prisma.book.findUnique({ where: { id: bookId } });
-    if (!existing || existing.ownerId !== user.id) {
+    if (!existing || !canManageBook(user, existing)) {
       throw new Error("Livro não encontrado");
     }
 
@@ -239,7 +248,7 @@ export async function deleteBook(bookId: number) {
   try {
     const user = await requireUser();
     const existing = await prisma.book.findUnique({ where: { id: bookId } });
-    if (!existing || existing.ownerId !== user.id) {
+    if (!existing || !canManageBook(user, existing)) {
       throw new Error("Livro não encontrado");
     }
 
@@ -345,7 +354,7 @@ export async function addChapter(
   try {
     const user = await requireUser();
     const book = await prisma.book.findUnique({ where: { id: bookId } });
-    if (!book || book.ownerId !== user.id) {
+    if (!book || !canManageBook(user, book)) {
       throw new Error("Livro não encontrado");
     }
 
@@ -391,7 +400,7 @@ export async function updateChapter(
       where: { id: chapterId },
       include: { book: true },
     });
-    if (!chapter || chapter.book.ownerId !== user.id) {
+    if (!chapter || !canManageBook(user, chapter.book)) {
       throw new Error("Capítulo não encontrado");
     }
 
@@ -424,7 +433,7 @@ export async function deleteChapter(chapterId: number) {
       where: { id: chapterId },
       include: { book: true },
     });
-    if (!chapter || chapter.book.ownerId !== user.id) {
+    if (!chapter || !canManageBook(user, chapter.book)) {
       throw new Error("Capítulo não encontrado");
     }
 
@@ -442,7 +451,7 @@ export async function reorderChapters(bookId: number, chapterIds: number[]) {
       where: { id: bookId },
       include: { chapters: true },
     });
-    if (!book || book.ownerId !== user.id) {
+    if (!book || !canManageBook(user, book)) {
       throw new Error("Livro não encontrado");
     }
 
@@ -476,7 +485,7 @@ export async function getBookById(bookId: number): Promise<BookDetail | null> {
 
     return {
       ...toListItem(book, inLibrary),
-      canEdit: isOwner,
+      canEdit: isOwner || (book.isOfficial && isContentStaff(user.role)),
       chapters: book.chapters.map((chapter) => ({
         id: chapter.id,
         bookId: chapter.bookId,
@@ -517,7 +526,7 @@ export async function getChapterById(
       order: chapter.order,
       createdAt: chapter.createdAt,
       updatedAt: chapter.updatedAt,
-      canEdit: isOwner,
+      canEdit: isOwner || (book.isOfficial && isContentStaff(user.role)),
       bookTitle: book.title,
     };
   } catch (error) {

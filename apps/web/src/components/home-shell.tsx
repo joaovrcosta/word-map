@@ -16,6 +16,7 @@ export function HomeShell({
 }) {
   const pathname = usePathname();
   const reading = Boolean(readingBackHref(pathname));
+  const chapter = /^\/home\/books\/\d+\/chapters\/\d+$/.test(pathname);
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -29,7 +30,7 @@ export function HomeShell({
         </Suspense>
       )}
       <div className="flex min-w-0 flex-1 flex-col">
-        <AppHeader initialVaults={initialVaults} />
+        {!chapter && <AppHeader initialVaults={initialVaults} />}
         <main className="min-h-0 flex-1 overflow-y-auto bg-[#f6f7f9] dark:bg-[#22272e] max-lg:mb-[var(--reading-card-cover)]">
           {children}
         </main>

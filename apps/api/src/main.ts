@@ -65,9 +65,25 @@ async function bootstrap() {
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean);
+  const hubOrigin = process.env.HUB_ORIGIN || "http://localhost:3002";
+  if (!origins.includes(hubOrigin)) origins.push(hubOrigin);
 
   app.enableCors({
-    origin: origins,
+    origin: (
+      origin: string | undefined,
+      callback: (error: Error | null, allow?: boolean) => void,
+    ) => {
+      if (!origin || origins.includes(origin)) {
+        callback(null, true);
+        return;
+      }
+      // O preview web do Expo sobe numa porta própria, fora do site.
+      if (/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(null, false);
+    },
     credentials: true,
   });
   app.useGlobalPipes(

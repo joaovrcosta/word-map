@@ -1,0 +1,14 @@
+@import "tailwindcss";
+
+body {
+  margin: 0;
+  background: #f3f5f7;
+  color: #1c2430;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}

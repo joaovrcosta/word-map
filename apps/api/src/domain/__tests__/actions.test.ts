@@ -826,7 +826,7 @@ describe("Actions", () => {
 
       expect(mockGetCurrentUser).toHaveBeenCalled();
       expect(mockPrisma.text.findMany).toHaveBeenCalledWith({
-        where: { userId: 1 },
+        where: { userId: 1, isCatalog: false },
         orderBy: { updatedAt: "desc" },
       });
       expect(result).toHaveLength(2);

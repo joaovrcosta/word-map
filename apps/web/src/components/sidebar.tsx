@@ -19,6 +19,7 @@ import { getCurrentUser } from "@/actions/auth";
 import { useVaults } from "@/hooks/use-words";
 import useSidebarStore from "@/store/sidebarStore";
 import { ThemeToggle } from "@/components/theme-toggle";
+import LogoutButton from "@/components/logout-button";
 import type { VaultNavItem } from "@/types/vault-nav";
 
 function ClassFlag() {
@@ -128,8 +129,11 @@ export default function AppSidebar({
   useEffect(() => {
     getCurrentUser().then((user) => {
       if (!user) return;
-      const fromEmail = user.email.split("@")[0];
-      setUserLabel(fromEmail || user.name.split(" ")[0] || "você");
+      setUserLabel(
+        user.username
+          ? `@${user.username}`
+          : user.name.split(" ")[0] || "você"
+      );
     });
   }, []);
 
@@ -265,6 +269,7 @@ export default function AppSidebar({
             </div>
           )}
         </button>
+        <LogoutButton appearance="sidebar" expanded={isOpen} />
       </div>
     </aside>
   );

@@ -1,9 +1,10 @@
-export type UserRole = "USER" | "ADMIN";
+export type UserRole = "USER" | "MODERATOR" | "ADMIN";
 
 export interface User {
   id: number;
   name: string;
   email: string;
+  username: string | null;
   createdAt: Date;
   updatedAt: Date;
   role: UserRole;
@@ -11,7 +12,13 @@ export interface User {
 
 export type AuthActionResult =
   | { success: true; user: User }
-  | { success: false; error: string };
+  | { success: false; error: string }
+  | {
+      success: false;
+      needsUsername: true;
+      email: string;
+      name: string;
+    };
 
 export interface LoginData {
   email: string;
@@ -22,6 +29,7 @@ export interface RegisterData {
   name: string;
   email: string;
   password: string;
+  username: string;
 }
 
 import { browserApi } from "@/lib/api/resources";
@@ -31,6 +39,10 @@ export const registerUser = browserApi.registerUser as (
 ) => Promise<AuthActionResult>;
 export const loginUser = browserApi.loginUser as (
   data: LoginData
+) => Promise<AuthActionResult>;
+export const loginWithGoogle = browserApi.loginWithGoogle as (
+  credential: string,
+  username?: string
 ) => Promise<AuthActionResult>;
 export const logoutUser = browserApi.logoutUser as () => Promise<void>;
 export const getCurrentUser = browserApi.getCurrentUser as () => Promise<User | null>;

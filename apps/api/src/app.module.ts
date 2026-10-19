@@ -3,6 +3,8 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from "@nestjs/core";
 import { PrismaModule } from "./prisma/prisma.module";
 import { AuthModule } from "./auth/auth.module";
 import { JwtAuthGuard } from "./common/jwt-auth.guard";
+import { RolesGuard } from "./common/roles.guard";
+import { HubModule } from "./hub/hub.module";
 import { UserContextInterceptor } from "./common/user-context.interceptor";
 import { ApiExceptionFilter } from "./common/api-exception.filter";
 import { VaultsModule } from "./vaults/vaults.module";
@@ -35,10 +37,12 @@ import { RankingModule } from "./ranking/ranking.module";
     DictionaryModule,
     TranslateModule,
     RankingModule,
+    HubModule,
   ],
   controllers: [HealthController],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },
+    { provide: APP_GUARD, useClass: RolesGuard },
     { provide: APP_INTERCEPTOR, useClass: UserContextInterceptor },
     { provide: APP_FILTER, useClass: ApiExceptionFilter },
   ],

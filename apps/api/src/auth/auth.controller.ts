@@ -1,7 +1,8 @@
-import { Body, Controller, Get, Post, Res } from "@nestjs/common";
-import type { Response } from "express";
-import { AuthService } from "./auth.service";
+import { Body, Controller, Get, Post, Req, Res } from "@nestjs/common";
+import type { Request, Response } from "express";
+import { AuthService, type AuthActionResult } from "./auth.service";
 import {
+  GoogleDto,
   LoginDto,
   RegisterDto,
   ResetCodeDto,
@@ -10,8 +11,22 @@ import {
 } from "./auth.dto";
 import { Public } from "../common/public.decorator";
 import { CurrentUser } from "../common/current-user.decorator";
-import { AUTH_COOKIE, authCookieOptions, clearAuthCookie } from "../common/cookies";
+import {
+  AUTH_COOKIE,
+  MOBILE_CLIENT_HEADER,
+  authCookieOptions,
+  clearAuthCookie,
+  isMobileClient,
+} from "../common/cookies";
 import type { User } from "./current-user";
+
+function sessionBody(result: AuthActionResult, mobile: boolean) {
+  if (!result.success) return result;
+  if (mobile && result.token) {
+    return { success: true as const, user: result.user, token: result.token };
+  }
+  return { success: true as const, user: result.user };
+}
 
 @Controller("auth")
 export class AuthController {
@@ -27,14 +42,31 @@ export class AuthController {
   @Post("login")
   async login(
     @Body() body: LoginDto,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response
   ) {
     const result = await this.auth.login(body);
     if (result.success && result.token) {
       response.cookie(AUTH_COOKIE, result.token, authCookieOptions());
     }
-    if (!result.success) return result;
-    return { success: true, user: result.user };
+    return sessionBody(result, isMobileClient(request.get(MOBILE_CLIENT_HEADER)));
+  }
+
+  @Public()
+  @Post("google")
+  async google(
+    @Body() body: GoogleDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response
+  ) {
+    const result = await this.auth.loginWithGoogle(
+      body.credential,
+      body.username
+    );
+    if (result.success && result.token) {
+      response.cookie(AUTH_COOKIE, result.token, authCookieOptions());
+    }
+    return sessionBody(result, isMobileClient(request.get(MOBILE_CLIENT_HEADER)));
   }
 
   @Public()

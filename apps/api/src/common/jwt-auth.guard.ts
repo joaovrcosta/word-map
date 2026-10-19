@@ -8,7 +8,7 @@ import { Reflector } from "@nestjs/core";
 import type { Response } from "express";
 import { AuthService } from "../auth/auth.service";
 import { IS_PUBLIC } from "./public.decorator";
-import { AUTH_COOKIE, clearAuthCookie, readCookie } from "./cookies";
+import { clearAuthCookie, readAccessToken } from "./cookies";
 import type { User } from "../auth/current-user";
 
 @Injectable()
@@ -24,11 +24,11 @@ export class JwtAuthGuard implements CanActivate {
       context.getClass(),
     ]);
     const request = context.switchToHttp().getRequest<{
-      headers: { cookie?: string };
+      headers: { cookie?: string; authorization?: string };
       user?: User | null;
     }>();
     const response = context.switchToHttp().getResponse<Response>();
-    const token = readCookie(request.headers.cookie, AUTH_COOKIE);
+    const token = readAccessToken(request.headers);
 
     if (!token) {
       request.user = null;

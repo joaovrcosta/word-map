@@ -5,6 +5,7 @@ import {
   deleteText,
   getTextById,
   getUserTexts,
+  listCatalogTexts,
   updateText,
 } from "../domain/actions";
 
@@ -30,6 +31,10 @@ export class TextsService {
 
   list() {
     return getUserTexts();
+  }
+
+  catalog() {
+    return listCatalogTexts();
   }
 
   get(textId: number) {

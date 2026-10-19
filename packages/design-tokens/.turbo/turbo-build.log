@@ -1,0 +1,4 @@
+
+> @word-map/design-tokens@0.1.0 build C:\Desenv\word-map\packages\design-tokens
+> tsc && node write-css.js
+

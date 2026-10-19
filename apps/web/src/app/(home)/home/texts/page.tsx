@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Text, getUserTexts, deleteText } from "@/actions/actions";
+import { Text, getUserTexts, getCatalogTexts, deleteText } from "@/actions/actions";
 import { getCurrentUser } from "@/actions/auth";
 import { CreateTextForm } from "./create-text-form";
 import { TextsOnboarding } from "@/components/texts-onboarding";
@@ -19,19 +19,27 @@ import { cn } from "@/lib/utils";
 export default function TextsPage() {
   const router = useRouter();
   const [texts, setTexts] = useState<Text[]>([]);
+  const [catalog, setCatalog] = useState<Text[]>([]);
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [isLoadingTexts, setIsLoadingTexts] = useState(true);
   const [firstName, setFirstName] = useState("");
-  const [activeTab, setActiveTab] = useState<"texts" | "report">("texts");
+  const [activeTab, setActiveTab] = useState<"texts" | "catalog" | "report">(
+    "texts"
+  );
 
   const fetchTexts = async () => {
     try {
       setIsLoadingTexts(true);
-      const textsData = await getUserTexts();
+      const [textsData, catalogData] = await Promise.all([
+        getUserTexts(),
+        getCatalogTexts(),
+      ]);
       setTexts(textsData);
+      setCatalog(catalogData);
     } catch (error) {
       console.error("Erro ao buscar textos:", error);
       setTexts([]);
+      setCatalog([]);
     } finally {
       setIsLoadingTexts(false);
     }
@@ -116,6 +124,13 @@ export default function TextsPage() {
           </button>
           <button
             type="button"
+            onClick={() => setActiveTab("catalog")}
+            className={tabClass("catalog")}
+          >
+            Catálogo
+          </button>
+          <button
+            type="button"
             onClick={() => setActiveTab("report")}
             className={tabClass("report")}
           >
@@ -183,6 +198,43 @@ export default function TextsPage() {
                   </div>
                 ))}
               </div>
+            </div>
+          ))}
+
+        {activeTab === "catalog" &&
+          (catalog.length === 0 ? (
+            <div className="flex flex-col items-center py-16 text-center">
+              <p className="text-[15px] font-bold text-[#3c3c3c] dark:text-white">
+                O catálogo ainda não tem textos
+              </p>
+              <p className="mt-1 text-sm text-[#777]">
+                Quando a equipe publicar um texto, ele aparece aqui para leitura.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 py-6">
+              {catalog.map((text) => (
+                <button
+                  key={text.id}
+                  type="button"
+                  onClick={() => router.push(`/home/texts/${text.id}`)}
+                  className="rounded-2xl border border-[#e8eaed] shadow-sm bg-white p-5 text-left transition-colors hover:border-[#24c875]/40 dark:border-[#373e47] dark:bg-[#2d333b]"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <h2 className="text-lg font-extrabold text-[#3c3c3c] dark:text-white">
+                      {text.title}
+                    </h2>
+                    {text.level && (
+                      <span className="shrink-0 rounded-full bg-[#e7f8ee] px-2 py-1 text-[11px] font-extrabold text-[#14804a]">
+                        {text.level}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-2 line-clamp-3 text-sm text-[#777] dark:text-[#8b949e]">
+                    {text.summary || text.content}
+                  </p>
+                </button>
+              ))}
             </div>
           ))}
 

@@ -1,4 +1,4 @@
-import { IsString, MinLength } from "class-validator";
+import { IsOptional, IsString, MinLength } from "class-validator";
 
 export class RegisterDto {
   @IsString()
@@ -9,6 +9,9 @@ export class RegisterDto {
 
   @IsString()
   password!: string;
+
+  @IsString()
+  username!: string;
 }
 
 export class LoginDto {
@@ -17,6 +20,15 @@ export class LoginDto {
 
   @IsString()
   password!: string;
+}
+
+export class GoogleDto {
+  @IsString()
+  credential!: string;
+
+  @IsOptional()
+  @IsString()
+  username?: string;
 }
 
 export class ResetCodeDto {

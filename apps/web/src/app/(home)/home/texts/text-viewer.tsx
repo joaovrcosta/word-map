@@ -1,6 +1,8 @@
 "use client";
 
 import { useState, useEffect, useLayoutEffect, useMemo, useCallback, memo, useRef } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
 import {
   Text,
   checkTextWords,
@@ -11,7 +13,7 @@ import {
   removeWordFromVault,
 } from "@/actions/actions";
 import { Vault, Word } from "@/actions/actions";
-import { Edit2, Save, X } from "lucide-react";
+import { AlignJustify, Edit2, Headphones, Layers, Pause, Save, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -42,14 +44,14 @@ import type { ContextualizePayload } from "@/lib/contextualize-client";
 import { buildReadingContext } from "@/lib/reading-context";
 import {
   paginateReading,
+  paginateReadingToFit,
   resolveReadingPage,
   splitParagraphs,
+  splitSentences,
 } from "@/lib/reading-pages";
-import {
-  PageSpeechControls,
-  usePageSpeech,
-} from "@/components/page-speech-button";
-import { paintSpokenWord, type SpokenRange } from "@/lib/spoken-word";
+import { readingBackHref } from "@/lib/reading-route";
+import { usePageSpeech } from "@/components/page-speech-button";
+import { locateSentenceStarts, paintSpokenWord, type SpokenRange } from "@/lib/spoken-word";
 import { cn } from "@/lib/utils";
 
 interface TextViewerProps {
@@ -117,11 +119,41 @@ export function TextViewer({
   );
   const { containerRef: selectionContainerRef, selection, clearSelection } =
     useTextSelection();
+  const backHref = readingBackHref(usePathname()) ?? "/home";
   const [pageIndex, setPageIndex] = useState(initialPageIndex);
-  const pages = useMemo(
-    () => (paged ? paginateReading(editContent) : []),
-    [paged, editContent]
-  );
+  const [fontSize, setFontSize] = useState(22);
+  const [frame, setFrame] = useState({ width: 0, height: 0 });
+  const [showPhrase, setShowPhrase] = useState(false);
+  const [showSavedWords, setShowSavedWords] = useState(false);
+  const [wordAnchor, setWordAnchor] = useState<{
+    top: number;
+    left: number;
+    bottom: number;
+    width: number;
+  } | null>(null);
+  const [liveSentence, setLiveSentence] = useState("");
+  const frameRef = useRef<HTMLDivElement>(null);
+  const measureRef = useRef<HTMLDivElement>(null);
+  const anchorRef = useRef({
+    paragraphIndex: initialParagraphIndex,
+    startOffset: 0,
+  });
+  const fitKeyRef = useRef("");
+  const touchStartX = useRef(0);
+  const pages = useMemo(() => {
+    if (!paged) return [];
+    const probe = measureRef.current;
+    if (!probe || frame.height < 80 || frame.width < 40) {
+      return paginateReading(editContent);
+    }
+    probe.style.width = `${frame.width}px`;
+    probe.style.fontSize = `${fontSize}px`;
+    probe.style.lineHeight = "1.7";
+    return paginateReadingToFit(editContent, (sample) => {
+      probe.textContent = sample;
+      return probe.offsetHeight <= frame.height - 24;
+    });
+  }, [paged, editContent, frame, fontSize]);
   const speechText = paged && !isEditing ? (pages[pageIndex]?.text ?? "") : "";
   const pageIndexRef = useRef(pageIndex);
   const pagesRef = useRef(pages);
@@ -147,11 +179,43 @@ export function TextViewer({
   useEffect(() => {
     return speech.subscribe((range) => {
       spokenRangeRef.current = range;
+      if (range) {
+        const sentences = splitSentences(speechText);
+        const starts = locateSentenceStarts(speechText, sentences);
+        const index = starts.findIndex(
+          (start, item) =>
+            range.start >= start && range.start < start + sentences[item].length
+        );
+        if (index >= 0) {
+          const nextSentence = sentences[index];
+          setLiveSentence((current) =>
+            current === nextSentence ? current : nextSentence
+          );
+        }
+      }
       const root = spokenRootRef.current;
       if (!root) return;
       paintSpokenWord(root, range);
     });
-  }, [speech.subscribe]);
+  }, [speech.subscribe, speechText]);
+  useLayoutEffect(() => {
+    if (!paged || isEditing) return;
+    const node = frameRef.current;
+    if (!node) return;
+    const apply = () => {
+      const width = Math.max(0, node.clientWidth - 40);
+      const height = node.clientHeight;
+      setFrame((current) =>
+        Math.abs(current.width - width) <= 1 && Math.abs(current.height - height) <= 1
+          ? current
+          : { width, height }
+      );
+    };
+    apply();
+    const observer = new ResizeObserver(apply);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [paged, isEditing, showPhrase, fontSize]);
   useLayoutEffect(() => {
     const root = spokenRootRef.current;
     if (!root) return;
@@ -168,6 +232,36 @@ export function TextViewer({
       resolveReadingPage(paginateReading(editContent), initialParagraphIndex, initialPageIndex)
     );
   }, [paged, editContent, initialPageIndex, initialParagraphIndex]);
+
+  useEffect(() => {
+    if (!paged || pages.length === 0) return;
+    const key = `${frame.width}x${frame.height}x${fontSize}`;
+    if (fitKeyRef.current === key) {
+      const slice = pages[pageIndex]?.slices[0];
+      if (slice) {
+        anchorRef.current = {
+          paragraphIndex: slice.paragraphIndex,
+          startOffset: slice.startOffset,
+        };
+      }
+      return;
+    }
+    fitKeyRef.current = key;
+    const { paragraphIndex, startOffset } = anchorRef.current;
+    const located = pages.findIndex((page) =>
+      page.slices.some(
+        (slice) =>
+          slice.paragraphIndex === paragraphIndex &&
+          startOffset >= slice.startOffset &&
+          startOffset < slice.startOffset + slice.text.length
+      )
+    );
+    const next =
+      located >= 0
+        ? located
+        : resolveReadingPage(pages, paragraphIndex, pageIndex);
+    if (next !== pageIndex) setPageIndex(next);
+  }, [paged, pages, pageIndex, frame, fontSize]);
 
   useEffect(() => {
     if (!paged || pages.length === 0) return;
@@ -342,6 +436,7 @@ export function TextViewer({
         occurrence,
         saved: findSavedReadingWord(foundWords, clean),
       });
+      setShowSavedWords(false);
       playWordAudio(clean);
       void handleFetchWordInfo(clean);
     },
@@ -622,7 +717,18 @@ export function TextViewer({
               similar={mark === "similar"}
               wordStart={start}
               wordEnd={end}
-              onClick={() => handleSelectWord(surface, clean, occurrence)}
+              reader={paged && !isEditing}
+              onClick={(anchor) => {
+                if (anchor) {
+                  setWordAnchor({
+                    top: anchor.top,
+                    left: anchor.left,
+                    bottom: anchor.bottom,
+                    width: anchor.width,
+                  });
+                }
+                handleSelectWord(surface, clean, occurrence);
+              }}
             />
           );
         } else {
@@ -641,7 +747,7 @@ export function TextViewer({
       if (last < content.length) nodes.push(content.slice(last));
       return nodes;
     },
-    [foundWords, selectedWord, handleSelectWord]
+    [foundWords, selectedWord, handleSelectWord, paged, isEditing]
   );
 
   // Memoizar a renderização do texto interativo
@@ -671,6 +777,34 @@ export function TextViewer({
 
   const readingProgress =
     pages.length <= 1 ? 0 : (pageIndex / (pages.length - 1)) * 100;
+  const reader = paged && !isEditing;
+  const phraseText = liveSentence || contextPayload?.sentence || "";
+  const chapterWords = useMemo(() => {
+    const rows: {
+      word: string;
+      clean: string;
+      translation: string;
+      level: number;
+    }[] = [];
+    const seen = new Set<string>();
+    for (const item of foundWords) {
+      const clean = normalizeToken(item.word);
+      if (!clean || seen.has(clean)) continue;
+      seen.add(clean);
+      const vault = item.vaultInfo[0];
+      const saved =
+        vault?.words.find((entry) => normalizeToken(entry.name) === clean) ??
+        vault?.words[0];
+      rows.push({
+        word: saved?.name || item.word,
+        clean,
+        translation: saved?.translations?.[0] ?? "",
+        level: Math.min(4, Math.max(1, saved?.confidence || 1)),
+      });
+    }
+    rows.sort((a, b) => a.word.localeCompare(b.word, "en"));
+    return rows;
+  }, [foundWords]);
 
   if (isLoading) {
     return (
@@ -682,77 +816,163 @@ export function TextViewer({
   }
 
   return (
-    <div>
-    <div className="flex items-start">
-      <div
-        className={cn(
-          "min-w-0 flex-1 px-6 sm:px-8 lg:px-16 xl:px-24 2xl:px-32",
-          paged && !isEditing && "flex flex-col"
-        )}
-      >
-        <div className="mb-4 flex items-center justify-between gap-3">
-          {isEditing ? (
-            <Input
-              value={editTitle}
-              onChange={(e) => setEditTitle(e.target.value)}
-              className="h-10 border-[#e5e5e5] text-xl font-medium shadow-none"
-              placeholder="Título do texto"
+    <div
+      className={
+        reader
+          ? cn(
+              "fixed inset-0 z-40 flex flex-col bg-[#22272e] text-zinc-100",
+              selectedWord && "lg:pr-[var(--reading-panel-width)]"
+            )
+          : undefined
+      }
+    >
+      {reader && (
+        <div className="flex items-center gap-3 px-4 pb-2 pt-3">
+          <Link href={backHref} aria-label="Fechar" className="text-zinc-100">
+            <X className="size-6" strokeWidth={1.75} />
+          </Link>
+          <div
+            className="h-1.5 flex-1 overflow-hidden rounded-full bg-white/10"
+            role="progressbar"
+            aria-valuenow={Math.round(readingProgress)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Progresso da leitura"
+          >
+            <div
+              className="h-full rounded-full bg-[#24c875] transition-[width] duration-300"
+              style={{ width: `${readingProgress}%` }}
             />
-          ) : (
-            <h1 className="truncate text-[22px] font-medium leading-tight text-[#333] dark:text-white">
-              {text.title}
-            </h1>
+          </div>
+          <button
+            type="button"
+            onClick={() =>
+              setFontSize((size) => (size === 18 ? 22 : size === 22 ? 26 : 18))
+            }
+            aria-label="Tamanho do texto"
+            className="font-serif text-[18px] leading-none text-zinc-100"
+          >
+            tT
+          </button>
+        </div>
+      )}
+      {reader && showPhrase && (
+        <p className="px-5 pb-2 text-[15px] leading-snug text-zinc-400">
+          {phraseText || "Toque numa palavra para ver a frase."}
+        </p>
+      )}
+      <div className={reader ? "flex min-h-0 flex-1 flex-col" : "flex items-start"}>
+        <div
+          className={cn(
+            reader
+              ? "flex min-h-0 min-w-0 flex-1 flex-col"
+              : "min-w-0 flex-1 px-6 sm:px-8 lg:px-16 xl:px-24 2xl:px-32",
+            paged && !isEditing && !reader && "flex flex-col"
+          )}
+        >
+          {!reader && (
+          <div className="mb-4 flex items-center justify-between gap-3">
+            {isEditing ? (
+              <Input
+                value={editTitle}
+                onChange={(e) => setEditTitle(e.target.value)}
+                className="h-10 border-[#e5e5e5] text-xl font-medium shadow-none"
+                placeholder="Título do texto"
+              />
+            ) : (
+              <h1 className="truncate text-[22px] font-medium leading-tight text-[#333] dark:text-white">
+                {text.title}
+              </h1>
+            )}
+
+            <div className="flex shrink-0 items-center gap-2">
+              {isEditing ? (
+                <>
+                  <Button
+                    onClick={handleSaveEdit}
+                    disabled={isSaving}
+                    size="sm"
+                    variant="ghost"
+                    className="gap-2 text-[#777]"
+                  >
+                    {isSaving ? (
+                      <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-current"></div>
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    Salvar
+                  </Button>
+                  <Button
+                    onClick={handleCancelEdit}
+                    disabled={isSaving}
+                    size="sm"
+                    variant="ghost"
+                    className="gap-2 text-[#777]"
+                  >
+                    <X className="h-4 w-4" />
+                    Cancelar
+                  </Button>
+                </>
+              ) : canEdit ? (
+                <Button
+                  onClick={() => setIsEditing(true)}
+                  size="icon"
+                  variant="ghost"
+                  className="h-8 w-8 text-[#b0b0b0] hover:text-[#555] dark:hover:text-white"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </Button>
+              ) : null}
+            </div>
+          </div>
           )}
 
-          <div className="flex shrink-0 items-center gap-2">
-            {isEditing ? (
-              <>
-                <Button
-                  onClick={handleSaveEdit}
-                  disabled={isSaving}
-                  size="sm"
-                  variant="ghost"
-                  className="gap-2 text-[#777]"
-                >
-                  {isSaving ? (
-                    <div className="h-4 w-4 animate-spin rounded-full border-b-2 border-current"></div>
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  Salvar
-                </Button>
-                <Button
-                  onClick={handleCancelEdit}
-                  disabled={isSaving}
-                  size="sm"
-                  variant="ghost"
-                  className="gap-2 text-[#777]"
-                >
-                  <X className="h-4 w-4" />
-                  Cancelar
-                </Button>
-              </>
-            ) : canEdit ? (
-              <Button
-                onClick={() => setIsEditing(true)}
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 text-[#b0b0b0] hover:text-[#555] dark:hover:text-white"
+          {isEditing ? (
+            <div className="space-y-6">
+              <Textarea
+                value={editContent}
+                onChange={(e) => setEditContent(e.target.value)}
+                className="min-h-64 resize-none text-base leading-8 shadow-none"
+                placeholder="Digite ou cole o texto aqui..."
+              />
+              <div
+                ref={setReadingRoot}
+                data-text-selection-container
+                className="select-text text-[20px] leading-[2.05] text-zinc-900 dark:text-zinc-100"
               >
-                <Edit2 className="h-4 w-4" />
-              </Button>
-            ) : null}
-          </div>
-        </div>
-
-        {isEditing ? (
-          <div className="space-y-6">
-            <Textarea
-              value={editContent}
-              onChange={(e) => setEditContent(e.target.value)}
-              className="min-h-64 resize-none text-base leading-8 shadow-none"
-              placeholder="Digite ou cole o texto aqui..."
-            />
+                {renderInteractiveText}
+              </div>
+            </div>
+          ) : reader ? (
+            <div ref={frameRef} className="relative min-h-0 flex-1 overflow-hidden px-5">
+              <div
+                ref={measureRef}
+                aria-hidden
+                className="pointer-events-none absolute top-0 left-0 opacity-0"
+              />
+              <div
+                ref={setReadingRoot}
+                data-text-selection-container
+                className="select-text text-zinc-100"
+                style={{ fontSize, lineHeight: 1.7 }}
+                onTouchStart={(event) => {
+                  touchStartX.current = event.changedTouches[0]?.clientX ?? 0;
+                }}
+                onTouchEnd={(event) => {
+                  const end = event.changedTouches[0]?.clientX ?? 0;
+                  const delta = end - touchStartX.current;
+                  if (Math.abs(delta) < 48) return;
+                  setPageIndex((current) =>
+                    delta < 0
+                      ? Math.min(pages.length - 1, current + 1)
+                      : Math.max(0, current - 1)
+                  );
+                }}
+              >
+                {renderInteractiveText}
+              </div>
+            </div>
+          ) : (
             <div
               ref={setReadingRoot}
               data-text-selection-container
@@ -760,89 +980,136 @@ export function TextViewer({
             >
               {renderInteractiveText}
             </div>
-          </div>
-        ) : (
-          <div
-            ref={setReadingRoot}
-            data-text-selection-container
-            className="select-text text-[20px] leading-[2.05] text-zinc-900 dark:text-zinc-100"
-          >
-            {renderInteractiveText}
-          </div>
-        )}
-        {paged && !isEditing && pages.length > 0 && (
-          <div className={cn("h-28 shrink-0", selectedWord && "max-lg:h-4")} />
-        )}
-      </div>
-      <div
-        className={`hidden lg:block lg:shrink-0 ${
-          selectedWord ? "lg:w-[var(--reading-panel-width)]" : "lg:w-0"
-        }`}
-      />
-      <ReadingWordPanel
-        selected={selectedWord}
-        sourceText={visibleText}
-        userVaults={userVaults}
-        wordInfo={selectedWord ? wordInfoMap[selectedWord.clean] : null}
-        isLoadingInfo={!!selectedWord && loadingWords.has(selectedWord.clean)}
-        isSaving={isAddingWord}
-        autoTranslateWordPreview={autoTranslateWordPreview}
-        showContextualize={paged && !isEditing}
-        contextPayload={contextPayload}
-        originSource={{
-          title: sourceTitle || text.title,
-          kind: sourceKind,
-        }}
-        onClose={() => setSelectedWord(null)}
-        onSave={handlePanelSave}
-        onUpdate={handlePanelUpdate}
-        onRemove={handleRemoveWordFromVault}
-      />
+          )}
+        </div>
+        <div
+          className={
+            reader
+              ? "hidden"
+              : `hidden lg:block lg:shrink-0 ${selectedWord ? "lg:w-[var(--reading-panel-width)]" : "lg:w-0"}`
+          }
+        />
+        <ReadingWordPanel
+          selected={selectedWord}
+          sourceText={visibleText}
+          userVaults={userVaults}
+          wordInfo={selectedWord ? wordInfoMap[selectedWord.clean] : null}
+          isLoadingInfo={!!selectedWord && loadingWords.has(selectedWord.clean)}
+          isSaving={isAddingWord}
+          autoTranslateWordPreview={autoTranslateWordPreview}
+          showContextualize={paged && !isEditing}
+          contextPayload={contextPayload}
+          originSource={{
+            title: sourceTitle || text.title,
+            kind: sourceKind,
+          }}
+          aboveBar={reader}
+          anchor={reader ? wordAnchor : null}
+          onClose={() => {
+            setSelectedWord(null);
+            setWordAnchor(null);
+          }}
+          onSave={handlePanelSave}
+          onUpdate={handlePanelUpdate}
+          onRemove={handleRemoveWordFromVault}
+        />
       </div>
 
-      {paged && !isEditing && pages.length > 0 && (
-        <div
-          className={cn(
-            "fixed top-14 left-0 z-20 h-1.5 bg-black/10 dark:bg-white/10",
-            selectedWord ? "right-0 lg:right-[var(--reading-panel-width)]" : "right-0"
-          )}
-          role="progressbar"
-          aria-valuenow={Math.round(readingProgress)}
-          aria-valuemin={0}
-          aria-valuemax={100}
-          aria-label="Progresso da leitura"
-        >
-          <div
-            className="h-full bg-[#24c875] transition-[width] duration-300"
-            style={{ width: `${readingProgress}%` }}
-          />
-        </div>
+      {reader && showSavedWords && (
+        <aside className="absolute inset-0 z-30 flex flex-col bg-[#22272e]">
+          <div className="flex items-center justify-between gap-3 px-4 pb-2 pt-3">
+            <p className="text-[18px] font-medium text-white">Palavras salvas</p>
+            <button
+              type="button"
+              onClick={() => setShowSavedWords(false)}
+              aria-label="Fechar"
+              className="text-zinc-100"
+            >
+              <X className="size-6" strokeWidth={1.75} />
+            </button>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            {chapterWords.length === 0 ? (
+              <p className="px-4 py-6 text-[13px] text-zinc-400">
+                Nenhuma palavra salva neste capítulo.
+              </p>
+            ) : (
+              <ul>
+                {chapterWords.map((item) => (
+                  <li key={item.clean} className="border-t border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => handleSelectWord(item.word, item.clean, 0)}
+                      className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-white/5"
+                    >
+                      <span
+                        className={cn(
+                          "inline-flex size-6 shrink-0 items-center justify-center rounded-full text-[11px] font-bold",
+                          item.level === 1 && "bg-[#ff4b4b] text-white",
+                          item.level === 2 && "bg-[#ff9600] text-white",
+                          item.level === 3 && "bg-[#ffc800] text-[#3c3c3c]",
+                          item.level === 4 && "bg-[#24c875] text-white"
+                        )}
+                      >
+                        {item.level}
+                      </span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-[16px] text-white">{item.word}</span>
+                        {item.translation ? (
+                          <span className="block text-[13px] leading-snug text-zinc-400">
+                            {item.translation}
+                          </span>
+                        ) : null}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </aside>
       )}
 
-      {paged && !isEditing && pages.length > 0 && (
-        <div
-          className={cn(
-            "fixed bottom-5 z-30 flex w-[min(92vw,26rem)] -translate-x-1/2 flex-col items-center",
-            selectedWord
-              ? "left-1/2 lg:left-[calc((100%-var(--reading-panel-width))/2)]"
-              : "left-1/2"
-          )}
-        >
-          <div className="rounded-full border border-white/10 bg-[#181818] px-4 py-2 shadow-[0_12px_32px_rgba(0,0,0,0.55)]">
-            <PageSpeechControls
-              status={speech.status}
-              canPlay={speech.canPlay}
-              onToggle={speech.toggle}
-              canNext={pageIndex < pages.length - 1}
-              canPrevious={pageIndex > 0}
-              onNextPart={() =>
-                setPageIndex((current) => Math.min(pages.length - 1, current + 1))
-              }
-              onPreviousPart={() =>
-                setPageIndex((current) => Math.max(0, current - 1))
-              }
-            />
-          </div>
+      {reader && (
+        <div className="grid h-[4.5rem] grid-cols-3 items-center px-6 pb-2 text-zinc-300">
+          <button
+            type="button"
+            onClick={speech.toggle}
+            disabled={!speech.canPlay}
+            aria-label={speech.status === "playing" ? "Pausar leitura" : "Ouvir esta página"}
+            className="justify-self-start disabled:opacity-40"
+          >
+            {speech.status === "playing" ? (
+              <Pause className="size-6" />
+            ) : (
+              <Headphones className="size-6" strokeWidth={1.75} />
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowPhrase((current) => !current)}
+            aria-pressed={showPhrase}
+            className="flex flex-col items-center gap-1 text-[11px]"
+          >
+            <AlignJustify className="size-5" strokeWidth={1.75} />
+            Ver frase
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setShowSavedWords((open) => !open);
+              setSelectedWord(null);
+              setWordAnchor(null);
+            }}
+            aria-expanded={showSavedWords}
+            aria-label={`${chapterWords.length} palavras salvas neste capítulo`}
+            className="relative justify-self-end"
+          >
+            <Layers className="size-6" strokeWidth={1.75} />
+            <span className="absolute -right-2 -top-2 min-w-4 rounded bg-[#24c875] px-1 text-center text-[10px] font-bold leading-4 text-white">
+              {chapterWords.length}
+            </span>
+          </button>
         </div>
       )}
 

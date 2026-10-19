@@ -1187,6 +1187,33 @@ export interface Text {
   userId: number;
   createdAt: Date;
   updatedAt: Date;
+  isCatalog?: boolean;
+  summary?: string | null;
+  level?: string | null;
+}
+
+function toText(text: {
+  id: number;
+  title: string;
+  content: string;
+  userId: number;
+  createdAt: Date;
+  updatedAt: Date;
+  isCatalog?: boolean;
+  summary?: string | null;
+  level?: string | null;
+}): Text {
+  return {
+    id: text.id,
+    title: text.title,
+    content: text.content,
+    userId: text.userId,
+    createdAt: text.createdAt,
+    updatedAt: text.updatedAt,
+    isCatalog: text.isCatalog ?? false,
+    summary: text.summary ?? null,
+    level: text.level ?? null,
+  };
 }
 
 // Criar novo texto
@@ -1253,7 +1280,7 @@ export async function getTextById(textId: number): Promise<Text | null> {
     const text = await prisma.text.findFirst({
       where: {
         id: textId,
-        userId: user.id, // Garantir que o texto pertence ao usuário
+        OR: [{ userId: user.id }, { isCatalog: true }],
       },
     });
 
@@ -1265,14 +1292,7 @@ export async function getTextById(textId: number): Promise<Text | null> {
     console.log("Texto encontrado:", text.title);
     console.log("=== FIM getTextById - SUCESSO ===");
 
-    return {
-      id: text.id,
-      title: text.title,
-      content: text.content,
-      userId: text.userId,
-      createdAt: text.createdAt,
-      updatedAt: text.updatedAt,
-    };
+    return toText(text);
   } catch (error) {
     console.error("=== ERRO em getTextById ===");
     console.error("Erro completo:", error);
@@ -1298,7 +1318,7 @@ export async function getUserTexts(): Promise<Text[]> {
     console.log("Buscando textos para usuário:", user.id);
 
     const texts = await prisma.text.findMany({
-      where: { userId: user.id },
+      where: { userId: user.id, isCatalog: false },
       orderBy: { updatedAt: "desc" },
     });
 
@@ -1324,6 +1344,30 @@ export async function getUserTexts(): Promise<Text[]> {
   }
 }
 
+export async function listCatalogTexts(): Promise<Text[]> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    const texts = await prisma.text.findMany({
+      where: { isCatalog: true },
+      orderBy: [{ level: "asc" }, { title: "asc" }],
+    });
+
+    return texts.map(toText);
+  } catch (error) {
+    console.error("=== ERRO em listCatalogTexts ===");
+    console.error("Erro completo:", error);
+    throw new Error(
+      `Erro ao buscar textos do catálogo: ${
+        error instanceof Error ? error.message : "Erro desconhecido"
+      }`
+    );
+  }
+}
+
 // Atualizar texto
 export async function updateText(
   textId: number,
@@ -1333,6 +1377,18 @@ export async function updateText(
   try {
     console.log("=== INÍCIO updateText ===");
     console.log("Atualizando texto:", textId);
+
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    const existing = await prisma.text.findFirst({
+      where: { id: textId, userId: user.id, isCatalog: false },
+    });
+    if (!existing) {
+      throw new Error("Texto não encontrado");
+    }
 
     const updatedText = await prisma.text.update({
       where: { id: textId },
@@ -1374,6 +1430,18 @@ export async function deleteText(textId: number): Promise<void> {
   try {
     console.log("=== INÍCIO deleteText ===");
     console.log("Deletando texto:", textId);
+
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    const existing = await prisma.text.findFirst({
+      where: { id: textId, userId: user.id, isCatalog: false },
+    });
+    if (!existing) {
+      throw new Error("Texto não encontrado");
+    }
 
     await prisma.text.delete({
       where: { id: textId },

@@ -59,6 +59,9 @@ export interface Text {
   userId: number;
   createdAt: Date;
   updatedAt: Date;
+  isCatalog?: boolean;
+  summary?: string | null;
+  level?: string | null;
 }
 
 export type SelectionSaveType = "phrasal-verb" | "word" | "frase";
@@ -213,6 +216,7 @@ export const getTextById = browserApi.getTextById as (
   textId: number
 ) => Promise<Text | null>;
 export const getUserTexts = browserApi.getUserTexts as () => Promise<Text[]>;
+export const getCatalogTexts = browserApi.getCatalogTexts as () => Promise<Text[]>;
 export const updateText = browserApi.updateText as (
   textId: number,
   title: string,

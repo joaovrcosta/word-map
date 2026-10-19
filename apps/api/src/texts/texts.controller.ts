@@ -28,6 +28,11 @@ export class TextsController {
     return this.texts.list();
   }
 
+  @Get("catalog")
+  catalog() {
+    return this.texts.catalog();
+  }
+
   @Get(":id")
   get(@Param("id", ParseIntPipe) id: number) {
     return this.texts.get(id);

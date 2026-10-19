@@ -4,7 +4,12 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { registerUser, type RegisterData } from "@/actions/auth";
+import { loginWithGoogle, registerUser, type RegisterData } from "@/actions/auth";
+import {
+  GoogleSignIn,
+  UsernameField,
+  UsernameStep,
+} from "@/components/google-sign-in";
 import { publicErrorMessage } from "@/lib/public-error";
 import { User, Mail, Lock } from "lucide-react";
 
@@ -14,9 +19,50 @@ export default function RegisterPage() {
     name: "",
     email: "",
     password: "",
+    username: "",
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [googleSignup, setGoogleSignup] = useState<{
+    credential: string;
+    email: string;
+  } | null>(null);
+
+  const finishGoogle = async (credential: string, chosenUsername?: string) => {
+    setError("");
+    setIsLoading(true);
+    try {
+      const result = await loginWithGoogle(credential, chosenUsername);
+      if (!result.success) {
+        if ("needsUsername" in result) {
+          setGoogleSignup({ credential, email: result.email });
+          setFormData((prev) => ({
+            ...prev,
+            username:
+              prev.username ||
+              result.email
+                .split("@")[0]
+                .toLowerCase()
+                .replace(/[^a-z0-9_]/g, "")
+                .slice(0, 20),
+          }));
+          return;
+        }
+        setError(result.error);
+        return;
+      }
+      router.push("/home");
+    } catch (cause) {
+      setError(
+        publicErrorMessage(
+          cause,
+          "Não foi possível criar a conta com o Google. Tente novamente em instantes."
+        )
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -26,7 +72,9 @@ export default function RegisterPage() {
     try {
       const result = await registerUser(formData);
       if (!result.success) {
-        setError(result.error);
+        setError(
+          "error" in result ? result.error : "Não foi possível criar a conta."
+        );
         return;
       }
       router.push(
@@ -68,7 +116,37 @@ export default function RegisterPage() {
               faça login se já tiver uma conta
             </button>
           </p>
+          <p className="mt-3 text-center text-sm text-gray-600 dark:text-gray-400">
+            Escolha um @. É assim que você aparece para as outras pessoas na
+            plataforma.
+          </p>
         </div>
+
+        {googleSignup ? (
+          <UsernameStep
+            email={googleSignup.email}
+            value={formData.username}
+            onChange={(value) => handleInputChange("username", value)}
+            pending={isLoading}
+            error={error}
+            onSubmit={() => finishGoogle(googleSignup.credential, formData.username)}
+          />
+        ) : (
+          <>
+        {process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID && (
+          <div className="mt-8 space-y-4">
+            <GoogleSignIn
+              text="signup_with"
+              disabled={isLoading}
+              onCredential={(credential) =>
+              finishGoogle(credential, formData.username || undefined)
+            }
+            />
+            <p className="text-center text-xs font-bold uppercase tracking-wide text-gray-400">
+              ou cadastre com email
+            </p>
+          </div>
+        )}
 
         <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
           {error && (
@@ -130,6 +208,12 @@ export default function RegisterPage() {
               </div>
             </div>
 
+            <UsernameField
+              value={formData.username}
+              onChange={(value) => handleInputChange("username", value)}
+              disabled={isLoading}
+            />
+
             <div>
               <label
                 htmlFor="password"
@@ -181,6 +265,8 @@ export default function RegisterPage() {
             </p>
           </div>
         </form>
+          </>
+        )}
       </div>
     </div>
   );

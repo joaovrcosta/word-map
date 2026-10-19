@@ -2,6 +2,7 @@ import {
   countWords,
   normalizeReadingPosition,
   paginateReading,
+  paginateReadingToFit,
   recoverParagraphs,
   resolveReadingPage,
   splitSentences,
@@ -105,6 +106,21 @@ describe("paginateReading", () => {
     expect(paginateReading("   \n  ")).toEqual([
       { text: "", wordCount: 0, slices: [] },
     ]);
+  });
+
+  it("coloca em cada página só o texto que cabe", () => {
+    const content = paragraph("fit", 6, 20);
+    const pages = paginateReadingToFit(content, (text) => countWords(text) <= 40);
+    expect(pages.length).toBeGreaterThan(1);
+    expect(pages.slice(0, -1).every((page) => page.wordCount <= 40)).toBe(true);
+    expect(recoverParagraphs(content, pages)).toEqual([content]);
+  });
+
+  it("mantém sozinha a frase que não cabe na tela", () => {
+    const huge = sentence("big", 80);
+    const pages = paginateReadingToFit(huge, () => false);
+    expect(pages).toHaveLength(1);
+    expect(pages[0].text).toBe(huge);
   });
 
   it("reconstrói os parágrafos sem perder nem duplicar texto", () => {

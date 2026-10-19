@@ -100,6 +100,7 @@ export default function ProfilePage() {
   const [gamificationStats, setGamificationStats] =
     useState<GamificationStats | null>(null);
   const [displayName, setDisplayName] = useState("Você");
+  const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const { settings, updateSettings } = useUserSettingsStore();
@@ -119,6 +120,7 @@ export default function ProfilePage() {
         if (user?.name) {
           setDisplayName(user.name.split(" ")[0]);
         }
+        setUsername(user?.username ?? null);
 
         if (userSettings) {
           updateSettings({
@@ -304,6 +306,9 @@ export default function ProfilePage() {
             <h1 className="text-[26px] font-extrabold text-[#3c3c3c] dark:text-white">
               Olá, {displayName}
             </h1>
+            {username && (
+              <p className="text-sm font-extrabold text-[#14804a]">@{username}</p>
+            )}
             <p className="mt-1 text-sm font-bold text-[#afafaf]">
               Acompanhe seu progresso e configure suas preferências
             </p>

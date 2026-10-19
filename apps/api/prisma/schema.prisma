@@ -9,16 +9,28 @@ datasource db {
 
 enum UserRole {
   USER
+  MODERATOR
   ADMIN
+}
+
+enum ContentLevel {
+  A1
+  A2
+  B1
+  B2
+  C1
+  C2
 }
 
 model User {
   id               Int           @id @default(autoincrement())
   name             String
   email            String        @unique
+  username         String?       @unique
   createdAt        DateTime      @default(now())
   updatedAt        DateTime      @updatedAt
-  password         String
+  password         String?
+  googleId         String?       @unique
   resetCode        String?
   resetCodeExpires DateTime?
   role             UserRole      @default(USER)
@@ -144,13 +156,18 @@ model WordHistory {
 }
 
 model Text {
-  id        Int      @id @default(autoincrement())
+  id        Int           @id @default(autoincrement())
   title     String
-  content   String   @db.Text
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  content   String        @db.Text
+  summary   String?       @db.Text
+  level     ContentLevel?
+  isCatalog Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
   userId    Int
-  user      User     @relation(fields: [userId], references: [id])
+  user      User          @relation(fields: [userId], references: [id])
+
+  @@index([isCatalog, level])
 }
 
 model Book {

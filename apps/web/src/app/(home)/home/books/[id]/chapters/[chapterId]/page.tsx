@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   getChapterById,
@@ -113,12 +114,18 @@ export default function ChapterPage() {
     await updateChapter(chapterId, title, content);
   };
 
-  if (isLoading) {
+  if (isLoading || !progressReady) {
     return (
-      <div className="flex items-center justify-center min-h-[50vh]">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-[#24c875] mx-auto"></div>
-          <p className="mt-4 text-gray-600">Carregando capítulo...</p>
+      <div className="fixed inset-0 z-40 bg-[#22272e] text-zinc-100">
+        <div className="flex items-center gap-3 px-4 pb-2 pt-3">
+          <Link
+            href={`/home/books/${bookId}`}
+            aria-label="Fechar"
+            className="text-zinc-100"
+          >
+            <X className="size-6" strokeWidth={1.75} />
+          </Link>
+          <div className="h-1.5 flex-1 rounded-full bg-white/10" />
         </div>
       </div>
     );

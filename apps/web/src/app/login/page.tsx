@@ -1,13 +1,16 @@
 "use client";
 
-import { useState, Suspense } from "react";
+import { useRef, useState, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { loginUser, type LoginData } from "@/actions/auth";
+import { loginUser, loginWithGoogle, type LoginData } from "@/actions/auth";
+import { GoogleSignIn, UsernameStep } from "@/components/google-sign-in";
 import { publicErrorMessage } from "@/lib/public-error";
 import { Lock, Mail } from "lucide-react";
+
+const googleClientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID;
 
 function LoginForm() {
   const router = useRouter();
@@ -21,6 +24,42 @@ function LoginForm() {
   });
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
+  const [username, setUsername] = useState("");
+  const [googleSignup, setGoogleSignup] = useState<{
+    credential: string;
+    email: string;
+  } | null>(null);
+  const redirectRef = useRef(redirect);
+  redirectRef.current = redirect;
+
+  const finishGoogle = async (credential: string, chosenUsername?: string) => {
+    setError("");
+    setIsLoading(true);
+    try {
+      const result = await loginWithGoogle(credential, chosenUsername);
+      if (!result.success) {
+        if ("needsUsername" in result) {
+          setGoogleSignup({ credential, email: result.email });
+          setUsername(
+            result.email.split("@")[0].toLowerCase().replace(/[^a-z0-9_]/g, "").slice(0, 20)
+          );
+          return;
+        }
+        setError(result.error);
+        return;
+      }
+      router.push(redirectRef.current);
+    } catch (cause) {
+      setError(
+        publicErrorMessage(
+          cause,
+          "Não foi possível entrar com o Google. Tente novamente em instantes."
+        )
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -32,7 +71,7 @@ function LoginForm() {
     try {
       const result = await loginUser(formData);
       if (!result.success) {
-        setError(result.error);
+        setError("error" in result ? result.error : "Não foi possível entrar.");
         return;
       }
       router.push(redirect);
@@ -75,7 +114,33 @@ function LoginForm() {
           </p>
         </div>
 
-        <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+        {googleSignup ? (
+          <UsernameStep
+            email={googleSignup.email}
+            value={username}
+            onChange={setUsername}
+            pending={isLoading}
+            error={error}
+            onSubmit={() => finishGoogle(googleSignup.credential, username)}
+          />
+        ) : (
+          <>
+        {googleClientId && (
+          <div className="mt-8 space-y-4">
+            <GoogleSignIn
+              disabled={isLoading}
+              onCredential={(credential) => finishGoogle(credential)}
+            />
+            <p className="text-center text-xs font-bold uppercase tracking-wide text-gray-400">
+              ou
+            </p>
+          </div>
+        )}
+
+        <form
+          className={googleClientId ? "space-y-6" : "mt-8 space-y-6"}
+          onSubmit={handleSubmit}
+        >
           {message && (
             <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-md p-4">
               <p className="text-sm text-green-600 dark:text-green-400">
@@ -176,6 +241,8 @@ function LoginForm() {
             </p>
           </div>
         </form>
+          </>
+        )}
       </div>
     </div>
   );

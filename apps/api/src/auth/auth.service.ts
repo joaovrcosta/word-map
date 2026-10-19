@@ -2,6 +2,7 @@ import { Injectable } from "@nestjs/common";
 import { hash, compare } from "bcryptjs";
 import { sign } from "jsonwebtoken";
 import { jwtVerify } from "jose";
+import { OAuth2Client } from "google-auth-library";
 import { prisma } from "../prisma/client";
 import {
   sendEmail,
@@ -13,7 +14,13 @@ import type { User, UserRole } from "./current-user";
 
 export type AuthActionResult =
   | { success: true; user: User; token?: string }
-  | { success: false; error: string };
+  | { success: false; error: string }
+  | {
+      success: false;
+      needsUsername: true;
+      email: string;
+      name: string;
+    };
 
 export interface LoginData {
   email: string;
@@ -24,6 +31,15 @@ export interface RegisterData {
   name: string;
   email: string;
   password: string;
+  username: string;
+}
+
+const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
+
+export function normalizeUsername(value: string): string | null {
+  const username = value.trim().replace(/^@+/, "").toLowerCase();
+  if (!USERNAME_PATTERN.test(username)) return null;
+  return username;
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key";
@@ -39,10 +55,27 @@ function isAdminEmail(email: string): boolean {
   return adminEmails().includes(email.toLowerCase());
 }
 
+function moderatorEmails(): string[] {
+  return (process.env.MODERATOR_EMAIL || "")
+    .split(",")
+    .map((email) => email.trim().toLowerCase())
+    .filter(Boolean);
+}
+
+function isModeratorEmail(email: string): boolean {
+  return moderatorEmails().includes(email.toLowerCase());
+}
+
+function publicRole(role?: UserRole | null): UserRole {
+  if (role === "ADMIN" || role === "MODERATOR") return role;
+  return "USER";
+}
+
 function toPublicUser(user: {
   id: number;
   name: string;
   email: string;
+  username?: string | null;
   createdAt: Date;
   updatedAt: Date;
   role?: UserRole | null;
@@ -51,9 +84,10 @@ function toPublicUser(user: {
     id: user.id,
     name: user.name,
     email: user.email,
+    username: user.username ?? null,
     createdAt: user.createdAt,
     updatedAt: user.updatedAt,
-    role: user.role === "ADMIN" ? "ADMIN" : "USER",
+    role: publicRole(user.role),
   };
 }
 
@@ -75,12 +109,43 @@ async function ensureAdminRole(user: {
   });
 }
 
+async function ensureModeratorRole(user: {
+  id: number;
+  name: string;
+  email: string;
+  createdAt: Date;
+  updatedAt: Date;
+  role?: UserRole | null;
+}) {
+  if (
+    isAdminEmail(user.email) ||
+    user.role === "ADMIN" ||
+    user.role === "MODERATOR" ||
+    !isModeratorEmail(user.email)
+  ) {
+    return user;
+  }
+
+  return prisma.user.update({
+    where: { id: user.id },
+    data: { role: "MODERATOR" },
+  });
+}
+
 export async function registerUser(
   data: RegisterData
 ): Promise<AuthActionResult> {
   try {
-    if (!data.name || !data.email || !data.password) {
+    const username = normalizeUsername(data.username || "");
+    if (!data.name || !data.email || !data.password || !data.username) {
       return { success: false, error: "Todos os campos são obrigatórios" };
+    }
+    if (!username) {
+      return {
+        success: false,
+        error:
+          "O nome de usuário precisa ter de 3 a 20 caracteres: letras, números ou _",
+      };
     }
 
     if (data.password.length < 6) {
@@ -98,14 +163,20 @@ export async function registerUser(
       return { success: false, error: "Este email já está em uso" };
     }
 
+    const takenUsername = await prisma.user.findUnique({ where: { username } });
+    if (takenUsername) {
+      return { success: false, error: "Esse @ já está em uso" };
+    }
+
     const hashedPassword = await hash(data.password, 12);
     const email = data.email.toLowerCase().trim();
     const user = await prisma.user.create({
       data: {
         name: data.name.trim(),
         email,
+        username,
         password: hashedPassword,
-        role: isAdminEmail(email) ? "ADMIN" : "USER",
+        role: roleForEmail(email),
       },
     });
 
@@ -131,8 +202,13 @@ export async function loginUser(data: LoginData): Promise<AuthActionResult> {
       where: { email: data.email.toLowerCase() },
     });
 
-    if (!user) {
-      return { success: false, error: "Email ou senha inválidos" };
+    if (!user || !user.password) {
+      return {
+        success: false,
+        error: user
+          ? "Esta conta entra com o Google"
+          : "Email ou senha inválidos",
+      };
     }
 
     const isPasswordValid = await compare(data.password, user.password);
@@ -140,24 +216,128 @@ export async function loginUser(data: LoginData): Promise<AuthActionResult> {
       return { success: false, error: "Email ou senha inválidos" };
     }
 
-    const currentUser = await ensureAdminRole(user);
-    const token = sign(
-      {
-        userId: currentUser.id,
-        email: currentUser.email,
-        name: currentUser.name,
-      },
-      JWT_SECRET,
-      { expiresIn: "7d" }
-    );
-
-    return { success: true, user: toPublicUser(currentUser), token };
+    return sessionFor(await ensureModeratorRole(await ensureAdminRole(user)));
   } catch (error) {
     return {
       success: false,
       error: publicErrorMessage(
         error,
         "Não foi possível entrar. Tente novamente em instantes."
+      ),
+    };
+  }
+}
+
+function sessionFor(user: {
+  id: number;
+  name: string;
+  email: string;
+  username?: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+  role?: UserRole | null;
+}): AuthActionResult {
+  const token = sign(
+    { userId: user.id, email: user.email, name: user.name },
+    JWT_SECRET,
+    { expiresIn: "7d" }
+  );
+  return { success: true, user: toPublicUser(user), token };
+}
+
+function roleForEmail(email: string): UserRole {
+  if (isAdminEmail(email)) return "ADMIN";
+  if (isModeratorEmail(email)) return "MODERATOR";
+  return "USER";
+}
+
+export async function loginWithGoogle(
+  credential: string,
+  requestedUsername?: string
+): Promise<AuthActionResult> {
+  try {
+    const clientId = process.env.GOOGLE_CLIENT_ID;
+    if (!credential || !clientId) {
+      return { success: false, error: "Não foi possível entrar com o Google" };
+    }
+
+    const client = new OAuth2Client(clientId);
+    const ticket = await client.verifyIdToken({
+      idToken: credential,
+      audience: clientId,
+    });
+    const payload = ticket.getPayload();
+    const email = payload?.email?.toLowerCase().trim();
+    if (!payload?.sub || !email || payload.email_verified !== true) {
+      return {
+        success: false,
+        error: "Não foi possível confirmar o email do Google",
+      };
+    }
+
+    const googleName = payload.name?.trim() || email.split("@")[0];
+    let user = await prisma.user.findUnique({ where: { googleId: payload.sub } });
+    if (!user) {
+      user = await prisma.user.findUnique({ where: { email } });
+    }
+
+    if (user?.username) {
+      if (user.googleId !== payload.sub) {
+        user = await prisma.user.update({
+          where: { id: user.id },
+          data: { googleId: payload.sub },
+        });
+      }
+      return sessionFor(await ensureModeratorRole(await ensureAdminRole(user)));
+    }
+
+    if (!requestedUsername?.trim()) {
+      return {
+        success: false,
+        needsUsername: true,
+        email,
+        name: user?.name || googleName,
+      };
+    }
+
+    const username = normalizeUsername(requestedUsername);
+    if (!username) {
+      return {
+        success: false,
+        error:
+          "O nome de usuário precisa ter de 3 a 20 caracteres: letras, números ou _",
+      };
+    }
+
+    const taken = await prisma.user.findUnique({ where: { username } });
+    if (taken && taken.id !== user?.id) {
+      return { success: false, error: "Esse @ já está em uso" };
+    }
+
+    if (user) {
+      user = await prisma.user.update({
+        where: { id: user.id },
+        data: { username, googleId: payload.sub },
+      });
+    } else {
+      user = await prisma.user.create({
+        data: {
+          name: googleName,
+          email,
+          username,
+          googleId: payload.sub,
+          role: roleForEmail(email),
+        },
+      });
+    }
+
+    return sessionFor(await ensureModeratorRole(await ensureAdminRole(user)));
+  } catch (error) {
+    return {
+      success: false,
+      error: publicErrorMessage(
+        error,
+        "Não foi possível entrar com o Google. Tente novamente em instantes."
       ),
     };
   }
@@ -174,7 +354,7 @@ export async function userFromToken(token: string): Promise<User | null> {
     });
     if (!user) return null;
 
-    const currentUser = await ensureAdminRole(user);
+    const currentUser = await ensureModeratorRole(await ensureAdminRole(user));
     return toPublicUser(currentUser);
   } catch {
     return null;
@@ -269,6 +449,10 @@ export class AuthService {
 
   login(data: LoginData) {
     return loginUser(data);
+  }
+
+  loginWithGoogle(credential: string, username?: string) {
+    return loginWithGoogle(credential, username);
   }
 
   userFromToken(token: string) {

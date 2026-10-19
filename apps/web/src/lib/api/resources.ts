@@ -6,6 +6,8 @@ export function createResources(request: Request) {
   return {
     registerUser: (data: unknown) => request("POST", "/auth/register", data),
     loginUser: (data: unknown) => request("POST", "/auth/login", data),
+    loginWithGoogle: (credential: string, username?: string) =>
+      request("POST", "/auth/google", { credential, username }),
     logoutUser: () => request("POST", "/auth/logout"),
     getCurrentUser: async () => {
       const result = await request<{ user: unknown }>("GET", "/auth/me");
@@ -85,6 +87,7 @@ export function createResources(request: Request) {
       request("POST", "/texts", { title, content }),
     getTextById: (textId: number) => request("GET", `/texts/${textId}`),
     getUserTexts: () => request("GET", "/texts"),
+    getCatalogTexts: () => request("GET", "/texts/catalog"),
     updateText: (textId: number, title: string, content: string) =>
       request("PATCH", `/texts/${textId}`, { title, content }),
     deleteText: (textId: number) => request("DELETE", `/texts/${textId}`),

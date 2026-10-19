@@ -916,6 +916,11 @@ export default function TextPage() {
       <div className="sticky top-0 z-50 bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700">
         <div className="w-full px-6 py-4">
           <div className="flex items-center justify-end">
+            {text.isCatalog ? (
+              <span className="text-xs font-extrabold uppercase tracking-wide text-[#14804a]">
+                Texto do catálogo
+              </span>
+            ) : (
             <div className="flex items-center gap-2">
               {isEditing ? (
                 <>
@@ -953,6 +958,7 @@ export default function TextPage() {
                 </Button>
               )}
             </div>
+            )}
           </div>
         </div>
       </div>

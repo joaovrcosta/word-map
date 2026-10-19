@@ -10,6 +10,7 @@ import { withPendingPoints } from "@/lib/points-optimistic";
 import { readingBackHref } from "@/lib/reading-route";
 import { CountUp } from "@/components/count-up";
 import { BookOpen, ChevronLeft, Crown, ChevronDown, Trophy } from "lucide-react";
+import LogoutButton from "@/components/logout-button";
 import type { VaultNavItem } from "@/types/vault-nav";
 
 function UkFlag() {
@@ -98,6 +99,7 @@ export function AppHeader({
         <span>{savedWords}</span>
         <ChevronDown className="h-3.5 w-3.5 text-[#999] dark:text-zinc-500" />
       </Link>
+      <LogoutButton />
     </header>
   );
 }

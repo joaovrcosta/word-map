@@ -171,6 +171,70 @@ export function paginateReading(
   return pages.length > 0 ? pages : [{ text: "", wordCount: 0, slices: [] }];
 }
 
+function slicesFromUnits(paragraphs: string[], units: SentenceUnit[]): PageSlice[] {
+  const slices: PageSlice[] = [];
+  for (const unit of units) {
+    const paragraph = paragraphs[unit.paragraphIndex];
+    const last = slices[slices.length - 1];
+    if (last && last.paragraphIndex === unit.paragraphIndex) {
+      last.text = paragraph.slice(last.startOffset, unit.end);
+      continue;
+    }
+    slices.push({
+      paragraphIndex: unit.paragraphIndex,
+      startOffset: unit.start,
+      text: paragraph.slice(unit.start, unit.end),
+      continues: unit.start > 0,
+    });
+  }
+  return slices;
+}
+
+function pageFromSlices(slices: PageSlice[]): ReadingPage {
+  const text = slices.map((slice) => slice.text).join("\n\n");
+  return { text, wordCount: countWords(text), slices };
+}
+
+export function paginateReadingToFit(
+  content: string,
+  fits: (text: string) => boolean
+): ReadingPage[] {
+  const paragraphs = splitParagraphs(content);
+  if (paragraphs.length === 0) {
+    return [{ text: "", wordCount: 0, slices: [] }];
+  }
+
+  const units = sentenceUnits(paragraphs);
+  const pages: ReadingPage[] = [];
+  let cursor = 0;
+
+  while (cursor < units.length) {
+    let low = cursor;
+    let high = units.length - 1;
+    let best = cursor;
+
+    while (low <= high) {
+      const mid = Math.floor((low + high) / 2);
+      const text = pageFromSlices(
+        slicesFromUnits(paragraphs, units.slice(cursor, mid + 1))
+      ).text;
+      if (mid === cursor || fits(text)) {
+        best = mid;
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+
+    pages.push(
+      pageFromSlices(slicesFromUnits(paragraphs, units.slice(cursor, best + 1)))
+    );
+    cursor = best + 1;
+  }
+
+  return pages;
+}
+
 export function resolveReadingPage(
   pages: ReadingPage[],
   paragraphIndex: number,

@@ -34,7 +34,7 @@ export default function BooksPage() {
   const [libraryBooks, setLibraryBooks] = useState<BookListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [firstName, setFirstName] = useState("");
-  const [isAdmin, setIsAdmin] = useState(false);
+  const [isStaff, setIsStaff] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [createOfficial, setCreateOfficial] = useState(false);
 
@@ -65,7 +65,7 @@ export default function BooksPage() {
       if (user?.name) {
         setFirstName(user.name.split(" ")[0]);
       }
-      setIsAdmin(user?.role === "ADMIN");
+      setIsStaff(user?.role === "ADMIN" || user?.role === "MODERATOR");
     });
   }, []);
 
@@ -154,8 +154,16 @@ export default function BooksPage() {
       <div className="px-6">
         {activeTab === "store" && (
           <div className="py-6 space-y-6">
-            <div className="flex justify-end">
-              {isAdmin && (
+            <div className="flex justify-end gap-3">
+              {isStaff && (
+                <a
+                  href={process.env.NEXT_PUBLIC_HUB_URL || "http://localhost:3002"}
+                  className="inline-flex items-center rounded-xl px-4 text-sm font-extrabold text-[#14804a]"
+                >
+                  Content Hub
+                </a>
+              )}
+              {isStaff && (
                 <Button
                   onClick={() => {
                     setCreateOfficial(true);
@@ -175,7 +183,7 @@ export default function BooksPage() {
                   A loja ainda não tem livros
                 </p>
                 <p className="mt-1 text-sm text-[#777]">
-                  {isAdmin
+                  {isStaff
                     ? "Publique o primeiro livro oficial para os leitores."
                     : "Volte mais tarde para adicionar livros oficiais à sua biblioteca."}
                 </p>
@@ -187,7 +195,7 @@ export default function BooksPage() {
                     key={book.id}
                     book={book}
                     onOpen={async () => {
-                      if (!book.inLibrary && !isAdmin) {
+                      if (!book.inLibrary && !isStaff) {
                         await handleAddToLibrary(book.id);
                       }
                       router.push(`/home/books/${book.id}`);

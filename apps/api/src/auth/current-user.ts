@@ -1,11 +1,16 @@
 import { AsyncLocalStorage } from "async_hooks";
 
-export type UserRole = "USER" | "ADMIN";
+export type UserRole = "USER" | "MODERATOR" | "ADMIN";
+
+export function isContentStaff(role: UserRole) {
+  return role === "ADMIN" || role === "MODERATOR";
+}
 
 export interface User {
   id: number;
   name: string;
   email: string;
+  username: string | null;
   createdAt: Date;
   updatedAt: Date;
   role: UserRole;

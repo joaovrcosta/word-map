@@ -168,6 +168,8 @@ interface ReadingWordPanelProps {
   showContextualize?: boolean;
   contextPayload?: ContextualizePayload | null;
   originSource?: { title: string; kind: WordOriginKind } | null;
+  aboveBar?: boolean;
+  anchor?: { top: number; left: number; bottom: number; width: number } | null;
 }
 
 const READING_PANEL_WIDTH_KEY = "wordmap-reading-panel-width";
@@ -238,6 +240,14 @@ function collectCandidateMeanings(
   return found;
 }
 
+function bestShortTranslation(candidates: string[]): string | null {
+  const short = candidates.find((item) => {
+    const text = item.trim();
+    return text.length <= 48 && text.split(/\s+/).length <= 4;
+  });
+  return short ?? candidates[0] ?? null;
+}
+
 function hasMeaning(list: string[], value: string): boolean {
   return list.some((item) => item.toLowerCase() === value.trim().toLowerCase());
 }
@@ -250,14 +260,16 @@ export function ReadingWordToken({
   onClick,
   wordStart,
   wordEnd,
+  reader = false,
 }: {
   surface: string;
   selected: boolean;
   similar?: boolean;
   inVault: boolean;
-  onClick: () => void;
+  onClick: (anchor?: DOMRect) => void;
   wordStart?: number;
   wordEnd?: number;
+  reader?: boolean;
 }) {
   const marked = Boolean(inVault || similar || selected);
   const { leading, core, trailing } = splitTokenEdges(surface);
@@ -266,7 +278,10 @@ export function ReadingWordToken({
     <button
       type="button"
       onClick={(event) => {
-        onClick();
+        const word = event.currentTarget.querySelector("[data-word-start]");
+        const rect = (word ?? event.currentTarget).getBoundingClientRect();
+        onClick(rect);
+        if (reader) return;
         if (!window.matchMedia("(max-width: 1023px)").matches) return;
         const target = event.currentTarget;
         requestAnimationFrame(() => {
@@ -283,6 +298,7 @@ export function ReadingWordToken({
       <span
         data-word-start={wordStart}
         data-word-end={wordEnd}
+        data-selected={selected ? "true" : undefined}
         className={cn(
           "mx-px rounded-[3px] !text-zinc-900 dark:!text-zinc-100",
           marked
@@ -297,7 +313,7 @@ export function ReadingWordToken({
           "relative bg-[#24c875] !text-white shadow-none dark:bg-[#24c875] dark:!text-white dark:shadow-none"
         )}
       >
-        {selected && (
+        {selected && !reader && (
           <span
             aria-hidden
             className="pointer-events-none absolute left-1/2 top-0 h-0 w-0 -translate-x-1/2 -translate-y-[calc(100%-1px)] border-x-[6px] border-b-[7px] border-x-transparent border-b-[#24c875]"
@@ -326,6 +342,8 @@ export function ReadingWordPanel({
   showContextualize = false,
   contextPayload = null,
   originSource = null,
+  aboveBar = false,
+  anchor = null,
 }: ReadingWordPanelProps) {
   const [onClient, setOnClient] = useState(false);
   const [open, setOpen] = useState(false);
@@ -337,6 +355,13 @@ export function ReadingWordPanel({
   const [isTranslatingMeanings, setIsTranslatingMeanings] = useState(false);
   const [notes, setNotes] = useState("");
   const [vaultId, setVaultId] = useState<string>("");
+  const resolvedVaultId =
+    vaultId ||
+    (selected?.saved
+      ? String(selected.saved.vaultId)
+      : userVaults[0]
+        ? String(userVaults[0].id)
+        : "");
   const [explanation, setExplanation] = useState<string | null>(null);
   const [suggestedTranslation, setSuggestedTranslation] = useState<string | null>(
     null
@@ -385,7 +410,7 @@ export function ReadingWordPanel({
     }
     const media = window.matchMedia("(max-width: 1023px)");
     const apply = () => {
-      if (!media.matches) {
+      if (!media.matches || anchor) {
         document.documentElement.style.setProperty("--reading-card-cover", "0px");
         return;
       }
@@ -404,7 +429,7 @@ export function ReadingWordPanel({
       window.removeEventListener("resize", apply);
       document.documentElement.style.setProperty("--reading-card-cover", "0px");
     };
-  }, [selectedKey, expanded]);
+  }, [selectedKey, expanded, anchor]);
 
   useEffect(() => {
     if (!selectedKey) return;
@@ -417,6 +442,80 @@ export function ReadingWordPanel({
     });
     return () => cancelAnimationFrame(frame);
   }, [selectedKey]);
+
+  useLayoutEffect(() => {
+    const aside = panelRef.current;
+    if (!aside) return;
+    const mobile = window.matchMedia("(max-width: 1023px)").matches;
+    if (!mobile || !anchor) {
+      aside.style.top = "";
+      aside.style.left = "";
+      aside.style.width = "";
+      aside.style.bottom = "";
+      aside.style.right = "";
+      return;
+    }
+    const place = () => {
+      if (!window.matchMedia("(max-width: 1023px)").matches) {
+        aside.style.top = "";
+        aside.style.left = "";
+        aside.style.width = "";
+        aside.style.bottom = "";
+        aside.style.right = "";
+        aside.style.overflow = "";
+        return;
+      }
+      const live = document.querySelector<HTMLElement>(
+        '[data-word-start][data-selected="true"]'
+      );
+      const box = live?.getBoundingClientRect();
+      const word = box
+        ? { top: box.top, left: box.left, bottom: box.bottom, width: box.width }
+        : anchor;
+      const margin = 12;
+      const gap = 8;
+      const width = Math.min(340, window.innerWidth - margin * 2);
+      const height = aside.offsetHeight;
+      let left = word.left + word.width / 2 - width / 2;
+      left = Math.max(margin, Math.min(left, window.innerWidth - width - margin));
+      let top = word.bottom + gap;
+      const limit = window.innerHeight - 76;
+      if (top + height > limit) {
+        const above = word.top - height - gap;
+        top = above >= 8 ? above : Math.max(8, limit - height);
+      }
+      aside.style.top = `${Math.round(top)}px`;
+      aside.style.left = `${Math.round(left)}px`;
+      aside.style.width = `${width}px`;
+      aside.style.bottom = "auto";
+      aside.style.right = "auto";
+      aside.style.overflow = "visible";
+      const arrow = aside.querySelector<HTMLElement>("[data-dropdown-arrow]");
+      if (arrow) {
+        const above = top + 4 < word.top;
+        arrow.style.left = `${Math.round(word.left + word.width / 2 - left)}px`;
+        arrow.style.top = above ? "auto" : "0";
+        arrow.style.bottom = above ? "0" : "auto";
+        arrow.style.transform = above
+          ? "translate(-50%, 100%)"
+          : "translate(-50%, -100%)";
+        arrow.style.borderTop = above ? "8px solid #2d333b" : "0";
+        arrow.style.borderBottom = above ? "0" : "8px solid #2d333b";
+      }
+    };
+    place();
+    const observer = new ResizeObserver(place);
+    observer.observe(aside);
+    const liveWord = document.querySelector<HTMLElement>(
+      '[data-word-start][data-selected="true"]'
+    );
+    if (liveWord) observer.observe(liveWord);
+    window.addEventListener("resize", place);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", place);
+    };
+  }, [anchor, selectedKey, open]);
 
   useEffect(() => {
     setOnClient(true);
@@ -584,9 +683,9 @@ export function ReadingWordPanel({
       }
       return;
     }
-    if (!vaultId) return;
+    if (!resolvedVaultId) return;
     await onSave({
-      vaultId: Number(vaultId),
+      vaultId: Number(resolvedVaultId),
       word: selected.clean,
       translations: translations.length ? translations : [selected.clean],
       grammaticalClass: suggestedClass,
@@ -665,6 +764,12 @@ export function ReadingWordPanel({
   const availableMeanings = candidateMeanings.filter(
     (item) => !hasMeaning(selectedMeanings, item)
   );
+  const dropdownMeaning = anchor
+    ? (selectedMeanings[0] ?? bestShortTranslation(availableMeanings))
+    : null;
+  const dropdownSaved = Boolean(
+    dropdownMeaning && hasMeaning(selectedMeanings, dropdownMeaning)
+  );
 
   if (!selected) return null;
 
@@ -676,15 +781,26 @@ export function ReadingWordPanel({
         snapOffscreen
           ? "transition-none"
           : "transition-transform duration-300 ease-[cubic-bezier(0.32,0.72,0,1)]",
-        open
-          ? "max-lg:translate-y-0 lg:translate-x-0"
-          : "pointer-events-none max-lg:translate-y-[110%] lg:translate-x-full",
+        open ? "lg:translate-x-0" : "pointer-events-none lg:translate-x-full",
+        anchor
+          ? "max-lg:translate-y-0"
+          : open
+            ? "max-lg:translate-y-0"
+            : "max-lg:translate-y-[110%]",
+        !open && "pointer-events-none",
         "fixed z-[80]",
-        "max-lg:inset-x-3 max-lg:bottom-24 max-lg:top-auto max-lg:h-fit max-lg:w-auto max-lg:rounded-2xl max-lg:border max-lg:shadow-2xl",
+        anchor
+          ? "max-lg:h-fit max-lg:rounded-2xl max-lg:border max-lg:border-[#3d444d] max-lg:bg-[#2d333b] max-lg:shadow-2xl"
+          : "max-lg:inset-x-4 max-lg:top-auto max-lg:h-fit max-lg:w-auto max-lg:rounded-2xl max-lg:border max-lg:border-[#3d444d] max-lg:bg-[#2d333b] max-lg:shadow-2xl",
+        !anchor && (aboveBar ? "max-lg:bottom-[5.5rem]" : "max-lg:bottom-24"),
         expanded
           ? "max-lg:max-h-[min(72dvh,560px)]"
           : "max-lg:max-h-none",
-        "lg:inset-x-auto lg:top-14 lg:right-0 lg:bottom-auto lg:h-[calc(100dvh-3.5rem)] lg:w-[var(--reading-panel-width)] lg:max-h-none lg:rounded-none lg:border-l lg:shadow-none"
+        anchor && "max-lg:max-h-[min(46dvh,380px)] max-lg:overflow-y-auto",
+        "lg:inset-x-auto lg:right-0 lg:bottom-auto lg:w-[var(--reading-panel-width)] lg:max-h-none lg:rounded-none lg:border-l lg:shadow-none",
+        aboveBar
+          ? "lg:top-0 lg:h-dvh"
+          : "lg:top-14 lg:h-[calc(100dvh-3.5rem)]"
       )}
     >
       <div
@@ -744,6 +860,17 @@ export function ReadingWordPanel({
           isResizing && "after:opacity-100"
         )}
       />
+      {anchor ? (
+        <span
+          data-dropdown-arrow
+          aria-hidden
+          className="pointer-events-none absolute z-10 hidden h-0 w-0 border-x-8 border-x-transparent max-lg:block"
+        />
+      ) : (
+        <div className="flex justify-center pt-2 lg:hidden" aria-hidden>
+          <span className="h-1 w-10 rounded-full bg-white/20" />
+        </div>
+      )}
       <div className="flex items-center justify-between gap-2 border-b border-[#ececec] px-3 py-2.5 dark:border-gray-800 max-lg:border-b-0">
         <div className="flex min-w-0 items-center gap-2">
           <button
@@ -768,6 +895,22 @@ export function ReadingWordPanel({
           )}
           <button
             type="button"
+            disabled={isSaving || !selected.saved}
+            onClick={() => {
+              if (!selected.saved) return;
+              onRemove(
+                selected.saved.name,
+                selected.saved.vaultId,
+                selected.saved.id
+              );
+            }}
+            className="inline-flex h-7 w-7 items-center justify-center rounded text-[#b0b0b0] hover:text-red-400 disabled:opacity-30 lg:hidden"
+            aria-label="Remover palavra"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
             onClick={onClose}
             className="inline-flex h-7 w-7 items-center justify-center rounded text-[#b0b0b0] hover:bg-black/5 hover:text-[#555] dark:hover:bg-white/10 dark:hover:text-white"
             aria-label="Fechar painel"
@@ -777,34 +920,105 @@ export function ReadingWordPanel({
         </div>
       </div>
 
-      <div className="px-3 pb-1 lg:hidden">
-        <div className="relative">
-          <Textarea
+      <div className="px-3 pb-3 lg:hidden">
+        <div className="mb-3 flex flex-wrap items-center gap-1.5">
+          {confidence > 0 && (
+            <span
+              className={cn(
+                "inline-flex h-6 min-w-6 items-center justify-center rounded-full px-1.5 text-[11px] font-bold",
+                LEVEL_COLORS[Math.min(confidence, 4) - 1]
+              )}
+            >
+              {confidence}
+            </span>
+          )}
+          {partOfSpeechBadges.map((badge) => (
+            <GrammarClassLink
+              key={badge}
+              value={badge}
+              className="rounded-md bg-white/10 px-2 py-0.5 text-[12px] text-zinc-300"
+            />
+          ))}
+        </div>
+        <div className="divide-y divide-white/10">
+          {anchor ? (
+            dropdownMeaning ? (
+              <div className="flex items-center gap-2 py-2 text-[14px] text-zinc-100">
+                <span className="min-w-0 flex-1 leading-snug">{dropdownMeaning}</span>
+                {dropdownSaved ? (
+                  <Check className="h-4 w-4 shrink-0 text-[#24c875]" />
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => void handleAddMeaning(dropdownMeaning)}
+                    className="inline-flex h-7 w-7 items-center justify-center text-zinc-400"
+                    aria-label={`Salvar ${dropdownMeaning}`}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                )}
+              </div>
+            ) : isTranslatingMeanings ? (
+              <p className="py-2 text-[13px] text-zinc-400">Buscando tradução…</p>
+            ) : null
+          ) : (
+            <>
+              {selectedMeanings.map((item) => (
+                <div key={item} className="flex items-center gap-2 py-2 text-[14px] text-zinc-100">
+                  <span className="min-w-0 flex-1 leading-snug">{item}</span>
+                  <Check className="h-4 w-4 shrink-0 text-[#24c875]" />
+                </div>
+              ))}
+              {availableMeanings.map((item) => (
+                <div key={item} className="flex items-center gap-2 py-2 text-[14px] text-zinc-100">
+                  <span className="min-w-0 flex-1 leading-snug">{item}</span>
+                  <button
+                    type="button"
+                    onClick={() => void handleAddMeaning(item)}
+                    className="inline-flex h-7 w-7 items-center justify-center text-zinc-400"
+                    aria-label={`Salvar ${item}`}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </button>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+        <div className="mt-2 flex items-center gap-1">
+          <Input
             value={customMeaning}
             onChange={(e) => setCustomMeaning(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
+              if (e.key === "Enter") {
                 e.preventDefault();
                 void handleAddMeaning(customMeaning);
               }
             }}
-            placeholder="Digite um novo significado aqui"
-            className="min-h-16 resize-none rounded-md border-[#e5e5e5] pr-9 text-[13px] shadow-none dark:border-gray-700 dark:bg-gray-900"
+            placeholder="Novo significado"
+            className="h-9 flex-1 border-white/10 bg-transparent text-[14px] text-zinc-100 shadow-none"
           />
           <button
             type="button"
             aria-label="Sugerir tradução"
             disabled={!selected || isSuggesting || suggestionLocked}
             onClick={() => void handleSuggestTranslation()}
-            className="absolute right-1.5 bottom-1.5 inline-flex h-7 w-7 items-center justify-center rounded text-violet-600 hover:bg-violet-50 disabled:opacity-40 dark:text-violet-300 dark:hover:bg-violet-400/10"
+            className="inline-flex h-8 w-8 items-center justify-center text-violet-300 disabled:opacity-40"
           >
-            <Sparkles
-              className={cn("h-3.5 w-3.5", isSuggesting && "animate-pulse")}
-            />
+            <Sparkles className={cn("h-4 w-4", isSuggesting && "animate-pulse")} />
+          </button>
+          <button
+            type="button"
+            disabled={!customMeaning.trim() || isSaving || !resolvedVaultId}
+            onClick={() => void handleAddMeaning(customMeaning)}
+            className="inline-flex h-8 w-8 items-center justify-center text-zinc-300 disabled:opacity-30"
+            aria-label="Adicionar significado"
+          >
+            <Plus className="h-4 w-4" />
           </button>
         </div>
         {suggestError ? (
-          <p className="mt-1 text-[12px] text-red-500 lg:hidden">{suggestError}</p>
+          <p className="mt-1 text-[12px] text-red-400">{suggestError}</p>
         ) : null}
       </div>
 
@@ -887,7 +1101,7 @@ export function ReadingWordPanel({
           </div>
           <button
             type="button"
-            disabled={!customMeaning.trim() || isSaving || !vaultId}
+            disabled={!customMeaning.trim() || isSaving || !resolvedVaultId}
             onClick={() => void handleAddMeaning(customMeaning)}
             className="inline-flex h-9 w-8 shrink-0 items-center justify-center text-[#b0b0b0] hover:text-[#14804a] disabled:opacity-30"
             aria-label="Adicionar significado"
@@ -901,7 +1115,7 @@ export function ReadingWordPanel({
           </p>
         ) : null}
         {!selected.saved && userVaults.length > 1 && (
-          <Select value={vaultId} onValueChange={setVaultId}>
+          <Select value={resolvedVaultId} onValueChange={setVaultId}>
             <SelectTrigger className="mt-1.5 h-8 w-full rounded-md border-[#e5e5e5] text-[12px] shadow-none dark:border-gray-700 dark:bg-gray-900">
               <SelectValue placeholder="Vault" />
             </SelectTrigger>
@@ -966,9 +1180,9 @@ export function ReadingWordPanel({
               <button
                 key={item}
                 type="button"
-                disabled={isSaving || !vaultId}
+                disabled={isSaving || !resolvedVaultId}
                 onClick={() => void handleAddMeaning(item)}
-                className="flex w-full items-center justify-between gap-2 rounded bg-[#f6f6f6] px-2.5 py-1.5 text-left text-[13px] text-[#14804a] hover:bg-[#e7f8ee] disabled:opacity-40 dark:bg-zinc-800 dark:text-[#7ddea8] dark:hover:bg-zinc-700"
+                className="flex w-full items-center justify-between gap-2 rounded bg-[#f6f6f6] px-2.5 py-1.5 text-left text-[13px] text-[#14804a] hover:bg-[#e7f8ee] disabled:opacity-100 dark:bg-zinc-800 dark:text-[#7ddea8] dark:hover:bg-zinc-700"
               >
                 <span className="line-clamp-2 min-w-0 leading-snug">{item}</span>
                 <Plus className="h-3.5 w-3.5 shrink-0 text-[#b0b0b0]" />
@@ -1083,7 +1297,7 @@ export function ReadingWordPanel({
       <button
         type="button"
         onClick={() => setExpanded((current) => !current)}
-        className="flex w-full shrink-0 items-center justify-center py-1.5 text-[#8b949e] lg:hidden"
+        className="hidden w-full shrink-0 items-center justify-center py-1.5 text-[#8b949e]"
         aria-label={expanded ? "Recolher painel" : "Expandir painel"}
       >
         {expanded ? (
@@ -1122,7 +1336,7 @@ export function ReadingWordPanel({
             <button
               key={level}
               type="button"
-              disabled={isSaving || (!selected.saved && !vaultId)}
+              disabled={isSaving || (!selected.saved && !resolvedVaultId)}
               onClick={() => void handleConfidence(level)}
               className={cn(
                 "flex h-8 w-8 items-center justify-center rounded-full text-[12px] font-medium",
