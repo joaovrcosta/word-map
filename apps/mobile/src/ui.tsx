@@ -15,20 +15,24 @@ import { useTheme } from "./theme";
 export function Screen({
   children,
   scroll = false,
+  padded = true,
+  safeBottom = false,
 }: {
   children: ReactNode;
   scroll?: boolean;
+  padded?: boolean;
+  safeBottom?: boolean;
 }) {
   const theme = useTheme();
   return (
     <SafeAreaView
-      edges={["top", "left", "right"]}
+      edges={safeBottom ? ["top", "right", "bottom", "left"] : ["top", "left", "right"]}
       style={[styles.screen, { backgroundColor: theme.colors.background }]}
     >
       {scroll ? (
-        <ScrollView contentContainerStyle={styles.scroll}>{children}</ScrollView>
+        <ScrollView contentContainerStyle={padded ? styles.scroll : styles.scrollFlush}>{children}</ScrollView>
       ) : (
-        <View style={styles.body}>{children}</View>
+        <View style={padded ? styles.body : styles.bodyFlush}>{children}</View>
       )}
     </SafeAreaView>
   );
@@ -144,7 +148,9 @@ export function Card({
 const styles = StyleSheet.create({
   screen: { flex: 1 },
   body: { flex: 1, padding: 20 },
+  bodyFlush: { flex: 1 },
   scroll: { padding: 20, paddingBottom: 32 },
+  scrollFlush: { flexGrow: 1 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   heading: { fontSize: 28 },
   muted: { marginTop: 6, fontSize: 15, lineHeight: 22 },

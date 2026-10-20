@@ -24,6 +24,7 @@ jest.mock("../../prisma/client", () => ({
     wordReview: {
       create: jest.fn(),
     },
+    $executeRaw: jest.fn().mockResolvedValue(1),
     vault: {
       findUnique: jest.fn(),
     },

@@ -20,7 +20,8 @@ import {
   wordExistsInVault,
   type CreateWordData,
 } from "../domain/actions";
-import { listWordOrigins, recordWordOrigin } from "../domain/word-origins";
+import { listWordOrigins, listWordsSavedInBook, recordWordOrigin } from "../domain/word-origins";
+import { listWordLevels } from "../domain/word-levels";
 import type { WordOriginKind } from "@word-map/shared/word-origin";
 import type { SelectionSaveType } from "../domain/actions";
 
@@ -113,6 +114,14 @@ export class WordsService {
 
   origins(wordId: number) {
     return listWordOrigins(wordId);
+  }
+
+  levels(wordId: number) {
+    return listWordLevels(wordId);
+  }
+
+  savedInBook(title: string) {
+    return listWordsSavedInBook(title);
   }
 
   recordOrigin(input: {

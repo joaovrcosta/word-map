@@ -1,0 +1,561 @@
+import { useEffect, useRef, useState } from "react";
+import { ActivityIndicator, BackHandler, Pressable, ScrollView, Text, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
+import * as Speech from "expo-speech";
+import Animated, { SlideInRight, SlideOutLeft } from "react-native-reanimated";
+import {
+  buildFlashcardQueue,
+  shouldRecordClozeResult,
+  shouldRequeueCloze,
+  type ClozeSource,
+  type ClozeStep,
+  type FlashcardStep,
+  type FlashcardWord,
+} from "@word-map/shared";
+import { ClozeCard } from "./components/cloze-card";
+import { ExitConfirm } from "./components/exit-confirm";
+import { CloseButton, EnergyMark, StreakChip, XpFloat } from "./components/lesson-bar";
+import { ListenCard } from "./components/listen-card";
+import { MatchCard } from "./components/match-card";
+import { RecallCard } from "./components/recall-card";
+import { SessionSummary } from "./components/session-summary";
+import { cues, isSoundOn, readSoundEnabled, syncSoundEnabled, useLessonCues, writeSoundEnabled } from "./cues";
+import { LESSON_MAX, focusFromMarks, mixLessonSteps, practiceLine, shuffleItems } from "./lesson-queue";
+import { ProgressFill, useMotionEnabled } from "./motion";
+import {
+  type ChallengeKind,
+  type LevelShift,
+  type PendingSave,
+  type PracticeMark,
+  type RawWord,
+  type ReviewItem,
+  type ReviewKind,
+  type StudySession,
+  type WordFocus,
+} from "./types";
+import { primaryTranslation, toWord } from "./words";
+import { flushSaves, readFocus, writeFocus } from "./saves";
+import { useSession } from "../../session";
+import { useTheme } from "../../theme";
+
+
+
+
+
+
+export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: () => void }) {
+  const theme = useTheme();
+  const motion = useMotionEnabled();
+  const { request } = useSession();
+  const [words, setWords] = useState<FlashcardWord[]>([]);
+  const [vaultName, setVaultName] = useState("");
+  const [session, setSession] = useState<StudySession | null>(null);
+  const [steps, setSteps] = useState<FlashcardStep[]>([]);
+  const [stepIndex, setStepIndex] = useState(0);
+  const [isSessionActive, setIsSessionActive] = useState(false);
+  const [showAnswer, setShowAnswer] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [starting, setStarting] = useState(false);
+  const [showSummary, setShowSummary] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [challengeStats, setChallengeStats] = useState({ correct: 0, total: 0 });
+  const [analysis, setAnalysis] = useState<string | null>(null);
+  const [analysisState, setAnalysisState] = useState<"none" | "loading" | "ready" | "unavailable">("none");
+  const [nextPractice, setNextPractice] = useState<string | null>(null);
+  const [evolved, setEvolved] = useState<LevelShift[]>([]);
+  const [soundOn, setSoundOn] = useState(true);
+  const [streak, setStreak] = useState(0);
+  const [xpToken, setXpToken] = useState(0);
+  const [confirmExit, setConfirmExit] = useState(false);
+  useLessonCues();
+  const stepsRef = useRef<FlashcardStep[]>([]);
+  const indexRef = useRef(0);
+  const studiedRef = useRef(0);
+  const clozeAttemptsRef = useRef<Map<number, number>>(new Map());
+  const outcomesRef = useRef<ReviewItem[]>([]);
+  const practiceRef = useRef<PracticeMark[]>([]);
+  const reviewTokenRef = useRef(0);
+  const pendingSavesRef = useRef<PendingSave[]>([]);
+  const levelsRef = useRef<Map<number, { id: number; name: string; start: number; current: number }>>(new Map());
+
+  useEffect(() => {
+    let alive = true;
+
+    const load = async () => {
+      setLoading(true);
+      setLoadError(null);
+      try {
+        try {
+          const vault = await request<{ name: string }>(`/flashcards/vaults/${vaultId}`);
+          if (alive) setVaultName(vault.name);
+        } catch {
+          if (alive) setVaultName("");
+        }
+        const flashcardWords = await request<RawWord[]>(`/flashcards/vaults/${vaultId}/words`);
+        const wordsForReview = await request<RawWord[]>("/flashcards/filter", {
+          method: "POST",
+          body: JSON.stringify({ words: flashcardWords }),
+        });
+        if (!alive) return;
+        setWords(wordsForReview.map(toWord));
+      } catch {
+        if (!alive) return;
+        setWords([]);
+        setLoadError("Não foi possível carregar as palavras.");
+      } finally {
+        if (alive) setLoading(false);
+      }
+    };
+
+    void load();
+    void readSoundEnabled().then((enabled) => {
+      syncSoundEnabled(enabled);
+      if (alive) setSoundOn(enabled);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [request, vaultId]);
+
+  useEffect(() => {
+    if (!isSessionActive) return;
+    const subscription = BackHandler.addEventListener("hardwareBackPress", () => {
+      setConfirmExit((open) => !open);
+      return true;
+    });
+    return () => subscription.remove();
+  }, [isSessionActive]);
+
+  const syncQueue = (nextSteps: FlashcardStep[], nextIndex: number) => {
+    stepsRef.current = nextSteps;
+    indexRef.current = nextIndex;
+    setSteps(nextSteps);
+    setStepIndex(nextIndex);
+  };
+
+  const requestClozes = async (wordIds: number[]): Promise<ClozeSource[]> => {
+    const unique = [...new Set(wordIds)];
+    const saved: ClozeSource[] = [];
+
+    for (let index = 0; index < unique.length; index += 20) {
+      const batch = unique.slice(index, index + 20);
+      try {
+        const data = await request<{ clozes?: unknown }>("/flashcards/cloze", {
+          method: "POST",
+          body: JSON.stringify({ wordIds: batch }),
+        });
+        if (!Array.isArray(data.clozes)) continue;
+        for (const item of data.clozes) {
+          if (!item || typeof item !== "object") continue;
+          const wordId = (item as { wordId?: unknown }).wordId;
+          const sentence = (item as { sentence?: unknown }).sentence;
+          const answer = (item as { answer?: unknown }).answer;
+          if (typeof wordId !== "number" || typeof sentence !== "string") continue;
+          if (typeof answer !== "string" || !sentence.trim() || !answer.trim()) continue;
+          saved.push({ wordId, sentence, answer });
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return saved;
+  };
+
+  const leaveLesson = () => {
+    Speech.stop();
+    pendingSavesRef.current = [];
+    onLeave();
+  };
+
+  const closeSession = (completedWords: number) => {
+    Speech.stop();
+    setSession((current) =>
+      current
+        ? {
+            ...current,
+            endTime: new Date(),
+            completedWords,
+          }
+        : current
+    );
+    setIsSessionActive(false);
+    setEvolved(
+      [...levelsRef.current.values()]
+        .filter((row) => row.current > row.start)
+        .map((row) => ({ id: row.id, name: row.name, from: row.start, to: row.current }))
+    );
+    setShowSummary(true);
+    setShowAnswer(false);
+    cues.done();
+    void flushSaves(pendingSavesRef.current, request);
+    if (practiceRef.current.length > 0) {
+      const focus = focusFromMarks(practiceRef.current);
+      setNextPractice(practiceLine(focus));
+      void writeFocus(vaultId, focus).catch(() => undefined);
+    } else {
+      setNextPractice(null);
+    }
+    const items = outcomesRef.current.slice(0, 40);
+    const token = reviewTokenRef.current;
+    if (items.length === 0) {
+      setAnalysis(null);
+      setAnalysisState("none");
+      return;
+    }
+    setAnalysis(null);
+    setAnalysisState("loading");
+    void request<{ text?: unknown }>("/flashcards/review", {
+      method: "POST",
+      body: JSON.stringify({ items }),
+    })
+      .then((data) => {
+        if (reviewTokenRef.current !== token) return;
+        const text = typeof data.text === "string" ? data.text.trim() : "";
+        if (text) {
+          setAnalysis(text);
+          setAnalysisState("ready");
+          return;
+        }
+        setAnalysis(null);
+        setAnalysisState("unavailable");
+      })
+      .catch(() => {
+        if (reviewTokenRef.current !== token) return;
+        setAnalysis(null);
+        setAnalysisState("unavailable");
+      });
+  };
+
+  const startSession = async () => {
+    if (starting) return;
+    setStarting(true);
+    setLoadError(null);
+    try {
+      const created = await request<{ vaultName?: string }>("/flashcards/sessions", {
+        method: "POST",
+        body: JSON.stringify({ vaultId }),
+      });
+      const focus = await readFocus(vaultId);
+      const focusedIds = new Set(focus.map((item) => item.id));
+      const shuffled = shuffleItems(words);
+      const pool = [
+        ...shuffled.filter((word) => focusedIds.has(word.id)),
+        ...shuffled.filter((word) => !focusedIds.has(word.id)),
+      ].slice(0, LESSON_MAX);
+      const clozes = await requestClozes(pool.map((word) => word.id));
+      const built = buildFlashcardQueue(pool, Math.random, clozes);
+      const queue = mixLessonSteps(built, focus);
+      studiedRef.current = 0;
+      clozeAttemptsRef.current = new Map();
+      outcomesRef.current = [];
+      practiceRef.current = [];
+      pendingSavesRef.current = [];
+      levelsRef.current = new Map();
+      setEvolved([]);
+      reviewTokenRef.current += 1;
+      setAnalysis(null);
+      setAnalysisState("none");
+      setNextPractice(null);
+      setStreak(0);
+      setXpToken(0);
+      setChallengeStats({ correct: 0, total: 0 });
+      setSession({
+        vaultName: created.vaultName || vaultName,
+        completedWords: 0,
+        startTime: new Date(),
+        endTime: null,
+      });
+      syncQueue(queue, 0);
+      setIsSessionActive(true);
+      setShowAnswer(false);
+      setShowSummary(false);
+    } catch {
+      setLoadError("Não foi possível começar a sessão.");
+    } finally {
+      setStarting(false);
+    }
+  };
+
+  const rememberLevel = (word: FlashcardWord, next: number) => {
+    const level = Math.min(4, Math.max(1, next));
+    const current = levelsRef.current.get(word.id);
+    if (!current) {
+      levelsRef.current.set(word.id, { id: word.id, name: word.name, start: word.confidence, current: level });
+      return;
+    }
+    current.current = level;
+  };
+
+  const rememberOutcome = (word: FlashcardWord, kind: ReviewKind, result: string) => {
+    outcomesRef.current.push({
+      name: word.name,
+      translation: primaryTranslation(word),
+      kind,
+      result,
+    });
+    practiceRef.current.push({ id: word.id, kind, result });
+  };
+
+  const finishStep = (wordCount: number, requeue: FlashcardWord[], clozeRetry?: ClozeStep) => {
+    studiedRef.current += wordCount;
+    let nextSteps = stepsRef.current;
+    const nextIndex = indexRef.current + 1;
+
+    for (const word of requeue) {
+      const alreadyQueued = nextSteps
+        .slice(nextIndex)
+        .some((step) => step.type === "recall" && step.word.id === word.id);
+      if (!alreadyQueued) {
+        nextSteps = [...nextSteps, { type: "recall", word }];
+      }
+    }
+
+    if (clozeRetry) {
+      nextSteps = [...nextSteps, clozeRetry];
+    }
+
+    syncQueue(nextSteps, nextIndex);
+    setShowAnswer(false);
+
+    if (nextIndex >= nextSteps.length) {
+      closeSession(studiedRef.current);
+    }
+  };
+
+  const noteChallenge = (word: FlashcardWord, correct: boolean, kind: ChallengeKind) => {
+    setStreak((current) => (correct ? current + 1 : 0));
+    if (correct) setXpToken((current) => current + 1);
+    setChallengeStats((stats) => ({
+      total: stats.total + 1,
+      correct: stats.correct + (correct ? 1 : 0),
+    }));
+    rememberOutcome(word, kind, correct ? "ok" : "miss");
+    const base = levelsRef.current.get(word.id)?.current ?? word.confidence;
+    rememberLevel(word, correct ? base + 1 : base - 1);
+    pendingSavesRef.current.push({ kind: "result", wordId: word.id, correct, challenge: kind });
+  };
+
+  const handleAnswer = (confidence: number) => {
+    const step = stepsRef.current[indexRef.current];
+    if (!step || step.type !== "recall") return;
+    pendingSavesRef.current.push({ kind: "progress", wordId: step.word.id, confidence });
+    rememberLevel(step.word, confidence);
+    rememberOutcome(step.word, "recall", String(confidence));
+    finishStep(1, []);
+  };
+
+  if (loading) {
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={{ paddingHorizontal: 8 }}>
+          <CloseButton onPress={onLeave} />
+        </View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator color={theme.colors.green} />
+        </View>
+      </View>
+    );
+  }
+
+  if (loadError && words.length === 0 && !isSessionActive) {
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={{ paddingHorizontal: 8 }}>
+          <CloseButton onPress={onLeave} />
+        </View>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 }}>
+          <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 16, textAlign: "center" }}>
+            {loadError}
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (words.length === 0) {
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={{ paddingHorizontal: 8 }}>
+          <CloseButton onPress={onLeave} />
+        </View>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 }}>
+        <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 16, textAlign: "center" }}>
+          Nenhuma palavra para estudar
+        </Text>
+        <Text
+          style={{
+            marginTop: 8,
+            color: theme.colors.mutedForeground,
+            fontFamily: theme.fonts.regular,
+            fontSize: 15,
+            textAlign: "center",
+          }}
+        >
+          Este vault não tem palavras para revisar agora.
+        </Text>
+      </View>
+      </View>
+    );
+  }
+
+  if (showSummary && session) {
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={{ paddingHorizontal: 8 }}>
+          <CloseButton onPress={onLeave} />
+        </View>
+      <SessionSummary
+        session={session}
+        challengeCorrect={challengeStats.correct}
+        challengeTotal={challengeStats.total}
+        analysis={analysis}
+        analysisState={analysisState}
+        nextPractice={nextPractice}
+        evolved={evolved}
+        onRestart={() => {
+          setShowSummary(false);
+          void startSession();
+        }}
+      />
+      </View>
+    );
+  }
+
+  if (!isSessionActive) {
+    const reviewLabel = words.length === 1 ? "1 palavra para revisar" : `${words.length} palavras para revisar`;
+    return (
+      <View style={{ flex: 1 }}>
+        <View style={{ paddingHorizontal: 8 }}>
+          <CloseButton onPress={onLeave} />
+        </View>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        {vaultName ? (
+          <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 22, textAlign: "center" }}>
+            {vaultName}
+          </Text>
+        ) : null}
+        <Text style={{ marginTop: 8, color: theme.colors.mutedForeground, fontFamily: theme.fonts.regular, fontSize: 15 }}>
+          {reviewLabel}
+        </Text>
+        <Pressable
+          disabled={starting}
+          onPress={() => void startSession()}
+          style={{
+            marginTop: 28,
+            minWidth: 210,
+            height: 48,
+            borderRadius: 16,
+            alignItems: "center",
+            justifyContent: "center",
+            backgroundColor: theme.colors.green,
+            opacity: starting ? 0.6 : 1,
+          }}
+        >
+          <Text style={{ color: "#ffffff", fontFamily: theme.fonts.bold, fontSize: 14 }}>
+            {starting ? "COMEÇANDO..." : "COMEÇAR"}
+          </Text>
+        </Pressable>
+        {loadError ? (
+          <Text style={{ marginTop: 16, color: theme.colors.destructive, fontFamily: theme.fonts.regular, fontSize: 14 }}>
+            {loadError}
+          </Text>
+        ) : null}
+      </View>
+      </View>
+    );
+  }
+
+  const step = steps[stepIndex];
+  const progress = steps.length > 0 ? Math.min(((stepIndex + 1) / steps.length) * 100, 100) : 0;
+
+  return (
+    <View style={{ flex: 1 }}>
+    <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12 }}>
+        <CloseButton label="Sair da lição" onPress={() => setConfirmExit(true)} />
+        <View style={{ flex: 1 }}>
+          <View
+            style={{
+              height: 16,
+              borderRadius: 999,
+              overflow: "hidden",
+              backgroundColor: theme.name === "dark" ? "#4b5563" : "#e5e7eb",
+            }}
+          >
+            <ProgressFill progress={progress} color={theme.colors.green} />
+          </View>
+          <XpFloat token={xpToken} />
+        </View>
+        <StreakChip streak={streak} />
+        <Pressable
+          onPress={() => {
+            const next = !isSoundOn();
+            syncSoundEnabled(next);
+            setSoundOn(next);
+            void writeSoundEnabled(next).catch(() => undefined);
+          }}
+          accessibilityLabel={soundOn ? "Desligar som" : "Ligar som"}
+          hitSlop={8}
+        >
+          <Ionicons name={soundOn ? "volume-high" : "volume-mute"} size={20} color={theme.colors.mutedForeground} />
+        </Pressable>
+        <EnergyMark />
+      </View>
+
+      <View style={{ flex: 1, overflow: "hidden" }}>
+      <Animated.View
+        key={step ? `${step.type}-${stepIndex}` : "empty"}
+        entering={motion ? SlideInRight.duration(320) : undefined}
+        exiting={motion ? SlideOutLeft.duration(280) : undefined}
+        style={{ flex: 1 }}
+      >
+      {step?.type === "recall" ? (
+        <RecallCard word={step.word} showAnswer={showAnswer} onToggle={() => setShowAnswer((current) => !current)} onAnswer={handleAnswer} />
+      ) : null}
+      {step?.type === "listen" ? (
+        <ListenCard
+          key={`listen-${step.word.id}-${stepIndex}`}
+          word={step.word}
+          options={step.options}
+          onAnswer={(correct) => {
+            noteChallenge(step.word, correct, "listen");
+            finishStep(1, correct ? [] : [step.word]);
+          }}
+        />
+      ) : null}
+      {step?.type === "cloze" ? (
+        <ClozeCard
+          key={`cloze-${step.word.id}-${stepIndex}`}
+          word={step.word}
+          sentence={step.sentence}
+          answer={step.answer}
+          onAnswer={(correct) => {
+            const attempts = (clozeAttemptsRef.current.get(step.word.id) ?? 0) + 1;
+            clozeAttemptsRef.current.set(step.word.id, attempts);
+            if (shouldRecordClozeResult(attempts)) {
+              noteChallenge(step.word, correct, "cloze");
+            }
+            finishStep(shouldRecordClozeResult(attempts) ? 1 : 0, [], shouldRequeueCloze(attempts, correct) ? step : undefined);
+          }}
+        />
+      ) : null}
+      {step?.type === "match" ? (
+        <MatchCard
+          key={`match-${step.pairs.map((pair) => pair.word.id).join("-")}-${stepIndex}`}
+          pairs={step.pairs}
+          onPair={(word, correct) => noteChallenge(word, correct, "match")}
+          onComplete={(missed) => finishStep(step.pairs.length, missed)}
+        />
+      ) : null}
+      </Animated.View>
+      </View>
+    </ScrollView>
+    {confirmExit ? <ExitConfirm onStay={() => setConfirmExit(false)} onLeave={leaveLesson} /> : null}
+    </View>
+  );
+}
+
+
+
+

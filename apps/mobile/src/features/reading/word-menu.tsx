@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentRef, type ReactNode } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -9,8 +9,8 @@ import {
   TextInput,
   useWindowDimensions,
   View,
-  type GestureResponderEvent,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Speech from "expo-speech";
 import {
@@ -20,27 +20,160 @@ import {
   grammarClassBySlug,
   grammarClassLabel,
   normalizeGrammaticalClass,
-  normalizeToken,
   resolveGrammarSlug,
   splitParagraphs,
-  splitTokenEdges,
   type DictionaryEntry,
   type ReadingPage,
 } from "@word-map/shared";
-import { useSession } from "./session";
-import { useTheme } from "./theme";
-import { type Vault, type Word } from "./types";
+import { useSession } from "../../session";
+import { speakWord } from "../../speech";
+import { useTheme } from "../../theme";
+import { type Vault, type Word } from "../../types";
+import { type WordAnchor } from "./page-text";
 
 const LEVEL_COLORS = ["#ff4b4b", "#ff9600", "#ffc800", "#24c875"];
 const LEVEL_TEXT = ["#ffffff", "#ffffff", "#3c3c3c", "#ffffff"];
 const CARD = "#2d333b";
+const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
-export type WordAnchor = {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+type LevelPoint = {
+  date: string;
+  level: number;
 };
+
+function localDay(date = new Date()) {
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${date.getFullYear()}-${month}-${day}`;
+}
+
+function dayPhrase(iso: string, today: string) {
+  const [year, month, day] = iso.split("-").map(Number);
+  const [todayYear, todayMonth, todayDay] = today.split("-").map(Number);
+  const diff = Math.round(
+    (Date.UTC(todayYear, todayMonth - 1, todayDay) - Date.UTC(year, month - 1, day)) / 86400000
+  );
+  const short = `${day} ${MONTHS[month - 1] ?? ""}`;
+  if (diff === 0) return `Hoje, ${short}`;
+  if (diff === 1) return `Ontem, ${short}`;
+  return short;
+}
+
+function levelStory(points: LevelPoint[]) {
+  if (points.length === 0) return null;
+  const today = localDay();
+  const last = points[points.length - 1];
+  const previous = points.length > 1 ? points[points.length - 2] : null;
+  if (!previous) return `${dayPhrase(last.date, today)}, nível ${last.level}.`;
+  if (previous.date === last.date) {
+    return `${dayPhrase(last.date, today)}, nível ${previous.level} → ${last.level}.`;
+  }
+  return `${dayPhrase(previous.date, today)}, nível ${previous.level}. ${dayPhrase(last.date, today)}, nível ${last.level}.`;
+}
+
+function LevelTrack({ points }: { points: LevelPoint[] }) {
+  const theme = useTheme();
+  const story = levelStory(points);
+  const shown = points.slice(-14);
+  const [width, setWidth] = useState(0);
+  const height = 120;
+  const labelW = 16;
+  const padRight = 8;
+  const padTop = 8;
+  const padBottom = 22;
+  const plotH = height - padTop - padBottom;
+  const plotW = Math.max(0, width - labelW - padRight);
+  const coords = shown.map((point, index) => {
+    const x = shown.length <= 1 ? plotW / 2 : (index / (shown.length - 1)) * plotW;
+    const y = ((4 - point.level) / 3) * plotH;
+    return { x, y, point };
+  });
+
+  return (
+    <View style={{ marginTop: 12 }} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
+      {story ? (
+        <Text style={{ color: "#d4d4d8", fontFamily: theme.fonts.regular, fontSize: 13, lineHeight: 18 }}>
+          {story}
+        </Text>
+      ) : null}
+      <View style={{ height, marginTop: 8 }}>
+        {[4, 3, 2, 1].map((level) => (
+          <Text
+            key={level}
+            style={{
+              position: "absolute",
+              left: 0,
+              top: padTop + ((4 - level) / 3) * plotH - 6,
+              width: labelW,
+              color: "#8b949e",
+              fontSize: 10,
+              fontFamily: theme.fonts.semibold,
+            }}
+          >
+            {level}
+          </Text>
+        ))}
+        {width > 0
+          ? coords.slice(0, -1).map((from, index) => {
+              const to = coords[index + 1];
+              if (!to) return null;
+              const dx = to.x - from.x;
+              const dy = to.y - from.y;
+              const length = Math.hypot(dx, dy);
+              return (
+                <View
+                  key={`line-${index}`}
+                  style={{
+                    position: "absolute",
+                    left: labelW + (from.x + to.x) / 2 - length / 2,
+                    top: padTop + (from.y + to.y) / 2 - 1,
+                    width: length,
+                    height: 2,
+                    borderRadius: 1,
+                    backgroundColor: "#7ddea8",
+                    transform: [{ rotate: `${Math.atan2(dy, dx)}rad` }],
+                  }}
+                />
+              );
+            })
+          : null}
+        {coords.map(({ x, y, point }, index) => (
+          <View
+            key={`dot-${index}-${point.date}-${point.level}`}
+            style={{
+              position: "absolute",
+              left: labelW + x - 5,
+              top: padTop + y - 5,
+              width: 10,
+              height: 10,
+              borderRadius: 5,
+              backgroundColor: LEVEL_COLORS[point.level - 1],
+              borderWidth: 2,
+              borderColor: CARD,
+            }}
+          />
+        ))}
+        {coords.map(({ x, point }, index) => (
+          <Text
+            key={`day-${index}-${point.date}`}
+            style={{
+              position: "absolute",
+              left: labelW + x - 14,
+              top: height - 16,
+              width: 28,
+              textAlign: "center",
+              color: "#8b949e",
+              fontSize: 10,
+              fontFamily: theme.fonts.semibold,
+            }}
+          >
+            {point.date.slice(8)}
+          </Text>
+        ))}
+      </View>
+    </View>
+  );
+}
 
 export type FoundTextWord = {
   word: string;
@@ -84,11 +217,6 @@ type Passage = {
   translation: string | null;
 };
 
-export function speakWord(word: string) {
-  Speech.stop();
-  Speech.speak(word, { language: "en-US", rate: 0.8 });
-}
-
 export function findSavedReadingWord(
   foundWords: FoundTextWord[],
   vaults: Vault[],
@@ -116,146 +244,6 @@ export function findSavedReadingWord(
   };
 }
 
-export function ReadingPageText({
-  text,
-  width,
-  fontSize,
-  vaultWords,
-  selectedClean,
-  selectedOccurrence,
-  onSelectWord,
-}: {
-  text: string;
-  width: number;
-  fontSize: number;
-  vaultWords: Set<string>;
-  selectedClean: string | null;
-  selectedOccurrence: number | null;
-  onSelectWord: (clean: string, occurrence: number, anchor: WordAnchor) => void;
-}) {
-  const theme = useTheme();
-  const lineHeight = Math.round(fontSize * 1.45);
-  const baseStyle = {
-    width,
-    color: theme.colors.foreground,
-    fontFamily: theme.fonts.regular,
-    fontSize,
-    lineHeight,
-  };
-
-  if (!text.trim()) {
-    return <Text style={baseStyle}>Este capítulo está vazio.</Text>;
-  }
-
-  const nodes: ReactNode[] = [];
-  const seen = new Map<string, number>();
-  const pattern = /\S+/g;
-  let last = 0;
-  let tokenKey = 0;
-  let match: RegExpExecArray | null = pattern.exec(text);
-  while (match) {
-    const start = match.index;
-    if (start > last) nodes.push(text.slice(last, start));
-    const surface = match[0];
-    const clean = normalizeToken(surface);
-    const inVault = vaultWords.has(clean);
-    const clickable = Boolean(clean) && (inVault || (surface.trim().length > 2 && clean.length >= 3));
-    if (clickable && clean) {
-      const occurrence = seen.get(clean) ?? 0;
-      seen.set(clean, occurrence + 1);
-      nodes.push(
-        <WordToken
-          key={`word-${tokenKey}`}
-          surface={surface}
-          inVault={inVault}
-          selected={selectedClean === clean && selectedOccurrence === occurrence}
-          similar={
-            selectedClean === clean &&
-            selectedOccurrence != null &&
-            selectedOccurrence !== occurrence
-          }
-          onPress={(anchor) => onSelectWord(clean, occurrence, anchor)}
-        />
-      );
-    } else {
-      nodes.push(surface);
-    }
-    tokenKey += 1;
-    last = start + surface.length;
-    match = pattern.exec(text);
-  }
-  if (last < text.length) nodes.push(text.slice(last));
-
-  return (
-    <Text selectable={false} style={baseStyle}>
-      {nodes}
-    </Text>
-  );
-}
-
-function WordToken({
-  surface,
-  selected,
-  similar,
-  inVault,
-  onPress,
-}: {
-  surface: string;
-  selected: boolean;
-  similar: boolean;
-  inVault: boolean;
-  onPress: (anchor: WordAnchor) => void;
-}) {
-  const theme = useTheme();
-  const coreRef = useRef<ComponentRef<typeof Text>>(null);
-  const { leading, core, trailing } = splitTokenEdges(surface);
-  const marked = inVault || similar || selected;
-  const dark = theme.name === "dark";
-
-  return (
-    <Text
-      suppressHighlighting
-      onPress={(event: GestureResponderEvent) => {
-        const { pageX, pageY } = event.nativeEvent;
-        const fallback = { x: pageX - 4, y: pageY - 10, width: 8, height: 20 };
-        const node = coreRef.current;
-        if (!node) {
-          onPress(fallback);
-          return;
-        }
-        node.measureInWindow((x, y, width, height) => {
-          const measuredWord = width > 0 && height > 0 && height < 56 && width < 280;
-          onPress(measuredWord ? { x, y, width, height } : fallback);
-        });
-      }}
-    >
-      {leading}
-      <Text
-        ref={coreRef}
-        style={{
-          color: selected ? "#ffffff" : inVault ? (dark ? "#7ddea8" : "#14804a") : theme.colors.foreground,
-          backgroundColor: selected
-            ? "#24c875"
-            : similar
-              ? dark
-                ? "rgba(36,200,117,0.15)"
-                : "#edf9df"
-              : inVault
-                ? dark
-                  ? "rgba(36,200,117,0.25)"
-                  : "#e7f8ee"
-                : "transparent",
-          borderRadius: 3,
-          paddingHorizontal: marked ? 3 : 0,
-        }}
-      >
-        {core}
-      </Text>
-      {trailing}
-    </Text>
-  );
-}
-
 export function ReadingWordMenu({
   clean,
   anchor,
@@ -266,6 +254,7 @@ export function ReadingWordMenu({
   bookTitle,
   saved,
   vaults,
+  full = false,
   onClose,
   onChanged,
 }: {
@@ -278,14 +267,16 @@ export function ReadingWordMenu({
   bookTitle: string;
   saved: SavedReadingWord | null;
   vaults: Vault[];
+  full?: boolean;
   onClose: () => void;
   onChanged: () => Promise<void>;
 }) {
   const theme = useTheme();
   const { request } = useSession();
   const window = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [boxHeight, setBoxHeight] = useState(0);
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(full);
   const [localSaved, setLocalSaved] = useState<SavedReadingWord | null>(saved);
   const [selectedMeanings, setSelectedMeanings] = useState<string[]>(saved?.translations ?? []);
   const [customMeaning, setCustomMeaning] = useState("");
@@ -305,6 +296,7 @@ export function ReadingWordMenu({
   const [suggestError, setSuggestError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [levels, setLevels] = useState<LevelPoint[]>([]);
   const [grammarSlug, setGrammarSlug] = useState<string | null>(null);
   const suggestingRef = useRef(false);
 
@@ -329,18 +321,36 @@ export function ReadingWordMenu({
     setSuggestError(null);
     setSuggestionLocked(false);
     suggestingRef.current = false;
-    setExpanded(false);
+    setExpanded(full);
     setGrammarSlug(null);
     setExplanation(null);
     setSuggestedTranslation(null);
     setExplanationError(null);
     setActionError(null);
-  }, [clean]);
+  }, [clean, full]);
 
   useEffect(() => {
     if (vaultId || localSaved || vaults.length === 0) return;
     setVaultId(String(vaults[0].id));
   }, [vaultId, localSaved, vaults]);
+
+  useEffect(() => {
+    if (!localSaved) {
+      setLevels([]);
+      return;
+    }
+    let cancelled = false;
+    request<LevelPoint[]>(`/words/${localSaved.id}/levels`)
+      .then((rows) => {
+        if (!cancelled) setLevels(Array.isArray(rows) ? rows : []);
+      })
+      .catch(() => {
+        if (!cancelled) setLevels([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [localSaved?.id, localSaved?.confidence, request]);
 
   useEffect(() => {
     return () => {
@@ -536,7 +546,7 @@ export function ReadingWordMenu({
         setActionError(null);
       }
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Não foi possível salvar");
+      setActionError(error instanceof Error ? error.message : "NÃ£o foi possÃ­vel salvar");
       throw error;
     } finally {
       setSaving(false);
@@ -587,7 +597,7 @@ export function ReadingWordMenu({
           setActionError(null);
         }
       } catch (error) {
-        setActionError(error instanceof Error ? error.message : "Não foi possível salvar");
+        setActionError(error instanceof Error ? error.message : "NÃ£o foi possÃ­vel salvar");
       } finally {
         setSaving(false);
       }
@@ -618,7 +628,7 @@ export function ReadingWordMenu({
         setActionError(null);
       }
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Não foi possível salvar a nota");
+      setActionError(error instanceof Error ? error.message : "NÃ£o foi possÃ­vel salvar a nota");
     } finally {
       setSaving(false);
     }
@@ -646,7 +656,7 @@ export function ReadingWordMenu({
         setActionError(null);
       }
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Não foi possível remover");
+      setActionError(error instanceof Error ? error.message : "NÃ£o foi possÃ­vel remover");
     } finally {
       setSaving(false);
     }
@@ -668,12 +678,12 @@ export function ReadingWordMenu({
         }),
       });
       const translation = data.translation?.trim();
-      if (!translation) throw new Error("Não foi possível sugerir uma tradução.");
+      if (!translation) throw new Error("NÃ£o foi possÃ­vel sugerir uma traduÃ§Ã£o.");
       setCustomMeaning(translation);
       setSuggestionLocked(true);
       locked = true;
     } catch (error) {
-      setSuggestError(error instanceof Error ? error.message : "Não foi possível sugerir uma tradução.");
+      setSuggestError(error instanceof Error ? error.message : "NÃ£o foi possÃ­vel sugerir uma traduÃ§Ã£o.");
     } finally {
       setSuggesting(false);
       if (!locked) suggestingRef.current = false;
@@ -698,15 +708,17 @@ export function ReadingWordMenu({
       setExplanation(result.explanation);
       setSuggestedTranslation(result.translation?.trim() || null);
     } catch (error) {
-      setExplanationError(error instanceof Error ? error.message : "Não foi possível explicar este trecho.");
+      setExplanationError(error instanceof Error ? error.message : "NÃ£o foi possÃ­vel explicar este trecho.");
     } finally {
       setExplaining(false);
     }
   };
 
+  const sheet = full;
+  const details = sheet || expanded;
   const margin = 12;
   const gap = 8;
-  const cardWidth = Math.min(340, window.width - margin * 2);
+  const cardWidth = sheet ? window.width : Math.min(340, window.width - margin * 2);
   const safeAnchor =
     anchor.width > 0
       ? anchor
@@ -717,28 +729,77 @@ export function ReadingWordMenu({
   const placeAbove = boxHeight > 0 && belowTop + boxHeight > window.height - 16 && safeAnchor.y - gap - boxHeight >= 8;
   const top = placeAbove ? safeAnchor.y - gap - boxHeight : belowTop;
   const arrowLeft = Math.max(16, Math.min(safeAnchor.x + safeAnchor.width / 2 - left, cardWidth - 16));
-  const maxCard = expanded ? Math.min(window.height * 0.72, 560) : Math.min(window.height * 0.46, 380);
+  const maxCard = details ? Math.min(window.height * 0.72, 560) : Math.min(window.height * 0.46, 380);
+  const levelBar = (
+    <View style={[styles.footer, sheet && styles.sheetFooter]}>
+      {localSaved ? (
+        <Pressable disabled={saving} onPress={() => void handleRemove()} style={styles.removeButton}>
+          <Ionicons name="trash-outline" size={sheet ? 18 : 14} color="#a1a1aa" />
+          {sheet ? null : (
+            <Text style={{ color: "#a1a1aa", fontFamily: theme.fonts.semibold, fontSize: 12 }}>Remover</Text>
+          )}
+        </Pressable>
+      ) : (
+        <View style={{ width: sheet ? 36 : 0 }} />
+      )}
+      <View style={styles.levels}>
+        {[1, 2, 3, 4].map((level) => {
+          const active = confidence === level;
+          return (
+            <Pressable
+              key={level}
+              disabled={saving || (!localSaved && !resolvedVaultId)}
+              onPress={() => void handleConfidence(level)}
+              style={[
+                styles.levelButton,
+                sheet && styles.levelButtonSheet,
+                {
+                  backgroundColor: active ? LEVEL_COLORS[level - 1] : "#3d444d",
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  color: active ? LEVEL_TEXT[level - 1] : "#a1a1aa",
+                  fontFamily: theme.fonts.bold,
+                  fontSize: 13,
+                }}
+              >
+                {level}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {sheet ? (
+        <Pressable accessibilityLabel="Fechar painel" onPress={onClose} style={styles.sheetDone}>
+          <Ionicons name="checkmark" size={20} color="#7ddea8" />
+        </Pressable>
+      ) : null}
+    </View>
+  );
 
   return (
-    <Modal transparent visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
-      <View style={{ flex: 1 }}>
-        <Pressable accessibilityLabel="Fechar" style={StyleSheet.absoluteFill} onPress={onClose} />
+    <Modal transparent={!sheet} visible animationType={sheet ? "slide" : "fade"} onRequestClose={onClose} statusBarTranslucent>
+      <View style={{ flex: 1, backgroundColor: sheet ? CARD : "transparent" }}>
+        {sheet ? null : <Pressable accessibilityLabel="Fechar" style={StyleSheet.absoluteFill} onPress={onClose} />}
         <View
           onLayout={(event) => {
+            if (sheet) return;
             const next = event.nativeEvent.layout.height;
             setBoxHeight((current) => (Math.abs(current - next) < 1 ? current : next));
           }}
-          style={{ position: "absolute", top, left, width: cardWidth }}
+          style={sheet ? styles.sheet : { position: "absolute", top, left, width: cardWidth }}
         >
-          {!placeAbove ? <Arrow pointing="up" left={arrowLeft} /> : null}
-          <View style={styles.card}>
+          {!sheet && !placeAbove ? <Arrow pointing="up" left={arrowLeft} /> : null}
+          <View style={[styles.card, sheet && styles.cardSheet, sheet && { paddingTop: insets.top }]}>
             <ScrollView
               keyboardShouldPersistTaps="handled"
-              bounces={false}
-              style={{ maxHeight: maxCard - 36 }}
-              contentContainerStyle={{ paddingBottom: 8 }}
+              bounces={sheet}
+              style={sheet ? { flex: 1 } : { maxHeight: maxCard - 36 }}
+              contentContainerStyle={{ paddingBottom: sheet ? 24 : 8 }}
             >
-              <View style={styles.header}>
+              <View style={[styles.header, sheet && { paddingHorizontal: 16, paddingTop: 12 }]}>
                 <View style={styles.headerTitle}>
                   <IconButton
                     label={`Ouvir ${clean}`}
@@ -751,19 +812,21 @@ export function ReadingWordMenu({
                   </Text>
                 </View>
                 <View style={styles.headerActions}>
-                  {localSaved ? <Ionicons name="checkmark" size={18} color="#24c875" /> : null}
-                  <IconButton
-                    label="Remover palavra"
-                    name="trash-outline"
-                    color="#b0b0b0"
-                    disabled={saving || !localSaved}
-                    onPress={() => void handleRemove()}
-                  />
+                  {localSaved && !sheet ? <Ionicons name="checkmark" size={18} color="#24c875" /> : null}
+                  {sheet ? null : (
+                    <IconButton
+                      label="Remover palavra"
+                      name="trash-outline"
+                      color="#b0b0b0"
+                      disabled={saving || !localSaved}
+                      onPress={() => void handleRemove()}
+                    />
+                  )}
                   <IconButton label="Fechar painel" name="close" color="#b0b0b0" onPress={onClose} />
                 </View>
               </View>
 
-              <View style={styles.body}>
+              <View style={[styles.body, sheet && { paddingHorizontal: 16 }]}>
                 <View style={styles.badges}>
                   {confidence > 0 ? (
                     <View style={[styles.level, { backgroundColor: LEVEL_COLORS[Math.min(confidence, 4) - 1] }]}>
@@ -789,6 +852,16 @@ export function ReadingWordMenu({
                   })}
                 </View>
 
+                {localSaved ? (
+                  <LevelTrack
+                    points={
+                      levels.length > 0
+                        ? levels
+                        : [{ date: localDay(), level: Math.min(4, Math.max(1, confidence || 1)) }]
+                    }
+                  />
+                ) : null}
+
                 {grammar ? (
                   <View style={styles.grammar}>
                     <Text style={[styles.grammarTitle, { fontFamily: theme.fonts.bold }]}>{grammar.label}</Text>
@@ -799,7 +872,7 @@ export function ReadingWordMenu({
                   </View>
                 ) : null}
 
-                {!expanded && dropdownMeaning ? (
+                {!details && dropdownMeaning ? (
                   <MeaningRow
                     label={dropdownMeaning}
                     saved={dropdownSaved}
@@ -807,8 +880,8 @@ export function ReadingWordMenu({
                     onAdd={() => void handleAddMeaning(dropdownMeaning)}
                   />
                 ) : null}
-                {!expanded && !dropdownMeaning && (loadingInfo || translating) ? (
-                  <Text style={[styles.hint, { fontFamily: theme.fonts.regular }]}>Buscando tradução…</Text>
+                {!details && !dropdownMeaning && (loadingInfo || translating) ? (
+                  <Text style={[styles.hint, { fontFamily: theme.fonts.regular }]}>Buscando traduÃ§Ã£oâ€¦</Text>
                 ) : null}
 
                 <View style={styles.inputRow}>
@@ -816,12 +889,12 @@ export function ReadingWordMenu({
                     value={customMeaning}
                     onChangeText={setCustomMeaning}
                     onSubmitEditing={() => void handleAddMeaning(customMeaning)}
-                    placeholder="Novo significado"
+                    placeholder={sheet ? "Digite um novo significado aqui" : "Novo significado"}
                     placeholderTextColor="#8b949e"
-                    style={[styles.input, { fontFamily: theme.fonts.regular }]}
+                    style={[styles.input, sheet && styles.inputBox, { fontFamily: theme.fonts.regular }]}
                   />
                   <IconButton
-                    label="Sugerir tradução"
+                    label="Sugerir traduÃ§Ã£o"
                     name="sparkles"
                     color="#c4b5fd"
                     disabled={!clean || suggesting || suggestionLocked}
@@ -845,7 +918,7 @@ export function ReadingWordMenu({
                   </Text>
                 ) : null}
 
-                {expanded ? (
+                {details ? (
                   <View style={{ marginTop: 12 }}>
                     {!localSaved && vaults.length > 1 ? (
                       <View style={styles.vaults}>
@@ -874,6 +947,7 @@ export function ReadingWordMenu({
 
                     {selectedMeanings.length > 0 ? (
                       <View style={{ marginTop: 8 }}>
+                        <Text style={[styles.section, { fontFamily: theme.fonts.semibold }]}>Significados salvos</Text>
                         {selectedMeanings.map((item) => (
                           <View key={item} style={styles.savedRow}>
                             <Text style={[styles.savedText, { fontFamily: theme.fonts.regular }]}>{item}</Text>
@@ -890,7 +964,7 @@ export function ReadingWordMenu({
 
                     <Text style={[styles.section, { fontFamily: theme.fonts.semibold }]}>Significados populares</Text>
                     {(loadingInfo || translating) && (
-                      <Text style={[styles.hint, { fontFamily: theme.fonts.regular }]}>Buscando tradução…</Text>
+                      <Text style={[styles.hint, { fontFamily: theme.fonts.regular }]}>Buscando traduÃ§Ã£oâ€¦</Text>
                     )}
                     {!loadingInfo && !translating && availableMeanings.length === 0 ? (
                       <Text style={[styles.hint, { fontFamily: theme.fonts.regular }]}>Nenhum significado sugerido.</Text>
@@ -912,11 +986,13 @@ export function ReadingWordMenu({
                     {relatedPhrases.length > 0 ? (
                       <View style={{ marginTop: 14 }}>
                         <Text style={[styles.section, { fontFamily: theme.fonts.semibold }]}>Frases relacionadas</Text>
-                        {relatedPhrases.map((phrase) => (
-                          <Text key={phrase} style={[styles.phrase, { fontFamily: theme.fonts.regular }]}>
-                            {phrase}
-                          </Text>
-                        ))}
+                        <View style={styles.phraseWrap}>
+                          {relatedPhrases.map((phrase) => (
+                            <View key={phrase} style={styles.phraseChip}>
+                              <Text style={[styles.phraseChipText, { fontFamily: theme.fonts.regular }]}>{phrase}</Text>
+                            </View>
+                          ))}
+                        </View>
                       </View>
                     ) : null}
 
@@ -933,7 +1009,7 @@ export function ReadingWordMenu({
                             <View style={styles.translationRow}>
                               <View style={{ flex: 1 }}>
                                 <Text style={[styles.section, { fontFamily: theme.fonts.semibold, color: "#c4b5fd" }]}>
-                                  Tradução
+                                  TraduÃ§Ã£o
                                 </Text>
                                 <Text style={[styles.contextBody, { fontFamily: theme.fonts.semibold, color: "#ffffff" }]}>
                                   {suggestedTranslation}
@@ -986,7 +1062,7 @@ export function ReadingWordMenu({
                           <View key={item.id} style={styles.origin}>
                             <Text style={[styles.hint, { fontFamily: theme.fonts.regular }]}>
                               {formatOriginDate(item.createdAt)}
-                              {" · "}
+                              {" Â· "}
                               {item.sourceTitle || "No vault"}
                             </Text>
                             <Text style={[styles.phrase, { fontFamily: theme.fonts.regular }]}>
@@ -1000,57 +1076,18 @@ export function ReadingWordMenu({
                       </View>
                     ) : null}
 
-                    <Text style={[styles.section, { marginTop: 14, fontFamily: theme.fonts.semibold }]}>Notas</Text>
+                    <Text style={[styles.section, { marginTop: 14, fontFamily: theme.fonts.semibold }]}>Anotações</Text>
                     <TextInput
                       value={notes}
                       onChangeText={setNotes}
                       onBlur={() => void handleNotesBlur()}
-                      placeholder="Adicionar nota aqui"
+                      placeholder="Adicionar anotação aqui"
                       placeholderTextColor="#8b949e"
                       multiline
                       style={[styles.notes, { fontFamily: theme.fonts.regular }]}
                     />
 
-                    <View style={styles.footer}>
-                      {localSaved ? (
-                        <Pressable disabled={saving} onPress={() => void handleRemove()} style={styles.removeButton}>
-                          <Ionicons name="trash-outline" size={14} color="#a1a1aa" />
-                          <Text style={{ color: "#a1a1aa", fontFamily: theme.fonts.semibold, fontSize: 12 }}>
-                            Remover
-                          </Text>
-                        </Pressable>
-                      ) : (
-                        <View />
-                      )}
-                      <View style={styles.levels}>
-                        {[1, 2, 3, 4].map((level) => {
-                          const active = confidence === level;
-                          return (
-                            <Pressable
-                              key={level}
-                              disabled={saving || (!localSaved && !resolvedVaultId)}
-                              onPress={() => void handleConfidence(level)}
-                              style={[
-                                styles.levelButton,
-                                {
-                                  backgroundColor: active ? LEVEL_COLORS[level - 1] : "#3d444d",
-                                },
-                              ]}
-                            >
-                              <Text
-                                style={{
-                                  color: active ? LEVEL_TEXT[level - 1] : "#a1a1aa",
-                                  fontFamily: theme.fonts.bold,
-                                  fontSize: 12,
-                                }}
-                              >
-                                {level}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
-                      </View>
-                    </View>
+                    {sheet ? null : levelBar}
                   </View>
                 ) : null}
 
@@ -1059,15 +1096,19 @@ export function ReadingWordMenu({
                 ) : null}
               </View>
             </ScrollView>
-            <Pressable
-              accessibilityLabel={expanded ? "Recolher painel" : "Expandir painel"}
-              onPress={() => setExpanded((current) => !current)}
-              style={styles.chevron}
-            >
-              <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color="#8b949e" />
-            </Pressable>
+            {sheet ? (
+              <View style={{ paddingBottom: insets.bottom }}>{levelBar}</View>
+            ) : (
+              <Pressable
+                accessibilityLabel={expanded ? "Recolher painel" : "Expandir painel"}
+                onPress={() => setExpanded((current) => !current)}
+                style={styles.chevron}
+              >
+                <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color="#8b949e" />
+              </Pressable>
+            )}
           </View>
-          {placeAbove ? <Arrow pointing="down" left={arrowLeft} /> : null}
+          {!sheet && placeAbove ? <Arrow pointing="down" left={arrowLeft} /> : null}
         </View>
       </View>
     </Modal>
@@ -1243,6 +1284,7 @@ async function translateEntryPreview(
 }
 
 const styles = StyleSheet.create({
+  sheet: { flex: 1 },
   card: {
     backgroundColor: CARD,
     borderRadius: 16,
@@ -1255,6 +1297,37 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     elevation: 12,
   },
+  cardSheet: {
+    flex: 1,
+    borderRadius: 0,
+    borderWidth: 0,
+    elevation: 0,
+    shadowOpacity: 0,
+  },
+  sheetFooter: {
+    marginTop: 0,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.12)",
+  },
+  sheetDone: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+  inputBox: {
+    height: 44,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.16)",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+  },
+  phraseWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  phraseChip: {
+    backgroundColor: "#3d444d",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  phraseChipText: { color: "#e4e4e7", fontSize: 13 },
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -1308,7 +1381,7 @@ const styles = StyleSheet.create({
   },
   hint: { color: "#a1a1aa", fontSize: 12, marginTop: 6, lineHeight: 18 },
   error: { color: "#f87171", fontSize: 12, marginTop: 6 },
-  section: { color: "#a1a1aa", fontSize: 11, marginTop: 10 },
+  section: { color: "#a1a1aa", fontSize: 13, marginTop: 10 },
   savedRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -1382,6 +1455,7 @@ const styles = StyleSheet.create({
   removeButton: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 6 },
   levels: { flexDirection: "row", gap: 8 },
   levelButton: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  levelButtonSheet: { width: 42, height: 42, borderRadius: 21 },
   vaults: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
   vaultChip: {
     borderWidth: 1,

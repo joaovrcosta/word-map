@@ -151,6 +151,11 @@ export class WordsController {
     return this.words.search(q);
   }
 
+  @Get("by-book")
+  savedInBook(@Query("title") title = "") {
+    return this.words.savedInBook(title);
+  }
+
   @Get("exists")
   exists(
     @Query("name") name = "",
@@ -220,6 +225,11 @@ export class WordsController {
   @Get(":id/origins")
   origins(@Param("id", ParseIntPipe) id: number) {
     return this.words.origins(id);
+  }
+
+  @Get(":id/levels")
+  levels(@Param("id", ParseIntPipe) id: number) {
+    return this.words.levels(id);
   }
 
   @Post(":id/origins")

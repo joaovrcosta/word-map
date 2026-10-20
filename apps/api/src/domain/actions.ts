@@ -12,6 +12,7 @@ import {
 } from "../lib/word-matching.server";
 import { addedMeanings, writeWordOrigins } from "../lib/word-origin-store";
 import { awardSavedWordPoints } from "../lib/points";
+import { recordWordLevel } from "./word-levels";
 
 export interface Vault {
   id: number;
@@ -324,6 +325,7 @@ export async function createWord(data: CreateWordData): Promise<Word> {
     }
 
     await writeWordOrigins(newWord.id, data.translations, data.origin);
+    await recordWordLevel(newWord.id, newWord.confidence);
 
     console.log("Palavra criada no banco com sucesso:", newWord);
     console.log("=== FIM createWord - SUCESSO ===");
@@ -760,6 +762,8 @@ export async function updateWord(
     if (data.confidence !== undefined) {
       updateData.confidence = data.confidence;
     }
+    const levelChanged =
+      data.confidence !== undefined && data.confidence !== existingWord.confidence;
 
     // Atualizar a palavra
     const updatedWord = await prisma.word.update({
@@ -773,6 +777,9 @@ export async function updateWord(
         addedMeanings(existingWord.translations, data.translations),
         data.origin
       );
+    }
+    if (levelChanged && data.confidence !== undefined) {
+      await recordWordLevel(wordId, data.confidence);
     }
 
     console.log("Palavra atualizada com sucesso:", updatedWord);

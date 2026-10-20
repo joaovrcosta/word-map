@@ -94,6 +94,7 @@ model Word {
   clozes           WordCloze[]
   origins          WordOrigin[]
   pointAward       PointAward?
+  levelMarks       WordLevelMark[]
 }
 
 model PointAward {
@@ -106,6 +107,16 @@ model PointAward {
   word      Word?    @relation(fields: [wordId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
+}
+
+model WordLevelMark {
+  id        Int      @id @default(autoincrement())
+  wordId    Int
+  level     Int
+  createdAt DateTime @default(now())
+  word      Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  @@index([wordId, createdAt])
 }
 
 model WordOrigin {

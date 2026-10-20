@@ -1,23 +1,36 @@
-import { useCallback, useState } from "react";
-import { Pressable, ScrollView, Text, View } from "react-native";
+import { useCallback, useMemo, useState } from "react";
+import { Pressable, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { type Href, router, useFocusEffect } from "expo-router";
+import { BookArt } from "../../../src/features/books/cover";
 import { useSession } from "../../../src/session";
 import { useTheme } from "../../../src/theme";
-import { countLabel, type BookListItem } from "../../../src/types";
-import { ErrorText, Heading, Loading, Muted, Screen } from "../../../src/ui";
+import type { BookListItem } from "../../../src/types";
+import { ErrorText, Loading, Muted, Screen } from "../../../src/ui";
 
-type Tab = "store" | "mine";
+type Shelf = "all" | "store" | "saved" | "mine";
+
+const SHELVES: Array<{ value: Shelf; label: string }> = [
+  { value: "all", label: "Tudo" },
+  { value: "store", label: "Acervo" },
+  { value: "saved", label: "Salvos" },
+  { value: "mine", label: "Meus" },
+];
 
 export default function BooksScreen() {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
   const { request, user } = useSession();
   const isStaff = user?.role === "ADMIN" || user?.role === "MODERATOR";
-  const [tab, setTab] = useState<Tab>("store");
   const [official, setOfficial] = useState<BookListItem[] | null>(null);
   const [mine, setMine] = useState<BookListItem[]>([]);
   const [library, setLibrary] = useState<BookListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
+  const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [shelf, setShelf] = useState<Shelf>("all");
 
   const load = useCallback(async () => {
     try {
@@ -72,163 +85,311 @@ export default function BooksScreen() {
     }
   };
 
+  const matches = useCallback(
+    (book: BookListItem) => book.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
+    [query]
+  );
+
+  const sections = useMemo(() => {
+    const officialBooks = (official ?? []).filter(matches);
+    const myBooks = mine.filter(matches);
+    const saved = library.filter(matches);
+    if (shelf === "store") return [{ key: "store", title: "Acervo", books: officialBooks }];
+    if (shelf === "saved") return [{ key: "saved", title: "Salvos", books: saved }];
+    if (shelf === "mine") return [{ key: "mine", title: "Meus", books: myBooks }];
+    const savedOnly = saved.filter(
+      (book) => !officialBooks.some((item) => item.id === book.id) && !myBooks.some((item) => item.id === book.id)
+    );
+    return [
+      { key: "store", title: "Acervo", books: officialBooks },
+      { key: "mine", title: "Meus", books: myBooks },
+      { key: "saved", title: "Salvos", books: savedOnly },
+    ].filter((section) => section.books.length > 0);
+  }, [library, matches, mine, official, shelf]);
+
   if (!official) return <Loading />;
 
+  const gap = 14;
+  const columns = 3;
+  const coverWidth = Math.floor((width - 40 - gap * (columns - 1)) / columns);
+
   return (
-    <Screen>
-      <Heading>Livros</Heading>
-      <View style={{ flexDirection: "row", gap: 8, marginTop: 16 }}>
-        {(
-          [
-            ["store", "Loja"],
-            ["mine", "Meus"],
-          ] as const
-        ).map(([value, label]) => {
-          const selected = tab === value;
-          return (
-            <Pressable
-              key={value}
-              onPress={() => setTab(value)}
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 8,
-                borderRadius: theme.radii.lg,
-                backgroundColor: selected ? theme.colors.green : theme.colors.card,
-                borderWidth: 1,
-                borderColor: selected ? theme.colors.green : theme.colors.border,
-              }}
-            >
-              <Text
+    <Screen scroll>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 32 }}>
+          Biblioteca
+        </Text>
+        <View style={{ flexDirection: "row", gap: 10 }}>
+          <RoundButton
+            name={filtersOpen ? "options" : "options-outline"}
+            label="Filtrar"
+            onPress={() => setFiltersOpen((open) => !open)}
+          />
+          <RoundButton
+            name="search"
+            label="Buscar"
+            onPress={() => {
+              setSearchOpen((open) => !open);
+              if (searchOpen) setQuery("");
+            }}
+          />
+        </View>
+      </View>
+
+      {searchOpen ? (
+        <TextInput
+          autoFocus
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Buscar no acervo"
+          placeholderTextColor={theme.colors.mutedForeground}
+          style={{
+            marginTop: 16,
+            borderWidth: 1,
+            borderColor: theme.colors.border,
+            borderRadius: 14,
+            paddingHorizontal: 14,
+            paddingVertical: 10,
+            color: theme.colors.foreground,
+            fontFamily: theme.fonts.medium,
+            fontSize: 16,
+            backgroundColor: theme.colors.card,
+          }}
+        />
+      ) : null}
+
+      {filtersOpen ? (
+        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
+          {SHELVES.map((item) => {
+            const selected = shelf === item.value;
+            return (
+              <Pressable
+                key={item.value}
+                onPress={() => setShelf(item.value)}
                 style={{
-                  color: selected ? "#ffffff" : theme.colors.foreground,
-                  fontFamily: theme.fonts.bold,
+                  paddingHorizontal: 14,
+                  paddingVertical: 8,
+                  borderRadius: 999,
+                  backgroundColor: selected ? theme.colors.green : theme.colors.card,
+                  borderWidth: 1,
+                  borderColor: selected ? theme.colors.green : theme.colors.border,
                 }}
               >
-                {label}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
+                <Text
+                  style={{
+                    color: selected ? "#ffffff" : theme.colors.foreground,
+                    fontFamily: theme.fonts.bold,
+                    fontSize: 14,
+                  }}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      ) : null}
+
       {error ? <ErrorText>{error}</ErrorText> : null}
-      <ScrollView style={{ marginTop: 8, flex: 1 }} contentContainerStyle={{ paddingBottom: 24 }}>
-        {tab === "store" ? (
-          official.length === 0 ? (
-            <Muted>Nenhum livro na loja.</Muted>
-          ) : (
-            official.map((book) => (
-              <BookRow
-                key={book.id}
-                book={book}
-                busy={busyId === book.id}
-                actionLabel={book.inLibrary ? "Remover" : "Adicionar"}
-                onOpen={() => void openBook(book)}
-                onAction={() => void toggleLibrary(book)}
-              />
-            ))
-          )
-        ) : mine.length === 0 && library.length === 0 ? (
-          <Muted>Nenhum livro ainda. Adicione um na loja.</Muted>
-        ) : (
-          <>
-            <Section title="Criados por mim" books={mine} onOpen={openBook} />
-            <Section
-              title="Biblioteca"
-              books={library}
-              onOpen={openBook}
-              actionLabel="Remover"
-              busyId={busyId}
-              onAction={toggleLibrary}
-            />
-          </>
-        )}
-      </ScrollView>
+
+      {sections.length === 0 ? (
+        <View style={{ marginTop: 28 }}>
+          <Muted>{query.trim() ? "Nenhum livro com esse nome." : "Nenhum livro no acervo ainda."}</Muted>
+        </View>
+      ) : (
+        sections.map((section) => (
+          <ShelfSection
+            key={section.key}
+            title={section.title}
+            books={section.books}
+            coverWidth={coverWidth}
+            gap={gap}
+            busyId={busyId}
+            onOpen={(book) => void openBook(book)}
+            onToggle={(book) => void toggleLibrary(book)}
+          />
+        ))
+      )}
     </Screen>
   );
 }
 
-function Section({
+function ShelfSection({
   title,
   books,
-  onOpen,
-  actionLabel,
+  coverWidth,
+  gap,
   busyId,
-  onAction,
+  onOpen,
+  onToggle,
 }: {
   title: string;
   books: BookListItem[];
+  coverWidth: number;
+  gap: number;
+  busyId: number | null;
   onOpen: (book: BookListItem) => void;
-  actionLabel?: string;
-  busyId?: number | null;
-  onAction?: (book: BookListItem) => void;
+  onToggle: (book: BookListItem) => void;
 }) {
   const theme = useTheme();
-  if (books.length === 0) return null;
+  const [expanded, setExpanded] = useState(false);
+  const visible = expanded || books.length <= 6 ? books : books.slice(0, 6);
+
   return (
-    <View style={{ marginTop: 16 }}>
-      <Text style={{ color: theme.colors.mutedForeground, fontFamily: theme.fonts.bold, fontSize: 13 }}>
-        {title}
-      </Text>
-      {books.map((book) => (
-        <BookRow
-          key={book.id}
-          book={book}
-          busy={busyId === book.id}
-          actionLabel={actionLabel}
-          onOpen={() => onOpen(book)}
-          onAction={onAction ? () => onAction(book) : undefined}
-        />
-      ))}
+    <View style={{ marginTop: 26 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+        <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 26 }}>{title}</Text>
+        {books.length > 6 ? (
+          <Pressable onPress={() => setExpanded((open) => !open)} hitSlop={8}>
+            <Text style={{ color: "#f08a24", fontFamily: theme.fonts.bold, fontSize: 16 }}>
+              {expanded ? "Menos" : "Mais →"}
+            </Text>
+          </Pressable>
+        ) : null}
+      </View>
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap, marginTop: 14 }}>
+        {visible.map((book) => (
+          <BookCover
+            key={book.id}
+            book={book}
+            width={coverWidth}
+            busy={busyId === book.id}
+            onOpen={() => onOpen(book)}
+            onToggle={() => onToggle(book)}
+          />
+        ))}
+      </View>
     </View>
   );
 }
 
-function BookRow({
+function BookCover({
   book,
-  onOpen,
-  onAction,
-  actionLabel,
+  width,
   busy,
+  onOpen,
+  onToggle,
 }: {
   book: BookListItem;
-  onOpen: () => void;
-  onAction?: () => void;
-  actionLabel?: string;
+  width: number;
   busy: boolean;
+  onOpen: () => void;
+  onToggle: () => void;
+}) {
+  const theme = useTheme();
+  const height = Math.round(width * 1.28);
+
+  return (
+    <View style={{ width, opacity: busy ? 0.55 : 1 }}>
+      <Pressable
+        onPress={onOpen}
+        disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel={book.title}
+        style={{
+          width,
+          height,
+          borderRadius: 16,
+          overflow: "hidden",
+          backgroundColor: "#f6f1e6",
+        }}
+      >
+        <BookArt title={book.title} bookId={book.id} />
+        {book.isOfficial ? <FreeRibbon /> : null}
+      </Pressable>
+      <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 4, marginTop: 8 }}>
+        <Text
+          numberOfLines={2}
+          style={{
+            flex: 1,
+            color: theme.colors.foreground,
+            fontFamily: theme.fonts.medium,
+            fontSize: 13,
+            lineHeight: 17,
+          }}
+        >
+          {book.title}
+        </Text>
+        <Pressable
+          onPress={onToggle}
+          disabled={busy}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel={book.inLibrary ? "Remover da biblioteca" : "Salvar na biblioteca"}
+        >
+          <Ionicons
+            name={book.inLibrary ? "heart" : "heart-outline"}
+            size={16}
+            color={book.inLibrary ? "#ff4d6d" : theme.colors.foreground}
+          />
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+function FreeRibbon() {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: "absolute",
+        left: 0,
+        top: 18,
+        width: 18,
+        height: 72,
+        backgroundColor: "#2a2a2a",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+      }}
+    >
+      <Text
+        style={{
+          position: "absolute",
+          width: 72,
+          left: -27,
+          top: 28,
+          textAlign: "center",
+          color: "#ffffff",
+          fontSize: 9,
+          letterSpacing: 0.6,
+          fontFamily: "Nunito_700Bold",
+          transform: [{ rotate: "-90deg" }],
+        }}
+      >
+        GRÁTIS!
+      </Text>
+    </View>
+  );
+}
+
+function RoundButton({
+  name,
+  label,
+  onPress,
+}: {
+  name: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
 }) {
   const theme = useTheme();
   return (
-    <View
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
       style={{
-        flexDirection: "row",
+        width: 42,
+        height: 42,
+        borderRadius: 21,
+        borderWidth: 1.5,
+        borderColor: theme.colors.foreground,
         alignItems: "center",
-        gap: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: theme.colors.border,
-        paddingVertical: 14,
+        justifyContent: "center",
       }}
     >
-      <Pressable onPress={onOpen} style={{ flex: 1 }} disabled={busy}>
-        <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 17 }}>
-          {book.title}
-        </Text>
-        {book.description ? (
-          <Text
-            numberOfLines={2}
-            style={{ color: theme.colors.mutedForeground, fontFamily: theme.fonts.regular, marginTop: 4 }}
-          >
-            {book.description}
-          </Text>
-        ) : null}
-        <Text style={{ color: theme.colors.greenText, fontFamily: theme.fonts.semibold, marginTop: 6 }}>
-          {countLabel(book.chapterCount, "capítulo", "capítulos")}
-        </Text>
-      </Pressable>
-      {actionLabel && onAction ? (
-        <Pressable onPress={onAction} disabled={busy}>
-          <Text style={{ color: theme.colors.greenText, fontFamily: theme.fonts.bold }}>{actionLabel}</Text>
-        </Pressable>
-      ) : null}
-    </View>
+      <Ionicons name={name} size={20} color={theme.colors.foreground} />
+    </Pressable>
   );
 }

@@ -21,9 +21,9 @@ export default function HomeScreen() {
       </Card>
       <Card onPress={() => router.push("/books" as Href)}>
         <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 20 }}>
-          Livros
+          Biblioteca
         </Text>
-        <Muted>Loja, biblioteca e capítulos.</Muted>
+        <Muted>Seu acervo de leitura.</Muted>
       </Card>
       <PrimaryButton label="Sair" onPress={() => void signOut()} />
     </Screen>

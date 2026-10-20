@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Modal,
   Pressable,
   ScrollView,
   Text,
@@ -7,22 +8,26 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
+import { BookArt, bookAuthor } from "../../../../../src/features/books/cover";
 import { normalizeReadingPosition, normalizeToken, paginateReading } from "@word-map/shared";
 import {
   findSavedReadingWord,
   ReadingPageText,
   ReadingWordMenu,
-  speakWord,
   type FoundTextWord,
   type WordAnchor,
-} from "../../../../../src/reading-word-menu";
+} from "../../../../../src/features/reading";
+import { speakPassage, speakWord, stopSpeech } from "../../../../../src/speech";
 import { useSession } from "../../../../../src/session";
 import { useTheme } from "../../../../../src/theme";
 import { type ChapterDetail, type ReadingPosition, type Vault } from "../../../../../src/types";
 import { ErrorText, Loading, Screen } from "../../../../../src/ui";
 
 const FONT_SIZES = [18, 22, 26];
+const LEVEL_COLORS = ["#ff4b4b", "#ff9600", "#ffc800", "#24c875"];
+const LEVEL_TEXT = ["#ffffff", "#ffffff", "#3c3c3c", "#ffffff"];
 
 export default function ChapterReaderScreen() {
   const theme = useTheme();
@@ -38,20 +43,30 @@ export default function ChapterReaderScreen() {
   const [width, setWidth] = useState(0);
   const [settled, setSettled] = useState(false);
   const [foundWords, setFoundWords] = useState<FoundTextWord[]>([]);
+  const [bookWords, setBookWords] = useState<BookWord[]>([]);
+  const [wordsOpen, setWordsOpen] = useState(false);
+  const [listening, setListening] = useState(false);
   const [vaults, setVaults] = useState<Vault[]>([]);
   const [selection, setSelection] = useState<{
     clean: string;
     occurrence: number;
     anchor: WordAnchor;
+    full?: boolean;
   } | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const pageIndexRef = useRef(0);
+  const pagesRef = useRef<ReturnType<typeof paginateReading>>([]);
+  const widthRef = useRef(0);
+  const keepListening = useRef(false);
+  const advancing = useRef(false);
   const openedAt = useRef(0);
 
   const pages = useMemo(
     () => (chapter ? paginateReading(chapter.content) : []),
     [chapter]
   );
+  pagesRef.current = pages;
+  widthRef.current = width;
 
   useEffect(() => {
     let cancelled = false;
@@ -103,6 +118,14 @@ export default function ChapterReaderScreen() {
     ]);
     setFoundWords(found);
     setVaults(nextVaults);
+    try {
+      const savedInBook = await request<BookWord[]>(
+        `/words/by-book?title=${encodeURIComponent(chapter.bookTitle)}`
+      );
+      setBookWords(Array.isArray(savedInBook) ? savedInBook : []);
+    } catch {
+      setBookWords([]);
+    }
   }, [chapter, request]);
 
   useEffect(() => {
@@ -112,6 +135,7 @@ export default function ChapterReaderScreen() {
       if (!cancelled) {
         setFoundWords([]);
         setVaults([]);
+        setBookWords([]);
       }
     });
     return () => {
@@ -141,24 +165,90 @@ export default function ChapterReaderScreen() {
     [foundWords]
   );
 
-  const selectWord = (clean: string, occurrence: number, anchor: WordAnchor) => {
+  const listedWords = useMemo(() => {
+    const merged = new Map<number, BookWord>();
+    for (const word of wordsSavedInChapter(foundWords)) merged.set(word.id, word);
+    for (const word of bookWords) {
+      const current = merged.get(word.id);
+      merged.set(word.id, {
+        ...current,
+        ...word,
+        translations: word.translations.length ? word.translations : (current?.translations ?? []),
+        meaning: word.meaning || current?.meaning || word.translations[0] || "",
+      });
+    }
+    return [...merged.values()];
+  }, [bookWords, foundWords]);
+
+  const selectWord = (clean: string, occurrence: number, anchor: WordAnchor, full = false) => {
     openedAt.current = Date.now();
-    setSelection({ clean, occurrence, anchor });
+    keepListening.current = false;
+    setListening(false);
+    setSelection({ clean, occurrence, anchor, full });
     speakWord(clean);
   };
+
+  const playCurrentPage = useCallback(() => {
+    const text = pagesRef.current[pageIndexRef.current]?.text ?? "";
+    if (!text.trim()) {
+      keepListening.current = false;
+      setListening(false);
+      return;
+    }
+    setListening(true);
+    speakPassage(text, () => {
+      if (!keepListening.current) {
+        setListening(false);
+        return;
+      }
+      const next = pageIndexRef.current + 1;
+      const frame = widthRef.current;
+      if (next >= pagesRef.current.length || !frame) {
+        keepListening.current = false;
+        setListening(false);
+        return;
+      }
+      advancing.current = true;
+      pageIndexRef.current = next;
+      setPageIndex(next);
+      scrollRef.current?.scrollTo({ x: next * frame, animated: true });
+    });
+  }, []);
+
+  const toggleListen = () => {
+    if (keepListening.current) {
+      keepListening.current = false;
+      stopSpeech();
+      setListening(false);
+      return;
+    }
+    if (!(pages[pageIndex]?.text ?? "").trim()) return;
+    keepListening.current = true;
+    playCurrentPage();
+  };
+
+  useEffect(() => {
+    return () => {
+      keepListening.current = false;
+      stopSpeech();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (advancing.current) {
+      advancing.current = false;
+      if (keepListening.current) playCurrentPage();
+      return;
+    }
+    if (!keepListening.current) return;
+    keepListening.current = false;
+    stopSpeech();
+    setListening(false);
+  }, [pageIndex, playCurrentPage]);
 
   const dismissFromScroll = () => {
     if (Date.now() - openedAt.current < 400) return;
     setSelection(null);
-  };
-
-  const goTo = (next: number) => {
-    if (!width || pages.length === 0) return;
-    setSelection(null);
-    const clamped = Math.min(Math.max(next, 0), pages.length - 1);
-    pageIndexRef.current = clamped;
-    setPageIndex(clamped);
-    scrollRef.current?.scrollTo({ x: clamped * width, animated: true });
   };
 
   const onScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -177,34 +267,33 @@ export default function ChapterReaderScreen() {
   const progress = pages.length <= 1 ? 1 : pageIndex / (pages.length - 1);
 
   return (
-    <Screen>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
-        <Pressable onPress={() => router.back()}>
-          <Text style={{ color: theme.colors.greenText, fontFamily: theme.fonts.semibold }}>Voltar</Text>
+    <Screen safeBottom>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button" accessibilityLabel="Fechar">
+          <Ionicons name="close" size={26} color={theme.colors.foreground} />
         </Pressable>
-        <Text
-          numberOfLines={1}
-          style={{ flex: 1, color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 16 }}
-        >
-          {chapter?.title ?? "Capítulo"}
-        </Text>
+        <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: theme.colors.border }}>
+          <View
+            style={{
+              height: 4,
+              borderRadius: 2,
+              width: `${Math.round(progress * 100)}%`,
+              backgroundColor: theme.colors.green,
+            }}
+          />
+        </View>
         <Pressable
           onPress={() =>
             setFontSize((current) => FONT_SIZES[(FONT_SIZES.indexOf(current) + 1) % FONT_SIZES.length])
           }
+          hitSlop={10}
+          accessibilityRole="button"
+          accessibilityLabel="Tamanho do texto"
         >
-          <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 16 }}>Aa</Text>
+          <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 18, letterSpacing: -1 }}>
+            TT
+          </Text>
         </Pressable>
-      </View>
-      <View style={{ height: 4, borderRadius: 2, backgroundColor: theme.colors.border, marginTop: 12 }}>
-        <View
-          style={{
-            height: 4,
-            borderRadius: 2,
-            width: `${Math.round(progress * 100)}%`,
-            backgroundColor: theme.colors.green,
-          }}
-        />
       </View>
       {error ? <ErrorText>{error}</ErrorText> : null}
       {missing ? (
@@ -224,6 +313,12 @@ export default function ChapterReaderScreen() {
               nestedScrollEnabled
               showsHorizontalScrollIndicator={false}
               onMomentumScrollEnd={onScrollEnd}
+              onScrollBeginDrag={() => {
+                if (!keepListening.current) return;
+                keepListening.current = false;
+                stopSpeech();
+                setListening(false);
+              }}
               scrollEventThrottle={16}
               style={{ width, flex: 1 }}
               snapToInterval={width}
@@ -237,6 +332,9 @@ export default function ChapterReaderScreen() {
                     onScrollBeginDrag={dismissFromScroll}
                     contentContainerStyle={{ paddingBottom: 24 }}
                   >
+                    {index === 0 && chapter ? (
+                      <ReadingIntro bookTitle={chapter.bookTitle} chapterTitle={chapter.title} bookId={chapter.bookId} />
+                    ) : null}
                     <ReadingPageText
                       text={page.text}
                       width={width}
@@ -254,32 +352,64 @@ export default function ChapterReaderScreen() {
         </View>
       )}
       {chapter && pages.length > 0 ? (
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingTop: 8 }}>
-          <Pressable onPress={() => goTo(pageIndex - 1)} disabled={pageIndex === 0}>
-            <Text
-              style={{
-                color: pageIndex === 0 ? theme.colors.border : theme.colors.greenText,
-                fontFamily: theme.fonts.bold,
-              }}
-            >
-              Anterior
-            </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", paddingTop: 8 }}>
+          <Pressable
+            onPress={toggleListen}
+            disabled={!(pages[pageIndex]?.text ?? "").trim()}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel={listening ? "Pausar leitura" : "Ouvir esta página"}
+            style={{ flex: 1, alignItems: "flex-start", minWidth: 56 }}
+          >
+            <Ionicons
+              name={listening ? "pause" : "headset-outline"}
+              size={26}
+              color={listening ? theme.colors.green : theme.colors.foreground}
+            />
           </Pressable>
           <Text style={{ color: theme.colors.mutedForeground, fontFamily: theme.fonts.semibold }}>
             {pageIndex + 1} / {pages.length}
           </Text>
-          <Pressable onPress={() => goTo(pageIndex + 1)} disabled={pageIndex >= pages.length - 1}>
-            <Text
-              style={{
-                color: pageIndex >= pages.length - 1 ? theme.colors.border : theme.colors.greenText,
-                fontFamily: theme.fonts.bold,
-              }}
-            >
-              Próxima
-            </Text>
+          <Pressable
+            onPress={() => setWordsOpen(true)}
+            hitSlop={12}
+            accessibilityRole="button"
+            accessibilityLabel={`${listedWords.length} palavras salvas neste livro`}
+            style={{ flex: 1, alignItems: "flex-end", minWidth: 56 }}
+          >
+            <View>
+              <Ionicons name="list-outline" size={26} color={theme.colors.foreground} />
+              <View
+                style={{
+                  position: "absolute",
+                  top: -6,
+                  right: -10,
+                  minWidth: 18,
+                  height: 18,
+                  borderRadius: 9,
+                  paddingHorizontal: 4,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  backgroundColor: theme.colors.green,
+                }}
+              >
+                <Text style={{ color: "#ffffff", fontFamily: theme.fonts.bold, fontSize: 10 }}>
+                  {listedWords.length}
+                </Text>
+              </View>
+            </View>
           </Pressable>
         </View>
       ) : null}
+      <BookWordsSheet
+        open={wordsOpen}
+        words={listedWords}
+        onClose={() => setWordsOpen(false)}
+        onPick={(word) => {
+          setWordsOpen(false);
+          selectWord(normalizeToken(word.name) || word.name, 0, { x: 0, y: 0, width: 0, height: 0 }, true);
+        }}
+      />
       {chapter && selection ? (
         <ReadingWordMenu
           clean={selection.clean}
@@ -291,10 +421,220 @@ export default function ChapterReaderScreen() {
           bookTitle={chapter.bookTitle}
           saved={saved}
           vaults={vaults}
+          full={selection.full}
           onClose={() => setSelection(null)}
           onChanged={reloadWords}
         />
       ) : null}
     </Screen>
+  );
+}
+
+function wordsSavedInChapter(found: FoundTextWord[]): BookWord[] {
+  const rows: BookWord[] = [];
+  const seen = new Set<string>();
+  for (const item of found) {
+    const clean = normalizeToken(item.word);
+    if (!clean || seen.has(clean)) continue;
+    const vault = item.vaultInfo[0];
+    const saved =
+      vault?.words.find((entry) => normalizeToken(entry.name) === clean) ?? vault?.words[0];
+    if (!saved) continue;
+    seen.add(clean);
+    rows.push({
+      id: saved.id,
+      name: saved.name || item.word,
+      translations: saved.translations ?? [],
+      grammaticalClass: saved.grammaticalClass,
+      confidence: saved.confidence,
+      meaning: saved.translations?.[0] ?? "",
+      sentence: null,
+    });
+  }
+  return rows;
+}
+
+type BookWord = {
+  id: number;
+  name: string;
+  translations: string[];
+  grammaticalClass: string;
+  confidence: number;
+  meaning: string;
+  sentence: string | null;
+};
+
+function BookWordsSheet({
+  open,
+  words,
+  onClose,
+  onPick,
+}: {
+  open: boolean;
+  words: BookWord[];
+  onClose: () => void;
+  onPick: (word: BookWord) => void;
+}) {
+  const theme = useTheme();
+  const ordered = [...words].sort((a, b) => a.name.localeCompare(b.name, "en"));
+  return (
+    <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
+      <Pressable onPress={onClose} style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.45)" }}>
+        <Pressable
+          onPress={() => undefined}
+          style={{
+            maxHeight: "72%",
+            backgroundColor: theme.colors.card,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            paddingTop: 12,
+            paddingBottom: 28,
+          }}
+        >
+          <View style={{ alignItems: "center", marginBottom: 12 }}>
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: theme.colors.border }} />
+          </View>
+          <Text
+            style={{
+              color: theme.colors.foreground,
+              fontFamily: theme.fonts.bold,
+              fontSize: 20,
+              paddingHorizontal: 20,
+            }}
+          >
+            Palavras deste livro
+          </Text>
+          <ScrollView contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 }}>
+            {ordered.length === 0 ? (
+              <Text
+                style={{
+                  marginTop: 16,
+                  color: theme.colors.mutedForeground,
+                  fontFamily: theme.fonts.regular,
+                  fontSize: 15,
+                  lineHeight: 22,
+                }}
+              >
+                Nenhuma palavra salva neste livro ainda. Toque numa palavra do texto para guardar.
+              </Text>
+            ) : (
+              ordered.map((word) => {
+                const level = Math.min(4, Math.max(1, word.confidence || 1));
+                return (
+                  <Pressable
+                    key={word.id}
+                    onPress={() => onPick(word)}
+                    style={{
+                      flexDirection: "row",
+                      alignItems: "center",
+                      gap: 12,
+                      paddingVertical: 14,
+                      borderBottomWidth: 1,
+                      borderBottomColor: theme.colors.border,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 24,
+                        height: 24,
+                        borderRadius: 12,
+                        alignItems: "center",
+                        justifyContent: "center",
+                        backgroundColor: LEVEL_COLORS[level - 1],
+                      }}
+                    >
+                      <Text style={{ color: LEVEL_TEXT[level - 1], fontFamily: theme.fonts.bold, fontSize: 11 }}>
+                        {level}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 17 }}>
+                        {word.name}
+                      </Text>
+                      <Text
+                        style={{
+                          marginTop: 2,
+                          color: theme.colors.mutedForeground,
+                          fontFamily: theme.fonts.regular,
+                          fontSize: 14,
+                        }}
+                      >
+                        {word.translations[0] || word.meaning}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })
+            )}
+          </ScrollView>
+        </Pressable>
+      </Pressable>
+    </Modal>
+  );
+}
+
+function ReadingIntro({
+  bookTitle,
+  chapterTitle,
+  bookId,
+}: {
+  bookTitle: string;
+  chapterTitle: string;
+  bookId: number;
+}) {
+  const theme = useTheme();
+  const author = bookAuthor(bookTitle);
+  const showChapter = chapterTitle.trim().length > 0 && chapterTitle.trim() !== bookTitle.trim();
+
+  return (
+    <View style={{ marginBottom: 22 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <View
+          style={{
+            width: 64,
+            height: 64,
+            borderRadius: 12,
+            overflow: "hidden",
+            backgroundColor: "#f6f1e6",
+          }}
+        >
+          <BookArt title={bookTitle} bookId={bookId} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text
+            numberOfLines={2}
+            style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 16, lineHeight: 20 }}
+          >
+            {bookTitle}
+          </Text>
+          {author ? (
+            <Text
+              numberOfLines={1}
+              style={{
+                marginTop: 2,
+                color: theme.colors.mutedForeground,
+                fontFamily: theme.fonts.regular,
+                fontSize: 13,
+              }}
+            >
+              {author}
+            </Text>
+          ) : null}
+        </View>
+      </View>
+      {showChapter ? (
+        <Text
+          style={{
+            marginTop: 20,
+            color: theme.colors.foreground,
+            fontFamily: theme.fonts.bold,
+            fontSize: 22,
+            lineHeight: 28,
+          }}
+        >
+          {chapterTitle}
+        </Text>
+      ) : null}
+    </View>
   );
 }

@@ -62,6 +62,7 @@ export function buildReviewPrompt(items: ReviewItem[]): string {
     "result ok = acertou. result miss = errou ou marcou que não sabia. No recall, 1 = não lembrou, 2 = difícil, 3 = bom, 4 = fácil. 1 e 2 são pontos fracos.",
     "Escreva em português, em duas a quatro frases.",
     "Para cada ponto fraco, cite a palavra, a tradução, o exercício que falhou e uma ação concreta para a próxima sessão.",
+    "Feche dizendo, numa frase, quais tipos de exercício essa pessoa deve praticar mais na próxima sessão: recordar, ouvir, combinar ou completar. Cite só os tipos em que houve falha.",
     "Não dê um conselho genérico que serviria para qualquer palavra.",
     "Se não houve ponto fraco, diga o que ficou firme e uma palavra para manter na revisão.",
     "Fale só das palavras listadas. Não invente outras.",
