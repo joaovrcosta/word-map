@@ -7,7 +7,17 @@ export type MobileUser = {
   name: string;
   email: string;
   username: string | null;
+  role?: "USER" | "MODERATOR" | "ADMIN";
 };
+
+export function apiErrorMessage(payload: unknown) {
+  if (!payload || typeof payload !== "object") return "Erro na API";
+  const body = payload as { error?: unknown; message?: unknown };
+  const raw = body.error ?? body.message;
+  if (Array.isArray(raw)) return raw.map(String).join("\n");
+  if (typeof raw === "string" && raw.trim()) return raw;
+  return "Erro na API";
+}
 
 function apiBase() {
   const configured = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "");
@@ -38,11 +48,7 @@ export async function apiRequest<T>(
   const text = await response.text();
   const payload = text ? JSON.parse(text) : null;
   if (!response.ok) {
-    const message =
-      payload && typeof payload === "object" && "message" in payload
-        ? String(payload.message)
-        : "Erro na API";
-    throw new Error(message);
+    throw new Error(apiErrorMessage(payload));
   }
   return payload as T;
 }

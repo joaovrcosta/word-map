@@ -47,6 +47,7 @@ type Session = {
   user: MobileUser | null;
   signIn: (email: string, password: string) => Promise<string | null>;
   signOut: () => Promise<void>;
+  request: <T>(path: string, init?: RequestInit) => Promise<T>;
 };
 
 const SessionContext = createContext<Session | null>(null);
@@ -108,9 +109,15 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     setUser(null);
   }, []);
 
+  const request = useCallback(
+    <T,>(path: string, init: RequestInit = {}) =>
+      apiRequest<T>(path, { ...init, token }),
+    [token]
+  );
+
   const value = useMemo(
-    () => ({ ready, user: token ? user : null, signIn, signOut }),
-    [ready, token, user, signIn, signOut]
+    () => ({ ready, user: token ? user : null, signIn, signOut, request }),
+    [ready, token, user, signIn, signOut, request]
   );
 
   return (
