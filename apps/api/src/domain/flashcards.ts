@@ -3,6 +3,7 @@ import { prisma } from "../prisma/client";
 import { isWordDue } from "@word-map/shared/flashcard-schedule";
 import { revalidatePath } from "../common/revalidate";
 import { getCurrentUser } from "../auth/current-user";
+import { awardFlashcardPoints } from "../lib/points";
 import { recordWordLevel } from "./word-levels";
 
 export interface FlashcardWord {
@@ -207,13 +208,16 @@ export async function recordChallengeResult(
       },
     });
 
-    await prisma.wordReview.create({
+    const review = await prisma.wordReview.create({
       data: {
         wordId,
         correct,
         challenge,
       },
     });
+    if (correct) {
+      await awardFlashcardPoints(user.id, wordId, review.id);
+    }
     if (nextConfidence !== existingWord.confidence) {
       await recordWordLevel(wordId, nextConfidence);
     }

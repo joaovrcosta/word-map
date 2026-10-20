@@ -25,6 +25,12 @@ import {
   requestSessionReview,
   requestWordClozes,
 } from "@/lib/flashcard-session-client";
+import {
+  awardPoints,
+  POINTS_PER_CHALLENGE,
+  rollbackPoints,
+  settlePoints,
+} from "@/lib/points-optimistic";
 import { Flashcard } from "./Flashcard";
 import { ListenChallenge } from "./ListenChallenge";
 import { MatchChallenge } from "./MatchChallenge";
@@ -203,9 +209,15 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
       correct: stats.correct + (correct ? 1 : 0),
     }));
     rememberOutcome(word, kind, correct ? "ok" : "miss");
-    void recordChallengeResult(word.id, correct, kind).catch((error) => {
-      console.error("Erro ao registrar desafio:", error);
-    });
+    if (correct) awardPoints(POINTS_PER_CHALLENGE);
+    void recordChallengeResult(word.id, correct, kind)
+      .then(() => {
+        if (correct) settlePoints(POINTS_PER_CHALLENGE);
+      })
+      .catch((error) => {
+        if (correct) rollbackPoints(POINTS_PER_CHALLENGE);
+        console.error("Erro ao registrar desafio:", error);
+      });
   };
 
   const handleAnswer = async (confidence: number) => {

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma/client";
 
 export const POINTS_PER_SAVED_WORD = 10;
+export const POINTS_PER_CHALLENGE = 10;
 
 export const RANKING_PERIODS = ["week", "month", "lifetime"] as const;
 export type RankingPeriod = (typeof RANKING_PERIODS)[number];
@@ -57,9 +58,9 @@ export async function awardSavedWordPoints(
 ): Promise<void> {
   try {
     await prisma.$executeRaw`
-      INSERT INTO "PointAward" ("userId", "wordId", "points", "createdAt")
-      VALUES (${userId}, ${wordId}, ${POINTS_PER_SAVED_WORD}, ${createdAt ?? new Date()})
-      ON CONFLICT ("wordId") DO NOTHING
+      INSERT INTO "PointAward" ("userId", "wordId", "points", "source", "dedupeKey", "createdAt")
+      VALUES (${userId}, ${wordId}, ${POINTS_PER_SAVED_WORD}, 'saved_word', ${`saved:${wordId}`}, ${createdAt ?? new Date()})
+      ON CONFLICT ("dedupeKey") DO NOTHING
     `;
   } catch (error) {
     console.error("Falha ao registrar pontos:", error);
@@ -74,9 +75,26 @@ export type RankingEntry = {
   isMe: boolean;
 };
 
+export async function awardFlashcardPoints(
+  userId: number,
+  wordId: number,
+  reviewId: number
+): Promise<void> {
+  try {
+    await prisma.$executeRaw`
+      INSERT INTO "PointAward" ("userId", "wordId", "points", "source", "dedupeKey", "createdAt")
+      VALUES (${userId}, ${wordId}, ${POINTS_PER_CHALLENGE}, 'flashcard', ${`flashcard:${reviewId}`}, ${new Date()})
+      ON CONFLICT ("dedupeKey") DO NOTHING
+    `;
+  } catch (error) {
+    console.error("Falha ao registrar pontos:", error);
+  }
+}
+
 export type RankingBoard = {
   period: RankingPeriod;
   pointsPerWord: number;
+  pointsPerChallenge: number;
   me: { points: number; rank: number | null };
   entries: RankingEntry[];
 };
@@ -131,6 +149,7 @@ export async function getRankingBoard(
   return {
     period,
     pointsPerWord: POINTS_PER_SAVED_WORD,
+    pointsPerChallenge: POINTS_PER_CHALLENGE,
     me: { points: myPoints, rank },
     entries: rows.map((row, index) => ({
       rank: index + 1,

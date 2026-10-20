@@ -96,7 +96,8 @@ export default function RankingPage() {
           Ranking
         </h1>
         <p className="mt-1 text-center text-[15px] text-[#afafaf]">
-          Cada palavra salva vale {data?.pointsPerWord ?? 10} XP.
+          Cada palavra salva vale {data?.pointsPerWord ?? 10} XP. Cada acerto no
+          flashcard vale {data?.pointsPerChallenge ?? 10} XP.
         </p>
 
         <div className="mt-4 flex justify-center gap-6">

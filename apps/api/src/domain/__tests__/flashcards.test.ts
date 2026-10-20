@@ -409,7 +409,7 @@ describe("Flashcards Actions", () => {
         confidence: 2,
       });
       mockPrisma.word.update.mockResolvedValue({});
-      mockPrisma.wordReview.create.mockResolvedValue({});
+      mockPrisma.wordReview.create.mockResolvedValue({ id: 11 });
 
       await recordChallengeResult(1, true, "listen");
 
@@ -427,6 +427,7 @@ describe("Flashcards Actions", () => {
           challenge: "listen",
         },
       });
+      expect(mockPrisma.$executeRaw).toHaveBeenCalled();
     });
 
     it("mantém a confiança entre 1 e 4 no completar", async () => {
@@ -435,7 +436,7 @@ describe("Flashcards Actions", () => {
         confidence: 4,
       });
       mockPrisma.word.update.mockResolvedValue({});
-      mockPrisma.wordReview.create.mockResolvedValue({});
+      mockPrisma.wordReview.create.mockResolvedValue({ id: 12 });
 
       await recordChallengeResult(1, true, "cloze");
 
@@ -480,6 +481,7 @@ describe("Flashcards Actions", () => {
 
       await recordChallengeResult(1, false, "match");
 
+      expect(mockPrisma.$executeRaw).not.toHaveBeenCalled();
       expect(mockPrisma.word.update).toHaveBeenCalledWith({
         where: { id: 1 },
         data: {

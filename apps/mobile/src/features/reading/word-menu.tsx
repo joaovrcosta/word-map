@@ -778,6 +778,63 @@ export function ReadingWordMenu({
       ) : null}
     </View>
   );
+  const contextPanel = (
+    <View style={sheet ? { marginTop: 14 } : styles.contextDock}>
+      {explanation && !explaining ? (
+        <View style={styles.contextBox}>
+          <Pressable disabled={!context} onPress={() => void handleContextualize()}>
+            <Text style={[styles.contextAction, { fontFamily: theme.fonts.semibold }]}>Explicar contexto</Text>
+          </Pressable>
+          {sheet ? (
+            <Text style={[styles.contextBody, { fontFamily: theme.fonts.regular }]}>{explanation}</Text>
+          ) : (
+            <ScrollView style={{ maxHeight: 112 }} nestedScrollEnabled>
+              <Text style={[styles.contextBody, { fontFamily: theme.fonts.regular }]}>{explanation}</Text>
+            </ScrollView>
+          )}
+          {suggestedTranslation ? (
+            <View style={styles.translationRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.section, { fontFamily: theme.fonts.semibold, color: "#c4b5fd" }]}>Tradução</Text>
+                <Text style={[styles.contextBody, { fontFamily: theme.fonts.semibold, color: "#ffffff" }]}>
+                  {suggestedTranslation}
+                </Text>
+              </View>
+              <Pressable
+                disabled={saving || !resolvedVaultId || hasMeaning(selectedMeanings, suggestedTranslation)}
+                onPress={() => void handleAddMeaning(suggestedTranslation)}
+                style={styles.saveChip}
+              >
+                <Ionicons
+                  name={hasMeaning(selectedMeanings, suggestedTranslation) ? "checkmark" : "add"}
+                  size={14}
+                  color="#c4b5fd"
+                />
+                <Text style={{ color: "#c4b5fd", fontFamily: theme.fonts.semibold, fontSize: 12 }}>
+                  {hasMeaning(selectedMeanings, suggestedTranslation) ? "Salva" : "Salvar"}
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
+        </View>
+      ) : (
+        <Pressable
+          disabled={!context || explaining}
+          onPress={() => void handleContextualize()}
+          style={styles.contextButton}
+        >
+          <Ionicons name="sparkles" size={14} color="#c4b5fd" />
+          <Text style={{ color: "#c4b5fd", fontFamily: theme.fonts.semibold, fontSize: 13 }}>
+            {explaining ? "Explicando..." : "Explicar contexto"}
+          </Text>
+        </Pressable>
+      )}
+      {explanationError ? (
+        <Text style={[styles.error, { fontFamily: theme.fonts.regular }]}>{explanationError}</Text>
+      ) : null}
+    </View>
+  );
+  const dockReserve = !sheet && details ? (explanation && !explaining ? 168 : 84) : 36;
 
   return (
     <Modal transparent={!sheet} visible animationType={sheet ? "slide" : "fade"} onRequestClose={onClose} statusBarTranslucent>
@@ -796,7 +853,7 @@ export function ReadingWordMenu({
             <ScrollView
               keyboardShouldPersistTaps="handled"
               bounces={sheet}
-              style={sheet ? { flex: 1 } : { maxHeight: maxCard - 36 }}
+              style={sheet ? { flex: 1 } : { maxHeight: Math.max(140, maxCard - dockReserve) }}
               contentContainerStyle={{ paddingBottom: sheet ? 24 : 8 }}
             >
               <View style={[styles.header, sheet && { paddingHorizontal: 16, paddingTop: 12 }]}>
@@ -996,62 +1053,7 @@ export function ReadingWordMenu({
                       </View>
                     ) : null}
 
-                    <View style={{ marginTop: 14 }}>
-                      {explanation && !explaining ? (
-                        <View style={styles.contextBox}>
-                          <Pressable disabled={!context} onPress={() => void handleContextualize()}>
-                            <Text style={[styles.contextAction, { fontFamily: theme.fonts.semibold }]}>
-                              Explicar contexto
-                            </Text>
-                          </Pressable>
-                          <Text style={[styles.contextBody, { fontFamily: theme.fonts.regular }]}>{explanation}</Text>
-                          {suggestedTranslation ? (
-                            <View style={styles.translationRow}>
-                              <View style={{ flex: 1 }}>
-                                <Text style={[styles.section, { fontFamily: theme.fonts.semibold, color: "#c4b5fd" }]}>
-                                  TraduÃ§Ã£o
-                                </Text>
-                                <Text style={[styles.contextBody, { fontFamily: theme.fonts.semibold, color: "#ffffff" }]}>
-                                  {suggestedTranslation}
-                                </Text>
-                              </View>
-                              <Pressable
-                                disabled={
-                                  saving ||
-                                  !resolvedVaultId ||
-                                  hasMeaning(selectedMeanings, suggestedTranslation)
-                                }
-                                onPress={() => void handleAddMeaning(suggestedTranslation)}
-                                style={styles.saveChip}
-                              >
-                                <Ionicons
-                                  name={hasMeaning(selectedMeanings, suggestedTranslation) ? "checkmark" : "add"}
-                                  size={14}
-                                  color="#c4b5fd"
-                                />
-                                <Text style={{ color: "#c4b5fd", fontFamily: theme.fonts.semibold, fontSize: 12 }}>
-                                  {hasMeaning(selectedMeanings, suggestedTranslation) ? "Salva" : "Salvar"}
-                                </Text>
-                              </Pressable>
-                            </View>
-                          ) : null}
-                        </View>
-                      ) : (
-                        <Pressable
-                          disabled={!context || explaining}
-                          onPress={() => void handleContextualize()}
-                          style={styles.contextButton}
-                        >
-                          <Ionicons name="sparkles" size={14} color="#c4b5fd" />
-                          <Text style={{ color: "#c4b5fd", fontFamily: theme.fonts.semibold, fontSize: 13 }}>
-                            {explaining ? "Explicando..." : "Explicar contexto"}
-                          </Text>
-                        </Pressable>
-                      )}
-                      {explanationError ? (
-                        <Text style={[styles.error, { fontFamily: theme.fonts.regular }]}>{explanationError}</Text>
-                      ) : null}
-                    </View>
+                    {sheet ? contextPanel : null}
 
                     {origins.length > 0 ? (
                       <View style={{ marginTop: 14 }}>
@@ -1096,6 +1098,7 @@ export function ReadingWordMenu({
                 ) : null}
               </View>
             </ScrollView>
+            {details && !sheet ? contextPanel : null}
             {sheet ? (
               <View style={{ paddingBottom: insets.bottom }}>{levelBar}</View>
             ) : (
@@ -1413,6 +1416,13 @@ const styles = StyleSheet.create({
   },
   contextAction: { color: "#c4b5fd", fontSize: 12 },
   contextBody: { color: "#e4e4e7", fontSize: 13, lineHeight: 18, marginTop: 6 },
+  contextDock: {
+    paddingHorizontal: 12,
+    paddingTop: 8,
+    paddingBottom: 4,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: "rgba(255,255,255,0.12)",
+  },
   contextButton: {
     flexDirection: "row",
     alignItems: "center",

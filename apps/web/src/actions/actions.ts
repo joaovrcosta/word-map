@@ -241,6 +241,7 @@ export type RankingPeriod = "week" | "month" | "lifetime";
 export type RankingBoard = {
   period: RankingPeriod;
   pointsPerWord: number;
+  pointsPerChallenge: number;
   me: { points: number; rank: number | null };
   entries: Array<{
     rank: number;

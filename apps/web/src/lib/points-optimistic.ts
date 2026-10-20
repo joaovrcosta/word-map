@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 
 type RankingBoard = {
   pointsPerWord: number;
+  pointsPerChallenge?: number;
   me: { points: number; rank: number | null };
   entries: Array<{
     rank: number;
@@ -13,6 +14,7 @@ type RankingBoard = {
 };
 
 export const POINTS_PER_SAVED_WORD = 10;
+export const POINTS_PER_CHALLENGE = 10;
 
 export const POINTS_DELTA_EVENT = "word-map:points";
 export const POINTS_SYNC_EVENT = "word-map:points-sync";

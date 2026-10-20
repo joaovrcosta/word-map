@@ -93,15 +93,17 @@ model Word {
   passageExplanations WordPassageExplanation[]
   clozes           WordCloze[]
   origins          WordOrigin[]
-  pointAward       PointAward?
+  pointAwards      PointAward[]
   levelMarks       WordLevelMark[]
 }
 
 model PointAward {
   id        Int      @id @default(autoincrement())
   userId    Int
-  wordId    Int?     @unique
+  wordId    Int?
   points    Int
+  source    String   @default("saved_word")
+  dedupeKey String   @unique
   createdAt DateTime @default(now())
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   word      Word?    @relation(fields: [wordId], references: [id], onDelete: SetNull)

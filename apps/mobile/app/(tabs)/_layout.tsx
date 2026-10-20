@@ -58,6 +58,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="vaults" options={{ title: "Vaults", tabBarIcon: () => null }} />
       <Tabs.Screen name="flashcards" options={{ title: "Flashcards", tabBarIcon: () => null }} />
       <Tabs.Screen name="books" options={{ title: "Biblioteca", tabBarIcon: () => null }} />
+      <Tabs.Screen name="ranking" options={{ href: null }} />
     </Tabs>
   );
 }
