@@ -8,18 +8,16 @@ import {
   createFlashcardSession,
   updateWordProgress,
   recordChallengeResult,
-  filterWordsForReview,
   type ChallengeKind,
 } from "@/actions/flashcards";
 import {
   buildFlashcardQueue,
-  type ClozeStep,
+  recognitionRetry,
+  selectPracticeWords,
+  stepWordIds,
   type FlashcardStep,
 } from "@/lib/flashcard-queue";
-import {
-  shouldRecordClozeResult,
-  shouldRequeueCloze,
-} from "@/lib/cloze-text";
+import { shouldRecordClozeResult } from "@/lib/cloze-text";
 import type { ReviewItem } from "@/lib/flashcard-review";
 import {
   requestSessionReview,
@@ -75,8 +73,7 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
     try {
       setLoading(true);
       const flashcardWords = await getFlashcardWords(vaultId);
-      const wordsForReview = await filterWordsForReview(flashcardWords);
-      setWords(wordsForReview);
+      setWords(flashcardWords);
     } catch (error) {
       console.error("Erro ao carregar palavras:", error);
     } finally {
@@ -91,11 +88,16 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
     setStepIndex(nextIndex);
   };
 
-  const startSession = async () => {
+  const startSession = async (practiceAnyway = false) => {
     try {
+      const pool = selectPracticeWords(words, new Date(), practiceAnyway);
+      if (pool.length === 0) return;
       const newSession = await createFlashcardSession(vaultId);
-      const clozes = await requestWordClozes(words.map((word) => word.id));
-      const queue = buildFlashcardQueue(words, Math.random, clozes);
+      const draft = buildFlashcardQueue(pool, Math.random, []);
+      const ids = [...new Set(draft.flatMap(stepWordIds))];
+      const clozes = await requestWordClozes(ids);
+      const queue = buildFlashcardQueue(pool, Math.random, clozes);
+      if (queue.length === 0) return;
       studiedRef.current = 0;
       clozeAttemptsRef.current = new Map();
       outcomesRef.current = [];
@@ -159,37 +161,21 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
   const rememberOutcome = (
     word: FlashcardWord,
     kind: ReviewItem["kind"],
-    result: string
+    result: string,
+    typed?: string
   ) => {
     outcomesRef.current.push({
-      name: word.name,
-      translation: word.translations.find((item) => item.trim())?.trim() ?? "",
+      id: word.id,
       kind,
       result,
+      ...(typed && result === "miss" ? { typed } : {}),
     });
   };
 
-  const finishStep = (
-    wordCount: number,
-    requeue: FlashcardWord[],
-    clozeRetry?: ClozeStep
-  ) => {
+  const finishStep = (wordCount: number, extra: FlashcardStep[] = []) => {
     studiedRef.current += wordCount;
-    let nextSteps = stepsRef.current;
+    const nextSteps = [...stepsRef.current, ...extra];
     const nextIndex = indexRef.current + 1;
-
-    for (const word of requeue) {
-      const alreadyQueued = nextSteps
-        .slice(nextIndex)
-        .some((step) => step.type === "recall" && step.word.id === word.id);
-      if (!alreadyQueued) {
-        nextSteps = [...nextSteps, { type: "recall", word }];
-      }
-    }
-
-    if (clozeRetry) {
-      nextSteps = [...nextSteps, clozeRetry];
-    }
 
     syncQueue(nextSteps, nextIndex);
     setShowAnswer(false);
@@ -202,13 +188,14 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
   const noteChallenge = (
     word: FlashcardWord,
     correct: boolean,
-    kind: ChallengeKind
+    kind: ChallengeKind,
+    typed?: string
   ) => {
     setChallengeStats((stats) => ({
       total: stats.total + 1,
       correct: stats.correct + (correct ? 1 : 0),
     }));
-    rememberOutcome(word, kind, correct ? "ok" : "miss");
+    rememberOutcome(word, kind, correct ? "ok" : "miss", typed);
     if (correct) awardPoints(POINTS_PER_CHALLENGE);
     void recordChallengeResult(word.id, correct, kind)
       .then(() => {
@@ -224,14 +211,17 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
     const step = stepsRef.current[indexRef.current];
     if (!step || step.type !== "recall") return;
 
-    try {
-      await updateWordProgress(step.word.id, confidence, 1);
-    } catch (error) {
-      console.error("Erro ao atualizar progresso:", error);
+    if (!step.retry) {
+      try {
+        await updateWordProgress(step.word.id, confidence, 1);
+      } catch (error) {
+        console.error("Erro ao atualizar progresso:", error);
+      }
+      rememberOutcome(step.word, "recall", String(confidence));
     }
-
-    rememberOutcome(step.word, "recall", String(confidence));
-    finishStep(1, []);
+    const again =
+      !step.retry && confidence <= 2 ? [{ ...step, retry: true as const }] : [];
+    finishStep(step.retry ? 0 : 1, again);
   };
 
   if (loading) {
@@ -265,10 +255,29 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
   }
 
   if (!isSessionActive) {
+    const due = selectPracticeWords(words);
+    if (due.length === 0) {
+      return (
+        <div
+          aria-label={vaultName}
+          className="mx-auto flex max-w-md flex-col items-center py-10 text-center"
+        >
+          <p className="text-[15px] font-extrabold text-[#3c3c3c] dark:text-white">
+            Nada para revisar hoje
+          </p>
+          <button
+            type="button"
+            onClick={() => void startSession(true)}
+            className="mt-8 inline-flex h-12 min-w-[210px] items-center justify-center rounded-2xl bg-[#24c875] px-5 text-sm font-extrabold uppercase tracking-wide text-white hover:brightness-105"
+          >
+            Praticar mesmo assim
+          </button>
+        </div>
+      );
+    }
+    const sessionCount = Math.min(due.length, 10);
     const reviewLabel =
-      words.length === 1
-        ? "1 palavra para revisar"
-        : `${words.length} palavras para revisar`;
+      sessionCount === 1 ? "1 palavra para revisar" : `${sessionCount} palavras para revisar`;
 
     return (
       <div
@@ -280,7 +289,7 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
         </p>
         <button
           type="button"
-          onClick={startSession}
+          onClick={() => void startSession()}
           className="mt-8 inline-flex h-12 min-w-[210px] items-center justify-center rounded-2xl bg-[#24c875] px-5 text-sm font-extrabold uppercase tracking-wide text-white hover:brightness-105"
         >
           Começar
@@ -325,12 +334,12 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
 
       {step?.type === "listen" ? (
         <ListenChallenge
-          key={step.word.id}
+          key={`${step.word.id}-${step.retry ? "retry" : "first"}`}
           word={step.word}
           options={step.options}
-          onAnswer={(correct) => {
-            noteChallenge(step.word, correct, "listen");
-            finishStep(1, correct ? [] : [step.word]);
+          onAnswer={(correct, typed) => {
+            if (!step.retry) noteChallenge(step.word, correct, "listen", typed);
+            finishStep(step.retry ? 0 : 1, !correct && !step.retry ? [{ ...step, retry: true }] : []);
           }}
         />
       ) : null}
@@ -341,18 +350,15 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
           word={step.word}
           sentence={step.sentence}
           answer={step.answer}
-          onAnswer={(correct) => {
+          onAnswer={(correct, typed) => {
             const attempts =
               (clozeAttemptsRef.current.get(step.word.id) ?? 0) + 1;
             clozeAttemptsRef.current.set(step.word.id, attempts);
-            if (shouldRecordClozeResult(attempts)) {
-              noteChallenge(step.word, correct, "cloze");
+            if (!step.retry && shouldRecordClozeResult(attempts)) {
+              noteChallenge(step.word, correct, "cloze", typed);
             }
-            finishStep(
-              shouldRecordClozeResult(attempts) ? 1 : 0,
-              [],
-              shouldRequeueCloze(attempts, correct) ? step : undefined
-            );
+            const counted = !step.retry && shouldRecordClozeResult(attempts);
+            finishStep(counted ? 1 : 0, !correct && !step.retry ? [{ ...step, retry: true }] : []);
           }}
         />
       ) : null}
@@ -361,8 +367,13 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
         <MatchChallenge
           key={step.pairs.map((pair) => pair.word.id).join("-")}
           pairs={step.pairs}
-          onPair={(word, correct) => noteChallenge(word, correct, "match")}
-          onComplete={(missed) => finishStep(step.pairs.length, missed)}
+          onPair={(word, correct, typed) => noteChallenge(word, correct, "match", typed)}
+          onComplete={(missed) =>
+            finishStep(
+              step.pairs.length,
+              missed.map((word) => recognitionRetry(word, words))
+            )
+          }
         />
       ) : null}
     </div>

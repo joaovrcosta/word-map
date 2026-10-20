@@ -5,10 +5,11 @@ import * as Speech from "expo-speech";
 import Animated, { SlideInRight, SlideOutLeft } from "react-native-reanimated";
 import {
   buildFlashcardQueue,
+  recognitionRetry,
+  selectPracticeWords,
   shouldRecordClozeResult,
-  shouldRequeueCloze,
+  stepWordIds,
   type ClozeSource,
-  type ClozeStep,
   type FlashcardStep,
   type FlashcardWord,
 } from "@word-map/shared";
@@ -20,7 +21,7 @@ import { MatchCard } from "./components/match-card";
 import { RecallCard } from "./components/recall-card";
 import { SessionSummary } from "./components/session-summary";
 import { cues, isSoundOn, readSoundEnabled, syncSoundEnabled, useLessonCues, writeSoundEnabled } from "./cues";
-import { LESSON_MAX, focusFromMarks, mixLessonSteps, practiceLine, shuffleItems } from "./lesson-queue";
+import { focusFromMarks, practiceLine } from "./lesson-queue";
 import { ProgressFill, useMotionEnabled } from "./motion";
 import {
   type ChallengeKind,
@@ -31,10 +32,9 @@ import {
   type ReviewItem,
   type ReviewKind,
   type StudySession,
-  type WordFocus,
 } from "./types";
-import { primaryTranslation, toWord } from "./words";
-import { flushSaves, readFocus, writeFocus } from "./saves";
+import { toWord } from "./words";
+import { flushSaves, writeFocus } from "./saves";
 import { useSession } from "../../session";
 import { useTheme } from "../../theme";
 
@@ -92,12 +92,8 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
           if (alive) setVaultName("");
         }
         const flashcardWords = await request<RawWord[]>(`/flashcards/vaults/${vaultId}/words`);
-        const wordsForReview = await request<RawWord[]>("/flashcards/filter", {
-          method: "POST",
-          body: JSON.stringify({ words: flashcardWords }),
-        });
         if (!alive) return;
-        setWords(wordsForReview.map(toWord));
+        setWords(flashcardWords.map(toWord));
       } catch {
         if (!alive) return;
         setWords([]);
@@ -227,25 +223,21 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
       });
   };
 
-  const startSession = async () => {
+  const startSession = async (practiceAnyway = false) => {
     if (starting) return;
     setStarting(true);
     setLoadError(null);
     try {
+      const pool = selectPracticeWords(words, new Date(), practiceAnyway);
+      if (pool.length === 0) return;
       const created = await request<{ vaultName?: string }>("/flashcards/sessions", {
         method: "POST",
         body: JSON.stringify({ vaultId }),
       });
-      const focus = await readFocus(vaultId);
-      const focusedIds = new Set(focus.map((item) => item.id));
-      const shuffled = shuffleItems(words);
-      const pool = [
-        ...shuffled.filter((word) => focusedIds.has(word.id)),
-        ...shuffled.filter((word) => !focusedIds.has(word.id)),
-      ].slice(0, LESSON_MAX);
-      const clozes = await requestClozes(pool.map((word) => word.id));
-      const built = buildFlashcardQueue(pool, Math.random, clozes);
-      const queue = mixLessonSteps(built, focus);
+      const draft = buildFlashcardQueue(pool, Math.random, []);
+      const clozes = await requestClozes([...new Set(draft.flatMap(stepWordIds))]);
+      const queue = buildFlashcardQueue(pool, Math.random, clozes);
+      if (queue.length === 0) return;
       studiedRef.current = 0;
       clozeAttemptsRef.current = new Map();
       outcomesRef.current = [];
@@ -287,33 +279,20 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
     current.current = level;
   };
 
-  const rememberOutcome = (word: FlashcardWord, kind: ReviewKind, result: string) => {
+  const rememberOutcome = (word: FlashcardWord, kind: ReviewKind, result: string, typed?: string) => {
     outcomesRef.current.push({
-      name: word.name,
-      translation: primaryTranslation(word),
+      id: word.id,
       kind,
       result,
+      ...(typed && result === "miss" ? { typed } : {}),
     });
     practiceRef.current.push({ id: word.id, kind, result });
   };
 
-  const finishStep = (wordCount: number, requeue: FlashcardWord[], clozeRetry?: ClozeStep) => {
+  const finishStep = (wordCount: number, extra: FlashcardStep[] = []) => {
     studiedRef.current += wordCount;
-    let nextSteps = stepsRef.current;
+    const nextSteps = [...stepsRef.current, ...extra];
     const nextIndex = indexRef.current + 1;
-
-    for (const word of requeue) {
-      const alreadyQueued = nextSteps
-        .slice(nextIndex)
-        .some((step) => step.type === "recall" && step.word.id === word.id);
-      if (!alreadyQueued) {
-        nextSteps = [...nextSteps, { type: "recall", word }];
-      }
-    }
-
-    if (clozeRetry) {
-      nextSteps = [...nextSteps, clozeRetry];
-    }
 
     syncQueue(nextSteps, nextIndex);
     setShowAnswer(false);
@@ -323,14 +302,14 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
     }
   };
 
-  const noteChallenge = (word: FlashcardWord, correct: boolean, kind: ChallengeKind) => {
+  const noteChallenge = (word: FlashcardWord, correct: boolean, kind: ChallengeKind, typed?: string) => {
     setStreak((current) => (correct ? current + 1 : 0));
     if (correct) setXpToken((current) => current + 1);
     setChallengeStats((stats) => ({
       total: stats.total + 1,
       correct: stats.correct + (correct ? 1 : 0),
     }));
-    rememberOutcome(word, kind, correct ? "ok" : "miss");
+    rememberOutcome(word, kind, correct ? "ok" : "miss", typed);
     const base = levelsRef.current.get(word.id)?.current ?? word.confidence;
     rememberLevel(word, correct ? base + 1 : base - 1);
     pendingSavesRef.current.push({ kind: "result", wordId: word.id, correct, challenge: kind });
@@ -339,10 +318,13 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
   const handleAnswer = (confidence: number) => {
     const step = stepsRef.current[indexRef.current];
     if (!step || step.type !== "recall") return;
-    pendingSavesRef.current.push({ kind: "progress", wordId: step.word.id, confidence });
-    rememberLevel(step.word, confidence);
-    rememberOutcome(step.word, "recall", String(confidence));
-    finishStep(1, []);
+    if (!step.retry) {
+      pendingSavesRef.current.push({ kind: "progress", wordId: step.word.id, confidence });
+      rememberLevel(step.word, confidence);
+      rememberOutcome(step.word, "recall", String(confidence));
+    }
+    const again = !step.retry && confidence <= 2 ? [{ ...step, retry: true as const }] : [];
+    finishStep(step.retry ? 0 : 1, again);
   };
 
   if (loading) {
@@ -423,7 +405,12 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
   }
 
   if (!isSessionActive) {
-    const reviewLabel = words.length === 1 ? "1 palavra para revisar" : `${words.length} palavras para revisar`;
+    const due = selectPracticeWords(words);
+    const reviewLabel = due.length === 0
+      ? "Nada para revisar hoje"
+      : due.length === 1
+        ? "1 palavra para revisar"
+        : `${Math.min(due.length, 10)} palavras para revisar`;
     return (
       <View style={{ flex: 1 }}>
         <View style={{ paddingHorizontal: 8 }}>
@@ -440,7 +427,7 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
         </Text>
         <Pressable
           disabled={starting}
-          onPress={() => void startSession()}
+          onPress={() => void startSession(due.length === 0)}
           style={{
             marginTop: 28,
             minWidth: 210,
@@ -453,7 +440,7 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
           }}
         >
           <Text style={{ color: "#ffffff", fontFamily: theme.fonts.bold, fontSize: 14 }}>
-            {starting ? "COMEÇANDO..." : "COMEÇAR"}
+            {starting ? "COMEÇANDO..." : due.length === 0 ? "PRATICAR MESMO ASSIM" : "COMEÇAR"}
           </Text>
         </Pressable>
         {loadError ? (
@@ -518,9 +505,9 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
           key={`listen-${step.word.id}-${stepIndex}`}
           word={step.word}
           options={step.options}
-          onAnswer={(correct) => {
-            noteChallenge(step.word, correct, "listen");
-            finishStep(1, correct ? [] : [step.word]);
+          onAnswer={(correct, typed) => {
+            if (!step.retry) noteChallenge(step.word, correct, "listen", typed);
+            finishStep(step.retry ? 0 : 1, !correct && !step.retry ? [{ ...step, retry: true }] : []);
           }}
         />
       ) : null}
@@ -530,13 +517,14 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
           word={step.word}
           sentence={step.sentence}
           answer={step.answer}
-          onAnswer={(correct) => {
+          onAnswer={(correct, typed) => {
             const attempts = (clozeAttemptsRef.current.get(step.word.id) ?? 0) + 1;
             clozeAttemptsRef.current.set(step.word.id, attempts);
-            if (shouldRecordClozeResult(attempts)) {
-              noteChallenge(step.word, correct, "cloze");
+            if (!step.retry && shouldRecordClozeResult(attempts)) {
+              noteChallenge(step.word, correct, "cloze", typed);
             }
-            finishStep(shouldRecordClozeResult(attempts) ? 1 : 0, [], shouldRequeueCloze(attempts, correct) ? step : undefined);
+            const counted = !step.retry && shouldRecordClozeResult(attempts);
+            finishStep(counted ? 1 : 0, !correct && !step.retry ? [{ ...step, retry: true }] : []);
           }}
         />
       ) : null}
@@ -544,8 +532,13 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
         <MatchCard
           key={`match-${step.pairs.map((pair) => pair.word.id).join("-")}-${stepIndex}`}
           pairs={step.pairs}
-          onPair={(word, correct) => noteChallenge(word, correct, "match")}
-          onComplete={(missed) => finishStep(step.pairs.length, missed)}
+          onPair={(word, correct, typed) => noteChallenge(word, correct, "match", typed)}
+          onComplete={(missed) =>
+            finishStep(
+              step.pairs.length,
+              missed.map((word) => recognitionRetry(word, words))
+            )
+          }
         />
       ) : null}
       </Animated.View>

@@ -13,7 +13,7 @@ interface ClozeChallengeProps {
   word: FlashcardWord;
   sentence: string;
   answer: string;
-  onAnswer: (correct: boolean) => void;
+  onAnswer: (correct: boolean, typed: string) => void;
 }
 
 export function ClozeChallenge({
@@ -32,7 +32,7 @@ export function ClozeChallenge({
     if (picked !== null) return;
     setPicked(correct);
     playAnswerSound(correct);
-    window.setTimeout(() => onAnswer(correct), 700);
+    window.setTimeout(() => onAnswer(correct, value), 700);
   };
 
   const verify = () => {

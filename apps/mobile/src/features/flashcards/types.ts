@@ -7,10 +7,10 @@ export type PendingSave =
 export type ReviewKind = "recall" | ChallengeKind;
 
 export type ReviewItem = {
-  name: string;
-  translation: string;
+  id: number;
   kind: ReviewKind;
   result: string;
+  typed?: string;
 };
 
 export type LevelShift = {
@@ -35,6 +35,7 @@ export type RawWord = {
   translations: string[];
   confidence: number;
   lastPractice?: string | null;
+  missedLast?: boolean;
   vaultId: number;
   createdAt: string;
   updatedAt: string;

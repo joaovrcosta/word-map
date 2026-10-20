@@ -15,7 +15,7 @@ export type TutorResult = {
 
 export type TutorClient = {
   explain(prompt: string): Promise<TutorResult>;
-  completeJson(prompt: string, maxTokens?: number): Promise<TutorResult>;
+  completeJson(prompt: string, maxTokens?: number, system?: string): Promise<TutorResult>;
 };
 
 export type TutorPromptInput = {
@@ -115,7 +115,7 @@ export function parseTutorExplanation(
 async function requestCompletion(
   fetchImpl: typeof fetch,
   prompt: string,
-  options: { json: boolean; maxTokens: number }
+  options: { json: boolean; maxTokens: number; system?: string }
 ): Promise<TutorResult> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -134,7 +134,10 @@ async function requestCompletion(
         model: TUTOR_MODEL,
         temperature: 0.2,
         max_tokens: options.maxTokens,
-        messages: [{ role: "user", content: prompt }],
+        messages: [
+          ...(options.system ? [{ role: "system", content: options.system }] : []),
+          { role: "user", content: prompt },
+        ],
         ...(options.json
           ? { response_format: { type: "json_object" } }
           : {}),
@@ -180,8 +183,8 @@ export function createOpenAITutor(
     explain(prompt: string) {
       return requestCompletion(fetchImpl, prompt, { json: false, maxTokens: 512 });
     },
-    completeJson(prompt: string, maxTokens = 1200) {
-      return requestCompletion(fetchImpl, prompt, { json: true, maxTokens });
+    completeJson(prompt: string, maxTokens = 1200, system?: string) {
+      return requestCompletion(fetchImpl, prompt, { json: true, maxTokens, system });
     },
   };
 }

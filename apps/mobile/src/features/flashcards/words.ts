@@ -10,6 +10,7 @@ export function toWord(raw: RawWord): FlashcardWord {
     translations: raw.translations ?? [],
     confidence: raw.confidence,
     lastPractice: raw.lastPractice ? new Date(raw.lastPractice) : null,
+    missedLast: raw.missedLast,
     vaultId: raw.vaultId,
     createdAt: new Date(raw.createdAt),
     updatedAt: new Date(raw.updatedAt),

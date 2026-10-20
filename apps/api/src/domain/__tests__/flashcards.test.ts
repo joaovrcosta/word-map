@@ -25,6 +25,7 @@ jest.mock("../../prisma/client", () => ({
       create: jest.fn(),
     },
     $executeRaw: jest.fn().mockResolvedValue(1),
+    $queryRaw: jest.fn().mockResolvedValue([]),
     vault: {
       findUnique: jest.fn(),
     },
@@ -119,7 +120,7 @@ describe("Flashcards Actions", () => {
           createdAt: "asc",
         },
       });
-      expect(result).toEqual(mockWords);
+      expect(result).toEqual(mockWords.map((word) => ({ ...word, missedLast: false })));
     });
 
     it("deve falhar se usuário não estiver autenticado", async () => {
@@ -309,48 +310,29 @@ describe("Flashcards Actions", () => {
   });
 
   describe("calculateNextReview", () => {
-    it("deve calcular próximo review para palavra bem conhecida", async () => {
-      const now = new Date();
-      const result = await calculateNextReview(4, 3, 2.5);
+    function expectInterval(confidence: number, days: number) {
+      const result = calculateNextReview(confidence, 1, 2.5);
+      return result.then((date) => {
+        const expected = new Date();
+        expected.setDate(expected.getDate() + days);
+        expect(date.toDateString()).toBe(expected.toDateString());
+      });
+    }
 
-      const expectedDate = new Date(now);
-      expectedDate.setDate(now.getDate() + Math.max(1, Math.floor(2.5 * 3)));
-
-      expect(result.getTime()).toBeGreaterThanOrEqual(expectedDate.getTime());
+    it("revisa o nível 4 depois de 21 dias", async () => {
+      await expectInterval(4, 21);
     });
 
-    it("deve calcular próximo review para palavra conhecida", async () => {
-      const now = new Date();
-      const result = await calculateNextReview(3, 2, 2.5);
-
-      const expectedDate = new Date(now);
-      expectedDate.setDate(
-        now.getDate() + Math.max(1, Math.floor(2.5 * 2 * 0.7))
-      );
-
-      expect(result.getTime()).toBeGreaterThanOrEqual(expectedDate.getTime());
+    it("revisa o nível 3 depois de 7 dias", async () => {
+      await expectInterval(3, 7);
     });
 
-    it("deve calcular próximo review para palavra com dificuldade", async () => {
-      const now = new Date();
-      const result = await calculateNextReview(2, 1, 2.5);
-
-      const expectedDate = new Date(now);
-      expectedDate.setDate(
-        now.getDate() + Math.max(1, Math.floor(2.5 * 1 * 0.5))
-      );
-
-      expect(result.getTime()).toBeGreaterThanOrEqual(expectedDate.getTime());
+    it("revisa o nível 2 depois de 3 dias", async () => {
+      await expectInterval(2, 3);
     });
 
-    it("deve calcular próximo review para palavra difícil", async () => {
-      const now = new Date();
-      const result = await calculateNextReview(1, 0, 2.5);
-
-      const expectedDate = new Date(now);
-      expectedDate.setDate(now.getDate() + 1);
-
-      expect(result.getTime()).toBeGreaterThanOrEqual(expectedDate.getTime());
+    it("revisa o nível 1 depois de 1 dia", async () => {
+      await expectInterval(1, 1);
     });
   });
 
@@ -365,7 +347,7 @@ describe("Flashcards Actions", () => {
       updatedAt: new Date(),
     };
 
-    it("deve incluir palavra nova e palavra nunca praticada", async () => {
+    it("inclui palavra nunca praticada e deixa o nível 1 de hoje para amanhã", async () => {
       const mockWords: FlashcardWord[] = [
         { ...baseWord, id: 1, confidence: 1, lastPractice: new Date() },
         { ...baseWord, id: 2, name: "goodbye", confidence: 3 },
@@ -373,12 +355,12 @@ describe("Flashcards Actions", () => {
 
       const result = await filterWordsForReview(mockWords);
 
-      expect(result.map((word) => word.id)).toEqual([1, 2]);
+      expect(result.map((word) => word.id)).toEqual([2]);
     });
 
     it("deve deixar de fora palavra fácil praticada há pouco", async () => {
       const recent = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000);
-      const due = new Date(Date.now() - 8 * 24 * 60 * 60 * 1000);
+      const due = new Date(Date.now() - 40 * 24 * 60 * 60 * 1000);
       const mockWords: FlashcardWord[] = [
         { ...baseWord, id: 1, confidence: 4, lastPractice: recent },
         {

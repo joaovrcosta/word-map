@@ -25,9 +25,16 @@ import {
   primaryTranslation,
 } from "../lib/cloze";
 import {
-  buildReviewPrompt,
-  parseReviewResponse,
+  REVIEW_MAX_TOKENS,
+  REVIEW_SYSTEM_PROMPT,
+  buildSessionReview,
+  parseReviewActions,
+  readReviewCache,
   readReviewItems,
+  renderReview,
+  reviewCacheKey,
+  writeReviewCache,
+  type ReviewWord,
 } from "../lib/flashcard-review";
 import { createOpenAITutor } from "../lib/tutor";
 import { consumeTutorQuota, refundTutorQuota } from "../lib/tutor-quota";
@@ -146,22 +153,57 @@ export async function reviewSession(itemsInput: unknown) {
   const items = readReviewItems(itemsInput);
   if (!items) fail(400, "Lista inválida");
 
+  const ids = [...new Set(items.map((item) => item.id))];
+  const rows = await prisma.word.findMany({
+    where: { id: { in: ids }, vault: { userId: user.id } },
+    select: { id: true, name: true, translations: true },
+  });
+  const words = new Map<number, ReviewWord>(
+    rows.map((row) => [
+      row.id,
+      {
+        id: row.id,
+        name: row.name,
+        translation: row.translations.find((item) => item.trim())?.trim() ?? "",
+      },
+    ])
+  );
+  const review = buildSessionReview(items, words);
+  if (!review.shouldCallModel) return { text: review.text };
+
+  const key = reviewCacheKey(user.id, review.normalized);
+  const cached = readReviewCache(key);
+  if (cached) return { text: cached };
+
   const allowed = await consumeTutorQuota(user.id);
-  if (!allowed) fail(429, "Muitas explicações em pouco tempo.");
+  if (!allowed) return { text: review.text };
 
   try {
-    const result = await createOpenAITutor().completeJson(buildReviewPrompt(items), 400);
+    const result = await createOpenAITutor().completeJson(
+      review.userPrompt,
+      REVIEW_MAX_TOKENS,
+      REVIEW_SYSTEM_PROMPT
+    );
     if (result.blocked || result.truncated || !result.text) {
-      fail(502, "Não foi possível analisar a sessão.");
+      await refundTutorQuota(user.id);
+      writeReviewCache(key, review.text);
+      return { text: review.text };
     }
-    const parsed = parseReviewResponse(result.text);
-    if (!parsed.ok) fail(502, "Não foi possível analisar a sessão.");
-    return { text: parsed.text };
+    const actions = parseReviewActions(result.text, review.allowedIds);
+    if (!actions) {
+      await refundTutorQuota(user.id);
+      writeReviewCache(key, review.text);
+      return { text: review.text };
+    }
+    const text = renderReview(review, actions);
+    writeReviewCache(key, text);
+    return { text };
   } catch (error) {
     if (error instanceof HttpException) throw error;
     console.error("Falha ao analisar sessão:", error);
     await refundTutorQuota(user.id);
-    fail(502, "Não foi possível analisar a sessão.");
+    writeReviewCache(key, review.text);
+    return { text: review.text };
   }
 }
 

@@ -16,7 +16,7 @@ export function ClozeCard({
   word: FlashcardWord;
   sentence: string;
   answer: string;
-  onAnswer: (correct: boolean) => void;
+  onAnswer: (correct: boolean, typed: string) => void;
 }) {
   const theme = useTheme();
   const [value, setValue] = useState("");
@@ -118,7 +118,7 @@ export function ClozeCard({
           answer={answer}
           onContinue={() => {
             if (!aliveRef.current) return;
-            onAnswer(picked);
+            onAnswer(picked, value);
           }}
         />
       ) : null}

@@ -75,7 +75,7 @@ export function MatchCard({
   onComplete,
 }: {
   pairs: MatchPair[];
-  onPair: (word: FlashcardWord, correct: boolean) => void;
+  onPair: (word: FlashcardWord, correct: boolean, typed?: string) => void;
   onComplete: (missed: FlashcardWord[]) => void;
 }) {
   const theme = useTheme();
@@ -98,11 +98,11 @@ export function MatchCard({
     };
   }, []);
 
-  const mark = (word: FlashcardWord, correct: boolean) => {
+  const mark = (word: FlashcardWord, correct: boolean, typed?: string) => {
     if (scoredRef.current.has(word.id)) return;
     scoredRef.current.add(word.id);
     if (!correct) missedRef.current = [...missedRef.current, word];
-    onPair(word, correct);
+    onPair(word, correct, typed);
   };
 
   const resolve = (translationId: number, wordId: number) => {
@@ -120,7 +120,8 @@ export function MatchCard({
     }
     setWrongIds([translationId, wordId]);
     cues.wrong();
-    mark(pair.word, false);
+    const other = pairs.find((item) => item.word.id === wordId);
+    mark(pair.word, false, other?.word.name);
     setTimeout(() => {
       setSelectedTranslation(null);
       setSelectedWord(null);

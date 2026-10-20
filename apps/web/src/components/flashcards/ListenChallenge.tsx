@@ -9,7 +9,7 @@ import { AnswerBurst, playAnswerSound } from "./answer-feedback";
 interface ListenChallengeProps {
   word: FlashcardWord;
   options: string[];
-  onAnswer: (correct: boolean) => void;
+  onAnswer: (correct: boolean, typed: string) => void;
 }
 
 export function ListenChallenge({
@@ -37,7 +37,7 @@ export function ListenChallenge({
     playAnswerSound(isCorrect);
     window.setTimeout(() => {
       if (!aliveRef.current) return;
-      onAnswer(isCorrect);
+      onAnswer(isCorrect, option);
     }, 700);
   };
 

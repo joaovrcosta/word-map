@@ -6,6 +6,7 @@ export interface FlashcardWord {
   translations: string[];
   confidence: number;
   lastPractice?: Date | null;
+  missedLast?: boolean;
   vaultId: number;
   createdAt: Date;
   updatedAt: Date;

@@ -19,7 +19,7 @@ export function ListenCard({
 }: {
   word: FlashcardWord;
   options: string[];
-  onAnswer: (correct: boolean) => void;
+  onAnswer: (correct: boolean, typed: string) => void;
 }) {
   const theme = useTheme();
   const motion = useMotionEnabled();
@@ -112,7 +112,7 @@ export function ListenCard({
           answer={primaryTranslation(word)}
           onContinue={() => {
             if (!aliveRef.current) return;
-            onAnswer(picked.trim().toLowerCase() === correct);
+            onAnswer(picked.trim().toLowerCase() === correct, picked);
           }}
         />
       ) : null}

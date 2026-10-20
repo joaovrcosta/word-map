@@ -1,6 +1,7 @@
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma/client";
-import { isWordDue } from "@word-map/shared/flashcard-schedule";
+import { isWordDue, reviewIntervalDays } from "@word-map/shared/flashcard-schedule";
 import { revalidatePath } from "../common/revalidate";
 import { getCurrentUser } from "../auth/current-user";
 import { awardFlashcardPoints } from "../lib/points";
@@ -14,6 +15,7 @@ export interface FlashcardWord {
   translations: string[];
   confidence: number;
   lastPractice?: Date | null;
+  missedLast?: boolean;
   vaultId: number;
   createdAt: Date;
   updatedAt: Date;
@@ -78,7 +80,21 @@ export async function getFlashcardWords(
       },
     });
 
-    return words;
+    const ids = words.map((word) => word.id);
+    const missed = new Set<number>();
+    if (ids.length > 0) {
+      const latest = await prisma.$queryRaw<Array<{ wordId: number; correct: boolean }>>`
+        SELECT DISTINCT ON (r."wordId") r."wordId" AS "wordId", r.correct
+        FROM "WordReview" r
+        WHERE r."wordId" IN (${Prisma.join(ids)})
+        ORDER BY r."wordId", r."createdAt" DESC
+      `;
+      for (const row of latest) {
+        if (!row.correct) missed.add(row.wordId);
+      }
+    }
+
+    return words.map((word) => ({ ...word, missedLast: missed.has(word.id) }));
   } catch (error) {
     console.error("Erro ao buscar palavras para flashcards:", error);
     throw new Error("Erro ao buscar palavras para flashcards");
@@ -262,21 +278,9 @@ export async function calculateNextReview(
   easeFactor: number = 2.5
 ): Promise<Date> {
   const now = new Date();
-  let interval: number;
-
-  if (currentConfidence >= 4) {
-    // Palavra bem conhecida - intervalo maior
-    interval = Math.max(1, Math.floor(easeFactor * reviewCount));
-  } else if (currentConfidence >= 3) {
-    // Palavra conhecida - intervalo médio
-    interval = Math.max(1, Math.floor(easeFactor * reviewCount * 0.7));
-  } else if (currentConfidence >= 2) {
-    // Palavra com dificuldade - intervalo menor
-    interval = Math.max(1, Math.floor(easeFactor * reviewCount * 0.5));
-  } else {
-    // Palavra difícil - revisar em breve
-    interval = 1;
-  }
+  const interval = reviewIntervalDays(currentConfidence);
+  void reviewCount;
+  void easeFactor;
 
   const nextReview = new Date(now);
   nextReview.setDate(now.getDate() + interval);

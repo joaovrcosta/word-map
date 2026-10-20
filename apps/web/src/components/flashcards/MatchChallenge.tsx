@@ -9,7 +9,7 @@ import { AnswerBurst, playAnswerSound, pulseClass } from "./answer-feedback";
 
 interface MatchChallengeProps {
   pairs: MatchPair[];
-  onPair: (word: FlashcardWord, correct: boolean) => void;
+  onPair: (word: FlashcardWord, correct: boolean, typed?: string) => void;
   onComplete: (missed: FlashcardWord[]) => void;
 }
 
@@ -52,11 +52,11 @@ export function MatchChallenge({
     return () => window.clearTimeout(timer);
   }, [burstKey]);
 
-  const mark = (word: FlashcardWord, correct: boolean) => {
+  const mark = (word: FlashcardWord, correct: boolean, typed?: string) => {
     if (scoredRef.current.has(word.id)) return;
     scoredRef.current.add(word.id);
     if (!correct) missedRef.current = [...missedRef.current, word];
-    onPair(word, correct);
+    onPair(word, correct, typed);
   };
 
   const selectAudio = (word: FlashcardWord) => {
@@ -93,7 +93,7 @@ export function MatchChallenge({
 
     setWrongChoiceId(choice.word.id);
     playAnswerSound(false);
-    mark(audio.word, false);
+    mark(audio.word, false, choice.translation);
     window.setTimeout(() => {
       setSelectedId(null);
       setWrongChoiceId(null);
