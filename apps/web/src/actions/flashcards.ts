@@ -41,6 +41,7 @@ import { browserApi } from "@/lib/api/resources";
 export const getFlashcardWords = browserApi.getFlashcardWords as (
   vaultId: number
 ) => Promise<FlashcardWord[]>;
+export const getAllFlashcardWords = browserApi.getAllFlashcardWords as () => Promise<FlashcardWord[]>;
 export const getVaultForFlashcards = browserApi.getVaultForFlashcards as (
   vaultId: number
 ) => Promise<{ id: number; name: string; totalWords: number; words: FlashcardWord[] }>;

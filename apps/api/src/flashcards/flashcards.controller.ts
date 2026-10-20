@@ -55,6 +55,11 @@ class SessionDto {
 export class FlashcardsController {
   constructor(private readonly flashcards: FlashcardsService) {}
 
+  @Get("words")
+  allWords() {
+    return this.flashcards.allWords();
+  }
+
   @Get("vaults/:id/words")
   words(@Param("id", ParseIntPipe) id: number) {
     return this.flashcards.words(id);

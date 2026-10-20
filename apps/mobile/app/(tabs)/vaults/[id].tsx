@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -19,6 +19,7 @@ import {
   type Vault,
   type Word,
 } from "../../../src/types";
+import { ReadingWordMenu, type SavedReadingWord } from "../../../src/features/reading/word-menu";
 import { ErrorText, Field, Heading, Loading, Muted, PrimaryButton, Screen } from "../../../src/ui";
 
 const LEVELS = [brand.level1, brand.level2, brand.level3, brand.level4];
@@ -35,13 +36,16 @@ function blankDraft(): Draft {
   return { id: null, name: "", translation: "", grammaticalClass: "substantivo", confidence: 1 };
 }
 
-function draftFromWord(word: Word): Draft {
+function savedFromWord(word: Word, vaultName: string): SavedReadingWord {
   return {
     id: word.id,
     name: word.name,
-    translation: word.translations.join(", "),
-    grammaticalClass: word.grammaticalClass || "substantivo",
-    confidence: Math.min(4, Math.max(1, word.confidence || 1)),
+    vaultId: word.vaultId,
+    vaultName,
+    translations: word.translations,
+    grammaticalClass: word.grammaticalClass,
+    confidence: word.confidence,
+    notes: word.notes ?? null,
   };
 }
 
@@ -66,7 +70,20 @@ export default function VaultDetailScreen() {
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draft, setDraft] = useState<Draft | null>(null);
+  const [opened, setOpened] = useState<Word | null>(null);
+  const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
+
+  const words = useMemo(() => {
+    if (!vault) return [];
+    const term = query.trim().toLowerCase();
+    if (!term) return vault.words;
+    return vault.words.filter(
+      (word) =>
+        word.name.toLowerCase().includes(term) ||
+        word.translations.some((item) => item.toLowerCase().includes(term))
+    );
+  }, [vault, query]);
 
   const load = useCallback(async () => {
     try {
@@ -170,16 +187,29 @@ export default function VaultDetailScreen() {
         </View>
       ) : null}
       {vault && vault.words.length > 0 ? (
+        <Field
+          value={query}
+          onChangeText={setQuery}
+          placeholder="Pesquisar palavra"
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
+      ) : null}
+      {vault && vault.words.length > 0 && words.length === 0 ? (
+        <Muted>Nenhuma palavra encontrada.</Muted>
+      ) : null}
+      {vault && words.length > 0 ? (
         <FlatList
-          data={vault.words}
+          data={words}
           keyExtractor={(item) => String(item.id)}
           style={{ marginTop: 8, flex: 1 }}
+          keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => {
             const level = Math.min(4, Math.max(1, item.confidence || 1));
             const translation = item.translations.filter(Boolean).join(", ");
             return (
               <Pressable
-                onPress={() => setDraft(draftFromWord(item))}
+                onPress={() => setOpened(item)}
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
@@ -220,6 +250,22 @@ export default function VaultDetailScreen() {
               </Pressable>
             );
           }}
+        />
+      ) : null}
+      {vault && opened ? (
+        <ReadingWordMenu
+          clean={opened.name}
+          anchor={{ x: 0, y: 0, width: 0, height: 0 }}
+          sourceText=""
+          chapterContent=""
+          pages={[]}
+          pageIndex={0}
+          bookTitle=""
+          saved={savedFromWord(opened, vault.name)}
+          vaults={[vault]}
+          full
+          onClose={() => setOpened(null)}
+          onChanged={load}
         />
       ) : null}
       <Modal animationType="slide" transparent visible={draft != null} onRequestClose={() => setDraft(null)}>

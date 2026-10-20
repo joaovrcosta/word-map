@@ -164,6 +164,7 @@ export function createResources(request: Request) {
 
     getFlashcardWords: (vaultId: number) =>
       request("GET", `/flashcards/vaults/${vaultId}/words`),
+    getAllFlashcardWords: () => request("GET", "/flashcards/words"),
     getVaultForFlashcards: (vaultId: number) =>
       request("GET", `/flashcards/vaults/${vaultId}`),
     updateWordProgress: (

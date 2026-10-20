@@ -45,12 +45,8 @@ export interface FlashcardSession {
   endTime?: Date;
 }
 
-// Buscar palavras de um vault específico para flashcards
-export async function getFlashcardWords(
-  vaultId: number
-): Promise<FlashcardWord[]> {
+async function listFlashcardWords(vaultId?: number): Promise<FlashcardWord[]> {
   try {
-    // Verificar se o usuário está autenticado
     const user = await getCurrentUser();
     if (!user) {
       throw new Error("Usuário não autenticado");
@@ -58,7 +54,7 @@ export async function getFlashcardWords(
 
     const words = await prisma.word.findMany({
       where: {
-        vaultId: vaultId,
+        ...(vaultId ? { vaultId } : {}),
         vault: {
           userId: user.id,
         },
@@ -99,6 +95,14 @@ export async function getFlashcardWords(
     console.error("Erro ao buscar palavras para flashcards:", error);
     throw new Error("Erro ao buscar palavras para flashcards");
   }
+}
+
+export function getFlashcardWords(vaultId: number): Promise<FlashcardWord[]> {
+  return listFlashcardWords(vaultId);
+}
+
+export function getAllFlashcardWords(): Promise<FlashcardWord[]> {
+  return listFlashcardWords();
 }
 
 // Buscar informações do vault para flashcards

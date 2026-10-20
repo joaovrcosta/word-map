@@ -161,8 +161,7 @@ export function selectPracticeWords<T extends FlashcardWord>(
       .sort(
         (left, right) =>
           daysUntilDue(left, now) - daysUntilDue(right, now) || left.id - right.id
-      )
-      .slice(0, SESSION_CARDS);
+      );
   }
 
   const ranked = [...due].sort(
@@ -190,8 +189,8 @@ function matchStep(group: FlashcardWord[]): MatchStep {
   };
 }
 
-function canMatch(group: FlashcardWord[]) {
-  if (group.length < 4) return false;
+function canMatch(group: FlashcardWord[], min = 4) {
+  if (group.length < min) return false;
   const seen = new Set<string>();
   for (const word of group) {
     const translation = primaryTranslation(word);
@@ -230,15 +229,46 @@ export function buildFlashcardQueue(
   const steps: FlashcardStep[] = [];
   const clozeById = new Map(clozes.map((cloze) => [cloze.wordId, cloze]));
   const buffer: Array<{ word: FlashcardWord; fresh: boolean }> = [];
+  const introduced: FlashcardWord[] = [];
+  const matchedIds = new Set<number>();
   let fresh = 0;
 
+  const clozeStep = (word: FlashcardWord): ClozeStep | null => {
+    const cloze = clozeById.get(word.id);
+    if (!cloze || !isSingleWordName(word.name)) return null;
+    return { type: "cloze", word, sentence: cloze.sentence, answer: cloze.answer };
+  };
+
+  const push = (step: FlashcardStep) => {
+    if (steps.length >= SESSION_CARDS) return false;
+    steps.push(step);
+    return true;
+  };
+
+  const followFresh = (list: FlashcardWord[]) => {
+    const unmatched = list.filter((word) => !matchedIds.has(word.id));
+    if (unmatched.length >= 2 && canMatch(unmatched, 2)) {
+      push(matchStep(unmatched));
+    }
+    for (const word of list) {
+      const listen = listenOrRecall(word, words, random);
+      if (listen.type === "listen") push(listen);
+    }
+    for (const word of list) {
+      const cloze = clozeStep(word);
+      if (cloze) push(cloze);
+    }
+  };
+
   const emitMatch = () => {
-    const group = buffer.splice(0, 4).map((item) => item.word);
+    const items = buffer.splice(0, 4);
+    const group = items.map((item) => item.word);
     if (!canMatch(group) || steps.length >= SESSION_CARDS) {
-      buffer.unshift(...group.map((word) => ({ word, fresh: !word.lastPractice })));
+      buffer.unshift(...items);
       return false;
     }
-    steps.push(matchStep(group));
+    push(matchStep(group));
+    for (const word of group) matchedIds.add(word.id);
     return true;
   };
 
@@ -247,13 +277,10 @@ export function buildFlashcardQueue(
       if (!emitMatch()) break;
     }
     for (const item of buffer.splice(0)) {
-      if (steps.length >= SESSION_CARDS) break;
-      steps.push(
-        item.fresh
-          ? { type: "recall", word: item.word }
-          : listenOrRecall(item.word, words, random)
-      );
+      if (item.fresh) continue;
+      push(listenOrRecall(item.word, words, random));
     }
+    followFresh(introduced);
   };
 
   for (const word of words) {
@@ -261,6 +288,7 @@ export function buildFlashcardQueue(
     if (!word.lastPractice) {
       if (fresh >= NEW_WORD_LIMIT) continue;
       fresh += 1;
+      if (push({ type: "recall", word })) introduced.push(word);
       buffer.push({ word, fresh: true });
       if (buffer.length === 4) emitMatch();
       continue;

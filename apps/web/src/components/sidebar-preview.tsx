@@ -44,11 +44,11 @@ export function SidebarPreview() {
       description: "Gerencie seus cofres de palavras",
     },
     {
-      name: "Flashcards",
+      name: "Treino",
       path: "/home/flashcards",
       icon: Brain,
       badge: 12,
-      description: "Pratique com flashcards",
+      description: "Pratique com todas as palavras",
     },
     {
       name: "Textos",

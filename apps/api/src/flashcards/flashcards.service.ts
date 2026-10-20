@@ -4,6 +4,7 @@ import {
   calculateNextReview,
   createFlashcardSession,
   filterWordsForReview,
+  getAllFlashcardWords,
   getFlashcardWords,
   getVaultForFlashcards,
   recordChallengeResult,
@@ -213,6 +214,10 @@ export class FlashcardsService {
 
   words(vaultId: number) {
     return getFlashcardWords(vaultId);
+  }
+
+  allWords() {
+    return getAllFlashcardWords();
   }
 
   vault(vaultId: number) {

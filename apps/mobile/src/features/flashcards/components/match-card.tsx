@@ -1,11 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { Text, View } from "react-native";
-import Animated, { useAnimatedStyle, useSharedValue, withDelay, withSequence, withTiming } from "react-native-reanimated";
+import { Pressable, Text, View } from "react-native";
 import { type FlashcardWord, type MatchPair } from "@word-map/shared";
 import { useTheme } from "../../../theme";
 import { cues } from "../cues";
-import { MotionFrame, ShakeView, useMotionEnabled } from "../motion";
-import { BUTTON_EDGE, DuoButton, PressScale } from "./duo-button";
+import { MotionFrame, ShakeView } from "../motion";
+import { BUTTON_EDGE, DuoButton } from "./duo-button";
 import { shufflePairs } from "../lesson-queue";
 
 function MatchTile({
@@ -22,49 +21,28 @@ function MatchTile({
   onPress: () => void;
 }) {
   const theme = useTheme();
-  const motion = useMotionEnabled();
-  const scale = useSharedValue(1);
-  const opacity = useSharedValue(1);
-
-  useEffect(() => {
-    if (!done) return;
-    if (!motion) {
-      opacity.value = 0;
-      return;
-    }
-    scale.value = withSequence(withTiming(1.08, { duration: 120 }), withTiming(0, { duration: 180 }));
-    opacity.value = withDelay(120, withTiming(0, { duration: 180 }));
-  }, [done, motion, opacity, scale]);
-
-  const animated = useAnimatedStyle(() => ({
-    opacity: opacity.value,
-    transform: [{ scale: scale.value }],
-  }));
+  const dark = theme.name === "dark";
 
   return (
     <ShakeView active={wrong}>
-      <View style={{ height: 76 }}>
-        <Animated.View style={[{ flex: 1 }, animated]}>
-          <PressScale
-            disabled={done}
-            onPress={onPress}
-            style={{
-              flex: 1,
-              borderRadius: 16,
-              borderWidth: 2,
-              borderColor: wrong ? theme.colors.destructive : done || selected ? theme.colors.green : theme.colors.border,
-              backgroundColor: done ? theme.colors.greenSoft : "transparent",
-              alignItems: "center",
-              justifyContent: "center",
-              paddingHorizontal: 10,
-            }}
-          >
-            <Text numberOfLines={3} style={{ color: theme.colors.foreground, fontFamily: theme.fonts.medium, fontSize: 15, textAlign: "center" }}>
-              {label}
-            </Text>
-          </PressScale>
-        </Animated.View>
-      </View>
+      <Pressable
+        disabled={done}
+        onPress={onPress}
+        style={{
+          height: 76,
+          borderRadius: 16,
+          borderWidth: 2,
+          borderColor: wrong ? theme.colors.destructive : done || selected ? theme.colors.green : theme.colors.border,
+          backgroundColor: done ? theme.colors.greenSoft : dark ? "#21262d" : "#ffffff",
+          alignItems: "center",
+          justifyContent: "center",
+          paddingHorizontal: 10,
+        }}
+      >
+        <Text numberOfLines={3} style={{ color: dark ? "#ffffff" : theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 16, textAlign: "center" }}>
+          {label}
+        </Text>
+      </Pressable>
     </ShakeView>
   );
 }
@@ -164,7 +142,7 @@ export function MatchCard({
           {translations.map((pair) =>
             renderTile(
               pair.word.id,
-              pair.translation,
+              pair.translation.trim() || pair.word.translations.find((item) => item.trim())?.trim() || pair.word.name,
               () => pickTranslation(pair.word.id),
               selectedTranslation === pair.word.id
             )

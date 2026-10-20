@@ -43,7 +43,15 @@ import { useTheme } from "../../theme";
 
 
 
-export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: () => void }) {
+export function FlashcardDeck({
+  vaultId,
+  onLeave,
+  autostart = false,
+}: {
+  vaultId?: number;
+  onLeave: () => void;
+  autostart?: boolean;
+}) {
   const theme = useTheme();
   const motion = useMotionEnabled();
   const { request } = useSession();
@@ -77,6 +85,7 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
   const reviewTokenRef = useRef(0);
   const pendingSavesRef = useRef<PendingSave[]>([]);
   const levelsRef = useRef<Map<number, { id: number; name: string; start: number; current: number }>>(new Map());
+  const autostartRef = useRef(false);
 
   useEffect(() => {
     let alive = true;
@@ -85,13 +94,19 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
       setLoading(true);
       setLoadError(null);
       try {
-        try {
-          const vault = await request<{ name: string }>(`/flashcards/vaults/${vaultId}`);
-          if (alive) setVaultName(vault.name);
-        } catch {
-          if (alive) setVaultName("");
+        if (vaultId) {
+          try {
+            const vault = await request<{ name: string }>(`/flashcards/vaults/${vaultId}`);
+            if (alive) setVaultName(vault.name);
+          } catch {
+            if (alive) setVaultName("");
+          }
+        } else if (alive) {
+          setVaultName("Treino");
         }
-        const flashcardWords = await request<RawWord[]>(`/flashcards/vaults/${vaultId}/words`);
+        const flashcardWords = await request<RawWord[]>(
+          vaultId ? `/flashcards/vaults/${vaultId}/words` : "/flashcards/words"
+        );
         if (!alive) return;
         setWords(flashcardWords.map(toWord));
       } catch {
@@ -188,7 +203,7 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
     if (practiceRef.current.length > 0) {
       const focus = focusFromMarks(practiceRef.current);
       setNextPractice(practiceLine(focus));
-      void writeFocus(vaultId, focus).catch(() => undefined);
+      if (vaultId) void writeFocus(vaultId, focus).catch(() => undefined);
     } else {
       setNextPractice(null);
     }
@@ -230,14 +245,19 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
     try {
       const pool = selectPracticeWords(words, new Date(), practiceAnyway);
       if (pool.length === 0) return;
-      const created = await request<{ vaultName?: string }>("/flashcards/sessions", {
-        method: "POST",
-        body: JSON.stringify({ vaultId }),
-      });
       const draft = buildFlashcardQueue(pool, Math.random, []);
       const clozes = await requestClozes([...new Set(draft.flatMap(stepWordIds))]);
       const queue = buildFlashcardQueue(pool, Math.random, clozes);
-      if (queue.length === 0) return;
+      if (queue.length === 0) {
+        setLoadError("Não há palavras para treinar.");
+        return;
+      }
+      const created = vaultId
+        ? await request<{ vaultName?: string }>("/flashcards/sessions", {
+            method: "POST",
+            body: JSON.stringify({ vaultId }),
+          })
+        : { vaultName: "Treino" };
       studiedRef.current = 0;
       clozeAttemptsRef.current = new Map();
       outcomesRef.current = [];
@@ -268,6 +288,12 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
       setStarting(false);
     }
   };
+
+  useEffect(() => {
+    if (!autostart || loading || autostartRef.current || words.length === 0) return;
+    autostartRef.current = true;
+    void startSession(selectPracticeWords(words).length === 0);
+  }, [autostart, loading, words]);
 
   const rememberLevel = (word: FlashcardWord, next: number) => {
     const level = Math.min(4, Math.max(1, next));
@@ -400,6 +426,14 @@ export function FlashcardDeck({ vaultId, onLeave }: { vaultId: number; onLeave: 
           void startSession();
         }}
       />
+      </View>
+    );
+  }
+
+  if (autostart && !isSessionActive && !showSummary && words.length > 0 && !loadError) {
+    return (
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator color={theme.colors.green} />
       </View>
     );
   }

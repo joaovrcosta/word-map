@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   FlashcardWord,
   FlashcardSession,
+  getAllFlashcardWords,
   getFlashcardWords,
   createFlashcardSession,
   updateWordProgress,
@@ -37,11 +38,12 @@ import { SessionSummary } from "./SessionSummary";
 import { FlashcardDeckSkeleton } from "./FlashcardDeckSkeleton";
 
 interface FlashcardDeckProps {
-  vaultId: number;
-  vaultName: string;
+  vaultId?: number;
+  vaultName?: string;
+  autostart?: boolean;
 }
 
-export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
+export function FlashcardDeck({ vaultId, vaultName = "Treino", autostart = false }: FlashcardDeckProps) {
   const [words, setWords] = useState<FlashcardWord[]>([]);
   const [session, setSession] = useState<FlashcardSession | null>(null);
   const [steps, setSteps] = useState<FlashcardStep[]>([]);
@@ -64,6 +66,7 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
   const clozeAttemptsRef = useRef<Map<number, number>>(new Map());
   const outcomesRef = useRef<ReviewItem[]>([]);
   const reviewTokenRef = useRef(0);
+  const autostartRef = useRef(false);
 
   useEffect(() => {
     loadWords();
@@ -72,7 +75,7 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
   const loadWords = async () => {
     try {
       setLoading(true);
-      const flashcardWords = await getFlashcardWords(vaultId);
+      const flashcardWords = vaultId ? await getFlashcardWords(vaultId) : await getAllFlashcardWords();
       setWords(flashcardWords);
     } catch (error) {
       console.error("Erro ao carregar palavras:", error);
@@ -92,12 +95,23 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
     try {
       const pool = selectPracticeWords(words, new Date(), practiceAnyway);
       if (pool.length === 0) return;
-      const newSession = await createFlashcardSession(vaultId);
       const draft = buildFlashcardQueue(pool, Math.random, []);
       const ids = [...new Set(draft.flatMap(stepWordIds))];
       const clozes = await requestWordClozes(ids);
       const queue = buildFlashcardQueue(pool, Math.random, clozes);
       if (queue.length === 0) return;
+      const newSession = vaultId
+        ? await createFlashcardSession(vaultId)
+        : {
+            id: `session_${Date.now()}`,
+            vaultId: 0,
+            vaultName,
+            totalWords: words.length,
+            wordsToReview: pool.length,
+            newWords: pool.filter((word) => !word.lastPractice).length,
+            completedWords: 0,
+            startTime: new Date(),
+          };
       studiedRef.current = 0;
       clozeAttemptsRef.current = new Map();
       outcomesRef.current = [];
@@ -114,6 +128,12 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
       console.error("Erro ao iniciar sessão:", error);
     }
   };
+
+  useEffect(() => {
+    if (!autostart || loading || autostartRef.current || words.length === 0) return;
+    autostartRef.current = true;
+    void startSession(selectPracticeWords(words).length === 0);
+  }, [autostart, loading, words]);
 
   const closeSession = (completedWords: number) => {
     setSession((current) =>
@@ -252,6 +272,10 @@ export function FlashcardDeck({ vaultId, vaultName }: FlashcardDeckProps) {
         onRestartSession={restartSession}
       />
     );
+  }
+
+  if (autostart && !isSessionActive && !showSummary && words.length > 0) {
+    return <FlashcardDeckSkeleton />;
   }
 
   if (!isSessionActive) {

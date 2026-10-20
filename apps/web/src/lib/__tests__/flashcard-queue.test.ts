@@ -64,6 +64,17 @@ describe("selectPracticeWords", () => {
     );
     expect(selectPracticeWords(words, seen).map((item) => item.id)).toEqual([1, 2, 3]);
   });
+
+  it("sem vencidas, libera as mais próximas só quando se pede para praticar", () => {
+    const now = new Date("2026-10-20T09:00:00-03:00");
+    const words = Array.from({ length: 16 }, (_, index) =>
+      word(index + 1, `w${index}`, `t${index}`, 4, new Date("2026-10-20T08:00:00-03:00"))
+    );
+    expect(selectPracticeWords(words, now)).toEqual([]);
+    const closest = selectPracticeWords(words, now, true);
+    expect(closest.map((item) => item.id)).toEqual(words.map((item) => item.id));
+    expect(buildFlashcardQueue(closest, () => 0)).toHaveLength(10);
+  });
 });
 
 describe("buildFlashcardQueue", () => {
@@ -96,6 +107,23 @@ describe("buildFlashcardQueue", () => {
   it("mostra a tradução no recordar para palavra nova", () => {
     const steps = buildFlashcardQueue([word(1, "run", "correr", 1, null)], () => 0);
     expect(steps.map((step) => step.type)).toEqual(["recall"]);
+  });
+
+  it("com duas palavras novas, segue do recordar para combinar e ouvir", () => {
+    const words = [word(1, "run", "correr", 1, null), word(2, "walk", "andar", 1, null)];
+    const steps = buildFlashcardQueue(words, () => 0, [
+      { wordId: 1, sentence: "I run every day.", answer: "run" },
+      { wordId: 2, sentence: "I walk home.", answer: "walk" },
+    ]);
+    expect(steps.map((step) => step.type)).toEqual([
+      "recall",
+      "recall",
+      "match",
+      "listen",
+      "listen",
+      "cloze",
+      "cloze",
+    ]);
   });
 
   it("não dá completar para nome com mais de uma palavra", () => {

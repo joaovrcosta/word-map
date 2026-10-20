@@ -70,7 +70,7 @@ const menuLinks = [
     icon: BookOpen,
   },
   {
-    name: "Flashcards",
+    name: "Treino",
     path: "/home/flashcards",
     icon: Lightbulb,
   },
