@@ -42,10 +42,16 @@ async function clearToken() {
   await SecureStore.deleteItemAsync(TOKEN_KEY);
 }
 
+type GoogleSignInResult =
+  | { needsUsername: true; email: string; name: string }
+  | { error: string }
+  | null;
+
 type Session = {
   ready: boolean;
   user: MobileUser | null;
   signIn: (email: string, password: string) => Promise<string | null>;
+  signInWithGoogle: (credential: string, username?: string) => Promise<GoogleSignInResult>;
   signOut: () => Promise<void>;
   request: <T>(path: string, init?: RequestInit) => Promise<T>;
 };
@@ -103,6 +109,35 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return null;
   }, []);
 
+  const signInWithGoogle = useCallback(async (credential: string, username?: string) => {
+    const result = await apiRequest<{
+      success: boolean;
+      error?: string;
+      token?: string;
+      user?: MobileUser;
+      needsUsername?: boolean;
+      email?: string;
+      name?: string;
+    }>("/auth/google", {
+      method: "POST",
+      body: JSON.stringify({ credential, username }),
+    });
+    if (result.needsUsername) {
+      return {
+        needsUsername: true as const,
+        email: result.email || "",
+        name: result.name || "",
+      };
+    }
+    if (!result.success || !result.token || !result.user) {
+      return { error: result.error || "Não foi possível entrar com o Google" };
+    }
+    await writeToken(result.token);
+    setToken(result.token);
+    setUser(result.user);
+    return null;
+  }, []);
+
   const signOut = useCallback(async () => {
     await clearToken();
     setToken(null);
@@ -116,8 +151,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ ready, user: token ? user : null, signIn, signOut, request }),
-    [ready, token, user, signIn, signOut, request]
+    () => ({ ready, user: token ? user : null, signIn, signInWithGoogle, signOut, request }),
+    [ready, token, user, signIn, signInWithGoogle, signOut, request]
   );
 
   return (

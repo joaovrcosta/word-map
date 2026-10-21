@@ -256,15 +256,17 @@ export async function loginWithGoogle(
   requestedUsername?: string
 ): Promise<AuthActionResult> {
   try {
-    const clientId = process.env.GOOGLE_CLIENT_ID;
-    if (!credential || !clientId) {
+    const audiences = [process.env.GOOGLE_CLIENT_ID, process.env.GOOGLE_ANDROID_CLIENT_ID]
+      .map((id) => id?.trim())
+      .filter((id): id is string => Boolean(id));
+    if (!credential || audiences.length === 0) {
       return { success: false, error: "Não foi possível entrar com o Google" };
     }
 
-    const client = new OAuth2Client(clientId);
+    const client = new OAuth2Client(audiences[0]);
     const ticket = await client.verifyIdToken({
       idToken: credential,
-      audience: clientId,
+      audience: audiences,
     });
     const payload = ticket.getPayload();
     const email = payload?.email?.toLowerCase().trim();

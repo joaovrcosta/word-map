@@ -5,6 +5,7 @@ import Animated, { Easing, FadeInDown, useAnimatedStyle, useSharedValue, withDel
 import { useTheme } from "../../../theme";
 import { useMotionEnabled } from "../motion";
 import { DuoButton } from "./duo-button";
+import { CHALLENGE_XP } from "./lesson-bar";
 import { type LevelShift, type StudySession } from "../types";
 
 const CONFETTI_COLORS = ["#24c875", "#ff9600", "#1cb0f6", "#ff4b4b", "#ffc800"];
@@ -115,6 +116,7 @@ export function SessionSummary({
     : 0;
   const durationLabel = duration < 1 ? "Menos de um minuto" : `${duration} min`;
   const celebrate = challengeTotal > 0 && challengeCorrect / challengeTotal >= 0.7;
+  const xpGained = challengeCorrect * CHALLENGE_XP;
   const enter = (index: number) => (motion ? FadeInDown.delay(index * 70).duration(240) : undefined);
 
   return (
@@ -131,6 +133,12 @@ export function SessionSummary({
         style={{ marginTop: 12, color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 26, textAlign: "center" }}
       >
         Sessão concluída
+      </Animated.Text>
+      <Animated.Text
+        entering={enter(2)}
+        style={{ marginTop: 8, color: "#ffc800", fontFamily: theme.fonts.bold, fontSize: 32, textAlign: "center" }}
+      >
+        +<CountUp value={xpGained} /> XP
       </Animated.Text>
       <Animated.Text
         entering={enter(2)}

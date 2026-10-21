@@ -47,6 +47,8 @@ export function StreakChip({ streak }: { streak: number }) {
   );
 }
 
+export const CHALLENGE_XP = 10;
+
 export function XpFloat({ token }: { token: number }) {
   const motion = useMotionEnabled();
   const progress = useSharedValue(0);
@@ -65,7 +67,7 @@ export function XpFloat({ token }: { token: number }) {
   if (token === 0) return null;
   return (
     <Animated.Text style={[{ position: "absolute", right: 0, top: -4, color: "#ff9600", fontFamily: "Nunito_700Bold", fontSize: 14 }, style]}>
-      +10
+      +{CHALLENGE_XP}
     </Animated.Text>
   );
 }

@@ -4,11 +4,11 @@ import { Text } from "react-native";
 import { type RankingBoard } from "../../src/ranking";
 import { useSession } from "../../src/session";
 import { useTheme } from "../../src/theme";
-import { Card, Heading, Muted, PrimaryButton, Screen } from "../../src/ui";
+import { Card, Heading, Muted, Screen } from "../../src/ui";
 
 export default function HomeScreen() {
   const theme = useTheme();
-  const { user, signOut, request } = useSession();
+  const { user, request } = useSession();
   const firstName = user?.name.split(" ")[0] || "olá";
   const [points, setPoints] = useState<number | null>(null);
 
@@ -50,7 +50,6 @@ export default function HomeScreen() {
         </Text>
         <Muted>Seu acervo de leitura.</Muted>
       </Card>
-      <PrimaryButton label="Sair" onPress={() => void signOut()} />
     </Screen>
   );
 }

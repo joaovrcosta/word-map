@@ -42,7 +42,14 @@
           "resizeMode": "contain"
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "expo-web-browser",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.219407875255-85kn7bgse6shvo9c96ga6tcjomg24ebt"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
