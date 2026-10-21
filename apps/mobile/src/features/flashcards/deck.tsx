@@ -501,7 +501,7 @@ export function FlashcardDeck({
               height: 16,
               borderRadius: 999,
               overflow: "hidden",
-              backgroundColor: theme.name === "dark" ? "#4b5563" : "#e5e7eb",
+              backgroundColor: "#4b5563",
             }}
           >
             <ProgressFill progress={progress} color={theme.colors.green} />

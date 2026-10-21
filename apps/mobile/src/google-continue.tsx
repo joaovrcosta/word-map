@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Platform, Pressable, Text, View } from "react-native";
+import { useTheme } from "./theme";
 import { Ionicons } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
 import * as Google from "expo-auth-session/providers/google";
@@ -44,6 +45,7 @@ export function GoogleContinueButton({
   onCredential: (credential: string) => void;
   onError: (message: string) => void;
 }) {
+  const theme = useTheme();
   const onCredentialRef = useRef(onCredential);
   const onErrorRef = useRef(onError);
   onCredentialRef.current = onCredential;
@@ -134,10 +136,12 @@ export function GoogleContinueButton({
       <Pressable
         disabled={disabled || (Platform.OS !== "web" && !request)}
         onPress={Platform.OS === "web" ? undefined : startNative}
-        style={styles.button}
+        style={[styles.button, { backgroundColor: theme.shell.tabBar, borderColor: theme.shell.line }]}
       >
-        <Ionicons name="logo-google" size={18} color="#ffffff" />
-        <Text style={styles.label}>Continuar com Google</Text>
+        <Ionicons name="logo-google" size={18} color={theme.shell.foreground} />
+        <Text style={[styles.label, { color: theme.shell.foreground, fontFamily: theme.fonts.bold }]}>
+          Continuar com Google
+        </Text>
       </Pressable>
       {Platform.OS === "web" ? (
         <View
@@ -155,14 +159,12 @@ const styles = {
     height: 56,
     borderRadius: 16,
     borderWidth: 1.5,
-    borderColor: "#4a4a4a",
-    backgroundColor: "#2a2a2a",
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     gap: 10,
   },
-  label: { color: "#ffffff", fontFamily: "Nunito_700Bold", fontSize: 16 },
+  label: { fontSize: 16 },
   webHit: {
     position: "absolute" as const,
     top: 0,

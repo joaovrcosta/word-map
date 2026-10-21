@@ -6,12 +6,12 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#24c875"
+      "backgroundColor": "#121212"
     },
     "ios": {
       "supportsTablet": true,
@@ -37,7 +37,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#24c875",
+          "backgroundColor": "#121212",
           "image": "./assets/splash-icon.png",
           "resizeMode": "contain"
         }

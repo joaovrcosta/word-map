@@ -4,7 +4,7 @@ import { grammarClassLabel } from "@word-map/shared";
 import { Text, View } from "react-native";
 import { type RankingBoard } from "../../src/ranking";
 import { useSession } from "../../src/session";
-import { useTheme } from "../../src/theme";
+import { fixedTones, type ToneName, useTheme } from "../../src/theme";
 import { type UserStats } from "../../src/user-stats";
 import { Card, ErrorText, Heading, Loading, Muted, PrimaryButton, Screen } from "../../src/ui";
 
@@ -39,24 +39,32 @@ function Bar({ percent, color }: { percent: number; color: string }) {
   );
 }
 
-function StatTile({ value, label, hint }: { value: number; label: string; hint: string }) {
+function StatTile({
+  value,
+  label,
+  hint,
+  tone,
+}: {
+  value: number;
+  label: string;
+  hint: string;
+  tone: ToneName;
+}) {
   const theme = useTheme();
   return (
     <View
       style={{
         flex: 1,
-        borderWidth: 1,
-        borderColor: theme.colors.border,
-        backgroundColor: theme.colors.card,
-        borderRadius: theme.radii.lg,
+        backgroundColor: theme.shell.tones[tone],
+        borderRadius: 20,
         padding: 14,
       }}
     >
-      <Text style={{ color: theme.colors.greenText, fontFamily: theme.fonts.bold, fontSize: 24 }}>{value}</Text>
+      <Text style={{ color: theme.shell.onPastel, fontFamily: theme.fonts.bold, fontSize: 24 }}>{value}</Text>
       <Text
         style={{
           marginTop: 6,
-          color: theme.colors.mutedForeground,
+          color: theme.shell.onPastelMuted,
           fontFamily: theme.fonts.bold,
           fontSize: 11,
           letterSpacing: 0.4,
@@ -65,7 +73,7 @@ function StatTile({ value, label, hint }: { value: number; label: string; hint: 
       >
         {label}
       </Text>
-      <Text style={{ marginTop: 2, color: theme.colors.mutedForeground, fontFamily: theme.fonts.regular, fontSize: 12 }}>
+      <Text style={{ marginTop: 2, color: theme.shell.onPastelMuted, fontFamily: theme.fonts.regular, fontSize: 12 }}>
         {hint}
       </Text>
     </View>
@@ -117,10 +125,10 @@ export default function ProfileScreen() {
 
   const summary = stats
     ? [
-        { label: "Palavras", value: stats.totalWords, hint: "Aprendidas" },
-        { label: "Vaults", value: stats.totalVaults, hint: "Coleções" },
-        { label: "Conexões", value: stats.totalConnections, hint: "Palavras ligadas" },
-        { label: "Atividade", value: stats.recentActivity, hint: "Últimos 30 dias" },
+        { label: "Palavras", value: stats.totalWords, hint: "Aprendidas", tone: fixedTones.words },
+        { label: "Vaults", value: stats.totalVaults, hint: "Coleções", tone: fixedTones.vaults },
+        { label: "Conexões", value: stats.totalConnections, hint: "Palavras ligadas", tone: fixedTones.connections },
+        { label: "Atividade", value: stats.recentActivity, hint: "Últimos 30 dias", tone: fixedTones.activity },
       ]
     : [];
   const confidence = [...(stats?.wordsByConfidence ?? [])].sort((a, b) => a.confidence - b.confidence);
@@ -160,11 +168,11 @@ export default function ProfileScreen() {
             </View>
           </View>
 
-          <Card onPress={() => router.push("/ranking" as Href)}>
-            <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 20 }}>
+          <Card tone={fixedTones.xp} onPress={() => router.push("/ranking" as Href)}>
+            <Text style={{ color: theme.shell.onPastel, fontFamily: theme.fonts.bold, fontSize: 20 }}>
               {board == null ? "Ranking" : `${board.me.points} XP`}
             </Text>
-            <Muted>{rankLabel}</Muted>
+            <Muted onPastel>{rankLabel}</Muted>
           </Card>
 
           <View style={{ marginTop: 20 }}>
@@ -230,16 +238,14 @@ export default function ProfileScreen() {
                       borderRadius: 999,
                       paddingHorizontal: 12,
                       paddingVertical: 6,
-                      backgroundColor: theme.colors.greenSoft,
+                      backgroundColor: theme.shell.chip,
                     }}
                   >
                     <Text
                       style={{
-                        color: theme.colors.greenText,
-                        fontFamily: theme.fonts.bold,
-                        fontSize: 11,
-                        letterSpacing: 0.4,
-                        textTransform: "uppercase",
+                        color: theme.shell.chipText,
+                        fontFamily: theme.fonts.medium,
+                        fontSize: 13,
                       }}
                     >
                       {item.category} ({item.count})

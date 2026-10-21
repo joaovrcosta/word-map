@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -16,13 +16,10 @@ import { Redirect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { GoogleContinueButton } from "../src/google-continue";
 import { useSession } from "../src/session";
-
-const background = "#141414";
-const line = "#3a3a3a";
-const muted = "#9a9a9a";
-const orange = "#ff9f1a";
+import { useTheme } from "../src/theme";
 
 function Mascot() {
+  const styles = useLoginStyles();
   return (
     <View style={styles.mascot}>
       <View style={styles.mascotBody} />
@@ -38,6 +35,7 @@ function Mascot() {
 }
 
 function Bubble() {
+  const styles = useLoginStyles();
   return (
     <View style={styles.bubble}>
       <Text style={styles.bubbleText}>
@@ -48,6 +46,8 @@ function Bubble() {
 }
 
 export default function LoginScreen() {
+  const theme = useTheme();
+  const styles = useLoginStyles();
   const { ready, user, signIn, signInWithGoogle } = useSession();
   const [mode, setMode] = useState<"gate" | "email" | "username">("gate");
   const [email, setEmail] = useState("");
@@ -62,7 +62,7 @@ export default function LoginScreen() {
     return (
       <View style={styles.center}>
         <StatusBar style="light" />
-        <ActivityIndicator color="#ffffff" />
+        <ActivityIndicator color={theme.shell.foreground} />
       </View>
     );
   }
@@ -131,7 +131,7 @@ export default function LoginScreen() {
               hitSlop={8}
               style={styles.back}
             >
-              <Ionicons name="chevron-back" size={28} color="#ffffff" />
+              <Ionicons name="chevron-back" size={28} color={theme.shell.foreground} />
             </Pressable>
             <View style={styles.ring} />
           </View>
@@ -154,7 +154,7 @@ export default function LoginScreen() {
                 />
                 {error ? <Text style={styles.error}>{error}</Text> : null}
                 <Pressable onPress={openEmail} style={styles.appleButton}>
-                  <Ionicons name="mail" size={18} color="#111111" />
+                  <Ionicons name="mail" size={18} color={theme.shell.chipActiveText} />
                   <Text style={styles.appleLabel}>Entrar com email</Text>
                 </Pressable>
 
@@ -180,7 +180,7 @@ export default function LoginScreen() {
                   autoFocus
                   maxLength={20}
                   placeholder="seuusuario"
-                  placeholderTextColor={muted}
+                  placeholderTextColor={theme.shell.muted}
                   value={username}
                   onChangeText={(value) => setUsername(value.replace(/^@+/, "").replace(/\s/g, ""))}
                   style={styles.input}
@@ -200,7 +200,7 @@ export default function LoginScreen() {
                   autoFocus
                   keyboardType="email-address"
                   placeholder="Email"
-                  placeholderTextColor={muted}
+                  placeholderTextColor={theme.shell.muted}
                   value={email}
                   onChangeText={setEmail}
                   style={styles.input}
@@ -208,7 +208,7 @@ export default function LoginScreen() {
                 <TextInput
                   secureTextEntry
                   placeholder="Senha"
-                  placeholderTextColor={muted}
+                  placeholderTextColor={theme.shell.muted}
                   value={password}
                   onChangeText={setPassword}
                   style={styles.input}
@@ -226,152 +226,160 @@ export default function LoginScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: background },
-  center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: background },
-  body: { flexGrow: 1, paddingHorizontal: 22, paddingBottom: 12 },
-  header: { flexDirection: "row", alignItems: "center", height: 48 },
-  back: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
-  ring: {
-    width: 26,
-    height: 26,
-    marginLeft: 6,
-    borderRadius: 13,
-    borderWidth: 2,
-    borderColor: "#d5d5d5",
-  },
-  intro: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12, minWidth: 0 },
-  mascot: { width: 84, height: 84 },
-  mascotBody: {
-    position: "absolute",
-    left: 8,
-    top: 2,
-    width: 68,
-    height: 58,
-    borderRadius: 30,
-    backgroundColor: "#2f9bff",
-  },
-  mascotEar: {
-    position: "absolute",
-    left: 2,
-    top: 26,
-    width: 16,
-    height: 20,
-    borderRadius: 8,
-    backgroundColor: "#2f9bff",
-  },
-  eye: {
-    position: "absolute",
-    top: 20,
-    width: 18,
-    height: 20,
-    borderRadius: 9,
-    backgroundColor: "#f4f7fb",
-  },
-  pupil: {
-    position: "absolute",
-    top: 26,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: "#1a1c1e",
-  },
-  laptop: {
-    position: "absolute",
-    left: 26,
-    top: 50,
-    width: 48,
-    height: 22,
-    borderRadius: 4,
-    backgroundColor: "#e8eef5",
-  },
-  laptopBase: {
-    position: "absolute",
-    left: 18,
-    top: 70,
-    width: 62,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: "#c5d4e4",
-  },
-  bubble: {
-    flex: 1,
-    flexShrink: 1,
-    minWidth: 0,
-    borderWidth: 1.5,
-    borderColor: line,
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-  },
-  bubbleText: {
-    color: "#ffffff",
-    fontFamily: "Nunito_700Bold",
-    fontSize: 16,
-    lineHeight: 22,
-  },
-  bubbleAccent: { color: orange },
-  footer: { flexGrow: 1, justifyContent: "flex-end", paddingTop: 28, paddingBottom: 8 },
-  hero: {
-    color: "#ffffff",
-    fontFamily: "Nunito_700Bold",
-    fontSize: 36,
-    textAlign: "center",
-  },
-  heroSub: {
-    marginTop: 4,
-    marginBottom: 28,
-    color: "#ffffff",
-    fontFamily: "Nunito_700Bold",
-    fontSize: 22,
-    textAlign: "center",
-  },
-  appleButton: {
-    height: 56,
-    marginTop: 12,
-    borderRadius: 16,
-    backgroundColor: "#ffffff",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
-  appleLabel: { color: "#111111", fontFamily: "Nunito_700Bold", fontSize: 16 },
-  legal: {
-    marginTop: 18,
-    color: muted,
-    fontFamily: "Nunito_400Regular",
-    fontSize: 12,
-    lineHeight: 18,
-    textAlign: "center",
-  },
-  legalLink: { color: "#cfcfcf", textDecorationLine: "underline" },
-  laterHit: { marginTop: 18, alignItems: "center" },
-  later: { color: "#b5b5b5", fontFamily: "Nunito_700Bold", fontSize: 16 },
-  laterNote: {
-    marginTop: 8,
-    color: muted,
-    fontFamily: "Nunito_400Regular",
-    fontSize: 13,
-    textAlign: "center",
-  },
-  input: {
-    height: 52,
-    marginBottom: 12,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: line,
-    backgroundColor: "#1e1e1e",
-    paddingHorizontal: 16,
-    color: "#ffffff",
-    fontFamily: "Nunito_400Regular",
-    fontSize: 16,
-  },
-  error: {
-    marginBottom: 12,
-    color: "#ff6b6b",
-    fontFamily: "Nunito_500Medium",
-    fontSize: 14,
-    textAlign: "center",
-  },
-});
+function useLoginStyles() {
+  const theme = useTheme();
+  const { shell, fonts } = theme;
+  return useMemo(
+    () =>
+      StyleSheet.create({
+        screen: { flex: 1, backgroundColor: shell.background },
+        center: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: shell.background },
+        body: { flexGrow: 1, paddingHorizontal: 22, paddingBottom: 12 },
+        header: { flexDirection: "row", alignItems: "center", height: 48 },
+        back: { width: 36, height: 36, alignItems: "center", justifyContent: "center" },
+        ring: {
+          width: 26,
+          height: 26,
+          marginLeft: 6,
+          borderRadius: 13,
+          borderWidth: 2,
+          borderColor: shell.mascot.ring,
+        },
+        intro: { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12, minWidth: 0 },
+        mascot: { width: 84, height: 84 },
+        mascotBody: {
+          position: "absolute",
+          left: 8,
+          top: 2,
+          width: 68,
+          height: 58,
+          borderRadius: 30,
+          backgroundColor: shell.mascot.body,
+        },
+        mascotEar: {
+          position: "absolute",
+          left: 2,
+          top: 26,
+          width: 16,
+          height: 20,
+          borderRadius: 8,
+          backgroundColor: shell.mascot.body,
+        },
+        eye: {
+          position: "absolute",
+          top: 20,
+          width: 18,
+          height: 20,
+          borderRadius: 9,
+          backgroundColor: shell.mascot.eye,
+        },
+        pupil: {
+          position: "absolute",
+          top: 26,
+          width: 8,
+          height: 8,
+          borderRadius: 4,
+          backgroundColor: shell.mascot.pupil,
+        },
+        laptop: {
+          position: "absolute",
+          left: 26,
+          top: 50,
+          width: 48,
+          height: 22,
+          borderRadius: 4,
+          backgroundColor: shell.mascot.laptop,
+        },
+        laptopBase: {
+          position: "absolute",
+          left: 18,
+          top: 70,
+          width: 62,
+          height: 6,
+          borderRadius: 3,
+          backgroundColor: shell.mascot.laptopBase,
+        },
+        bubble: {
+          flex: 1,
+          flexShrink: 1,
+          minWidth: 0,
+          borderWidth: 1.5,
+          borderColor: shell.line,
+          borderRadius: 18,
+          paddingHorizontal: 14,
+          paddingVertical: 12,
+        },
+        bubbleText: {
+          color: shell.foreground,
+          fontFamily: fonts.bold,
+          fontSize: 16,
+          lineHeight: 22,
+        },
+        bubbleAccent: { color: shell.mascot.accent },
+        footer: { flexGrow: 1, justifyContent: "flex-end", paddingTop: 28, paddingBottom: 8 },
+        hero: {
+          color: shell.foreground,
+          fontFamily: fonts.bold,
+          fontSize: 36,
+          textAlign: "center",
+        },
+        heroSub: {
+          marginTop: 4,
+          marginBottom: 28,
+          color: shell.foreground,
+          fontFamily: fonts.bold,
+          fontSize: 22,
+          textAlign: "center",
+        },
+        appleButton: {
+          height: 56,
+          marginTop: 12,
+          borderRadius: 16,
+          backgroundColor: shell.chipActive,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 10,
+        },
+        appleLabel: { color: shell.chipActiveText, fontFamily: fonts.bold, fontSize: 16 },
+        legal: {
+          marginTop: 18,
+          color: shell.muted,
+          fontFamily: fonts.regular,
+          fontSize: 12,
+          lineHeight: 18,
+          textAlign: "center",
+        },
+        legalLink: { color: shell.foreground, textDecorationLine: "underline" },
+        laterHit: { marginTop: 18, alignItems: "center" },
+        later: { color: shell.muted, fontFamily: fonts.bold, fontSize: 16 },
+        laterNote: {
+          marginTop: 8,
+          color: shell.muted,
+          fontFamily: fonts.regular,
+          fontSize: 13,
+          textAlign: "center",
+        },
+        input: {
+          height: 52,
+          marginBottom: 12,
+          borderRadius: 16,
+          borderWidth: 1.5,
+          borderColor: shell.line,
+          backgroundColor: shell.surface,
+          paddingHorizontal: 16,
+          color: shell.foreground,
+          fontFamily: fonts.regular,
+          fontSize: 16,
+        },
+        error: {
+          marginBottom: 12,
+          color: shell.dangerOnDark,
+          fontFamily: fonts.medium,
+          fontSize: 14,
+          textAlign: "center",
+        },
+      }),
+    [fonts, shell]
+  );
+}

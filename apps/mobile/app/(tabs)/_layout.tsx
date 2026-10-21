@@ -1,16 +1,17 @@
 import { Redirect, Tabs, usePathname } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useSession } from "../../src/session";
-import { useTheme } from "../../src/theme";
+import { tabBarBottom, tabBarHidden, tabBarMetrics, useTheme } from "../../src/theme";
 
 export default function TabsLayout() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { ready, user } = useSession();
-  const bottomInset = insets.bottom;
   const pathname = usePathname();
-  const hideTabBar = /^\/books\/[^/]+\/chapters\/[^/]+/.test(pathname) || /^\/flashcards\/[^/]+/.test(pathname);
+  const hideTabBar = tabBarHidden(pathname);
+  const bottom = tabBarBottom(insets.bottom);
 
   if (!ready) {
     return (
@@ -26,39 +27,72 @@ export default function TabsLayout() {
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: theme.colors.green,
-        tabBarInactiveTintColor: theme.colors.mutedForeground,
+        tabBarHideOnKeyboard: true,
+        tabBarActiveTintColor: theme.shell.foreground,
+        tabBarInactiveTintColor: theme.shell.muted,
         tabBarStyle: hideTabBar
           ? { display: "none", height: 0 }
           : {
-              backgroundColor: theme.colors.card,
-              borderTopColor: theme.colors.border,
-              borderTopWidth: 1,
-              height: 48 + bottomInset,
-              paddingTop: 0,
-              paddingBottom: bottomInset,
+              position: "absolute",
+              start: tabBarMetrics.margin,
+              end: tabBarMetrics.margin,
+              bottom,
+              height: tabBarMetrics.height,
+              borderRadius: tabBarMetrics.height / 2,
+              backgroundColor: theme.shell.tabBar,
+              borderTopWidth: 0,
+              paddingTop: 6,
+              paddingBottom: 6,
+              paddingHorizontal: 0,
+              overflow: "hidden",
             },
-        tabBarLabelPosition: "beside-icon",
-        tabBarIconStyle: { display: "none", width: 0, height: 0 },
+        tabBarLabelPosition: "below-icon",
         tabBarItemStyle: {
           justifyContent: "center",
           paddingVertical: 0,
         },
         tabBarLabelStyle: {
-          fontFamily: theme.fonts.semibold,
-          fontSize: 12,
-          marginTop: 0,
-          marginBottom: 0,
-          marginStart: 0,
-          marginEnd: 0,
+          fontFamily: theme.fonts.medium,
+          fontSize: 10,
+          marginTop: 2,
         },
       }}
     >
-      <Tabs.Screen name="home" options={{ title: "Início", tabBarIcon: () => null }} />
-      <Tabs.Screen name="vaults" options={{ title: "Vaults", tabBarIcon: () => null }} />
-      <Tabs.Screen name="flashcards" options={{ title: "Treino", tabBarIcon: () => null }} />
-      <Tabs.Screen name="books" options={{ title: "Biblioteca", tabBarIcon: () => null }} />
-      <Tabs.Screen name="profile" options={{ title: "Perfil", tabBarIcon: () => null }} />
+      <Tabs.Screen
+        name="home"
+        options={{
+          title: "Início",
+          tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="vaults"
+        options={{
+          title: "Vaults",
+          tabBarIcon: ({ color, size }) => <Ionicons name="folder" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="flashcards"
+        options={{
+          title: "Treino",
+          tabBarIcon: ({ color, size }) => <Ionicons name="flash" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="books"
+        options={{
+          title: "Biblioteca",
+          tabBarIcon: ({ color, size }) => <Ionicons name="book" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Perfil",
+          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+        }}
+      />
       <Tabs.Screen name="ranking" options={{ href: null }} />
     </Tabs>
   );

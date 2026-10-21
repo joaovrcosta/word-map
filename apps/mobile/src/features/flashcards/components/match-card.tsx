@@ -21,7 +21,6 @@ function MatchTile({
   onPress: () => void;
 }) {
   const theme = useTheme();
-  const dark = theme.name === "dark";
 
   return (
     <ShakeView active={wrong}>
@@ -33,13 +32,13 @@ function MatchTile({
           borderRadius: 16,
           borderWidth: 2,
           borderColor: wrong ? theme.colors.destructive : done || selected ? theme.colors.green : theme.colors.border,
-          backgroundColor: done ? theme.colors.greenSoft : dark ? "#21262d" : "#ffffff",
+          backgroundColor: done ? theme.colors.greenSoft : theme.shell.surface,
           alignItems: "center",
           justifyContent: "center",
           paddingHorizontal: 10,
         }}
       >
-        <Text numberOfLines={3} style={{ color: dark ? "#ffffff" : theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 16, textAlign: "center" }}>
+        <Text numberOfLines={3} style={{ color: theme.shell.foreground, fontFamily: theme.fonts.bold, fontSize: 16, textAlign: "center" }}>
           {label}
         </Text>
       </Pressable>

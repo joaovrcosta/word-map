@@ -4,11 +4,11 @@ import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import {
-  Nunito_400Regular,
-  Nunito_500Medium,
-  Nunito_600SemiBold,
-  Nunito_700Bold,
-} from "@expo-google-fonts/nunito";
+  SpaceGrotesk_400Regular,
+  SpaceGrotesk_500Medium,
+  SpaceGrotesk_600SemiBold,
+  SpaceGrotesk_700Bold,
+} from "@expo-google-fonts/space-grotesk";
 import { ThemeProvider, useTheme } from "../src/theme";
 import { SessionProvider } from "../src/session";
 
@@ -18,7 +18,7 @@ function RootStack() {
   const theme = useTheme();
   return (
     <>
-      <StatusBar style={theme.name === "dark" ? "light" : "dark"} />
+      <StatusBar style="light" />
       <Stack
         screenOptions={{
           headerShown: false,
@@ -31,10 +31,10 @@ function RootStack() {
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
-    Nunito_400Regular,
-    Nunito_500Medium,
-    Nunito_600SemiBold,
-    Nunito_700Bold,
+    SpaceGrotesk_400Regular,
+    SpaceGrotesk_500Medium,
+    SpaceGrotesk_600SemiBold,
+    SpaceGrotesk_700Bold,
   });
 
   useEffect(() => {

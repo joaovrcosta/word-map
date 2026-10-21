@@ -18,7 +18,6 @@ const RATINGS = [
 function StudyCard({ children, onSpeak }: { children: ReactNode; onSpeak: () => void }) {
   const theme = useTheme();
   const size = useStudyCardSize();
-  const dark = theme.name === "dark";
 
   return (
     <View
@@ -26,7 +25,7 @@ function StudyCard({ children, onSpeak }: { children: ReactNode; onSpeak: () => 
         width: size,
         height: size,
         borderRadius: 28,
-        backgroundColor: dark ? theme.colors.card : "#ffffff",
+        backgroundColor: theme.colors.card,
         alignItems: "center",
         justifyContent: "center",
         paddingHorizontal: 24,

@@ -10,9 +10,9 @@ import {
 } from "react-native";
 import { type Href, router, useFocusEffect } from "expo-router";
 import { useSession } from "../../../src/session";
-import { useTheme } from "../../../src/theme";
+import { toneFor, useTheme } from "../../../src/theme";
 import { countLabel, type Vault } from "../../../src/types";
-import { ErrorText, Field, Heading, Loading, Muted, PrimaryButton, Screen } from "../../../src/ui";
+import { Card, ErrorText, Field, Heading, Loading, Muted, PrimaryButton, Screen, useTabBarInset } from "../../../src/ui";
 
 function askConfirm(title: string, message: string) {
   if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -28,6 +28,7 @@ function askConfirm(title: string, message: string) {
 
 export default function VaultListScreen() {
   const theme = useTheme();
+  const tabInset = useTabBarInset();
   const { request } = useSession();
   const [vaults, setVaults] = useState<Vault[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -93,7 +94,7 @@ export default function VaultListScreen() {
   if (!vaults) return <Loading />;
 
   return (
-    <Screen>
+    <Screen reserveTabBar={false}>
       <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
         <Heading>Vaults</Heading>
         <Pressable onPress={() => setEditor({ id: null, name: "" })}>
@@ -104,7 +105,7 @@ export default function VaultListScreen() {
       </View>
       {error ? <ErrorText>{error}</ErrorText> : null}
       {vaults.length === 0 ? (
-        <View style={{ flex: 1, justifyContent: "center" }}>
+        <View style={{ flex: 1, justifyContent: "center", paddingBottom: tabInset }}>
           <Muted>Nenhum vault ainda. Crie um e adicione palavras.</Muted>
           <PrimaryButton label="Criar vault" onPress={() => setEditor({ id: null, name: "" })} />
         </View>
@@ -113,32 +114,26 @@ export default function VaultListScreen() {
           data={vaults}
           keyExtractor={(item) => String(item.id)}
           style={{ marginTop: 8, flex: 1 }}
+          contentContainerStyle={{ paddingBottom: tabInset }}
           renderItem={({ item }) => (
-            <Pressable
-              onPress={() => router.push(`/vaults/${item.id}` as Href)}
-              style={{
-                borderBottomWidth: 1,
-                borderBottomColor: theme.colors.border,
-                paddingVertical: 14,
-              }}
-            >
-              <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 18 }}>
+            <Card stripe tone={toneFor(item.id)} onPress={() => router.push(`/vaults/${item.id}` as Href)}>
+              <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.bold, fontSize: 18 }}>
                 {item.name}
               </Text>
               <Muted>{countLabel(item.words?.length ?? 0, "palavra", "palavras")}</Muted>
               <View style={{ flexDirection: "row", gap: 16, marginTop: 8 }}>
                 <Pressable onPress={() => setEditor({ id: item.id, name: item.name })}>
-                  <Text style={{ color: theme.colors.greenText, fontFamily: theme.fonts.semibold }}>
+                  <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.semibold }}>
                     Renomear
                   </Text>
                 </Pressable>
                 <Pressable onPress={() => void removeVault(item)}>
-                  <Text style={{ color: theme.colors.destructive, fontFamily: theme.fonts.semibold }}>
+                  <Text style={{ color: theme.shell.dangerOnDark, fontFamily: theme.fonts.semibold }}>
                     Excluir
                   </Text>
                 </Pressable>
               </View>
-            </Pressable>
+            </Card>
           )}
         />
       )}
@@ -146,11 +141,11 @@ export default function VaultListScreen() {
         <View style={{ flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.45)" }}>
           <View
             style={{
-              backgroundColor: theme.colors.card,
+              backgroundColor: theme.shell.surface,
               borderRadius: theme.radii.lg,
               padding: 20,
               borderWidth: 1,
-              borderColor: theme.colors.border,
+              borderColor: theme.shell.line,
             }}
           >
             <Heading>{editor?.id == null ? "Novo vault" : "Renomear"}</Heading>

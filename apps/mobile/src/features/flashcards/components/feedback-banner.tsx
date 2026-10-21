@@ -15,8 +15,7 @@ export function FeedbackBanner({
 }) {
   const theme = useTheme();
   const motion = useMotionEnabled();
-  const dark = theme.name === "dark";
-  const background = correct ? theme.colors.greenSoft : dark ? "#3a1618" : "#fde2e2";
+  const background = correct ? theme.colors.greenSoft : "#3a1618";
   const color = correct ? theme.colors.greenText : theme.colors.destructive;
 
   return (

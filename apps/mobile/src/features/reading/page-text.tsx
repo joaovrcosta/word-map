@@ -104,7 +104,6 @@ function WordToken({
   const coreRef = useRef<ComponentRef<typeof Text>>(null);
   const { leading, core, trailing } = splitTokenEdges(surface);
   const marked = inVault || similar || selected;
-  const dark = theme.name === "dark";
 
   return (
     <Text
@@ -127,17 +126,13 @@ function WordToken({
       <Text
         ref={coreRef}
         style={{
-          color: selected ? "#ffffff" : inVault ? (dark ? "#7ddea8" : "#14804a") : theme.colors.foreground,
+          color: selected ? "#ffffff" : inVault ? "#7ddea8" : theme.colors.foreground,
           backgroundColor: selected
             ? "#24c875"
             : similar
-              ? dark
-                ? "rgba(36,200,117,0.15)"
-                : "#edf9df"
+              ? "rgba(36,200,117,0.15)"
               : inVault
-                ? dark
-                  ? "rgba(36,200,117,0.25)"
-                  : "#e7f8ee"
+                ? "rgba(36,200,117,0.25)"
                 : "transparent",
           borderRadius: 3,
           paddingHorizontal: marked ? 3 : 0,

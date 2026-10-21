@@ -20,10 +20,11 @@ export function CloseButton({ onPress, label = "Fechar" }: { onPress: () => void
 }
 
 export function EnergyMark() {
+  const theme = useTheme();
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
       <Ionicons name="flash" size={22} color="#1cb0f6" />
-      <Text style={{ color: "#1cb0f6", fontFamily: "Nunito_700Bold", fontSize: 22, lineHeight: 26 }}>∞</Text>
+      <Text style={{ color: "#1cb0f6", fontFamily: theme.fonts.bold, fontSize: 22, lineHeight: 26 }}>∞</Text>
     </View>
   );
 }
@@ -37,12 +38,13 @@ export function StreakChip({ streak }: { streak: number }) {
   }, [motion, scale, streak]);
 
   const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const theme = useTheme();
   if (streak < 2) return null;
 
   return (
     <Animated.View style={[{ flexDirection: "row", alignItems: "center", gap: 4 }, style]}>
       <Ionicons name="flame" size={20} color="#ff9600" />
-      <Text style={{ color: "#ff9600", fontFamily: "Nunito_700Bold", fontSize: 16 }}>{streak}</Text>
+      <Text style={{ color: "#ff9600", fontFamily: theme.fonts.bold, fontSize: 16 }}>{streak}</Text>
     </Animated.View>
   );
 }
@@ -64,9 +66,10 @@ export function XpFloat({ token }: { token: number }) {
     transform: [{ translateY: -40 * progress.value }],
   }));
 
+  const theme = useTheme();
   if (token === 0) return null;
   return (
-    <Animated.Text style={[{ position: "absolute", right: 0, top: -4, color: "#ff9600", fontFamily: "Nunito_700Bold", fontSize: 14 }, style]}>
+    <Animated.Text style={[{ position: "absolute", right: 0, top: -4, color: "#ff9600", fontFamily: theme.fonts.bold, fontSize: 14 }, style]}>
       +{CHALLENGE_XP}
     </Animated.Text>
   );

@@ -61,7 +61,7 @@ function Row({
   avatar: string;
 }) {
   const theme = useTheme();
-  const highlight = theme.name === "dark" ? "#3a2d4d" : "#f4e9ff";
+  const highlight = "#3a2d4d";
   return (
     <View
       style={{

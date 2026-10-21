@@ -6,7 +6,7 @@ import { BookArt } from "../../../src/features/books/cover";
 import { useSession } from "../../../src/session";
 import { useTheme } from "../../../src/theme";
 import type { BookListItem } from "../../../src/types";
-import { ErrorText, Loading, Muted, Screen } from "../../../src/ui";
+import { Chip, ErrorText, Loading, Muted, Screen } from "../../../src/ui";
 
 type Shelf = "all" | "store" | "saved" | "mine";
 
@@ -29,7 +29,6 @@ export default function BooksScreen() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [filtersOpen, setFiltersOpen] = useState(false);
   const [shelf, setShelf] = useState<Shelf>("all");
 
   const load = useCallback(async () => {
@@ -121,11 +120,6 @@ export default function BooksScreen() {
         </Text>
         <View style={{ flexDirection: "row", gap: 10 }}>
           <RoundButton
-            name={filtersOpen ? "options" : "options-outline"}
-            label="Filtrar"
-            onPress={() => setFiltersOpen((open) => !open)}
-          />
-          <RoundButton
             name="search"
             label="Buscar"
             onPress={() => {
@@ -158,37 +152,16 @@ export default function BooksScreen() {
         />
       ) : null}
 
-      {filtersOpen ? (
-        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
-          {SHELVES.map((item) => {
-            const selected = shelf === item.value;
-            return (
-              <Pressable
-                key={item.value}
-                onPress={() => setShelf(item.value)}
-                style={{
-                  paddingHorizontal: 14,
-                  paddingVertical: 8,
-                  borderRadius: 999,
-                  backgroundColor: selected ? theme.colors.green : theme.colors.card,
-                  borderWidth: 1,
-                  borderColor: selected ? theme.colors.green : theme.colors.border,
-                }}
-              >
-                <Text
-                  style={{
-                    color: selected ? "#ffffff" : theme.colors.foreground,
-                    fontFamily: theme.fonts.bold,
-                    fontSize: 14,
-                  }}
-                >
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
+      <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 16 }}>
+        {SHELVES.map((item) => (
+          <Chip
+            key={item.value}
+            label={item.label}
+            selected={shelf === item.value}
+            onPress={() => setShelf(item.value)}
+          />
+        ))}
+      </View>
 
       {error ? <ErrorText>{error}</ErrorText> : null}
 
@@ -329,6 +302,7 @@ function BookCover({
 }
 
 function FreeRibbon() {
+  const theme = useTheme();
   return (
     <View
       pointerEvents="none"
@@ -354,7 +328,7 @@ function FreeRibbon() {
           color: "#ffffff",
           fontSize: 9,
           letterSpacing: 0.6,
-          fontFamily: "Nunito_700Bold",
+          fontFamily: theme.fonts.bold,
           transform: [{ rotate: "-90deg" }],
         }}
       >
