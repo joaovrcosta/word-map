@@ -14,14 +14,18 @@ import { BookArt, bookAuthor } from "../../../../../src/features/books/cover";
 import { normalizeReadingPosition, normalizeToken, paginateReading } from "@word-map/shared";
 import {
   findSavedReadingWord,
+  MAX_RANGE_WORDS,
+  nextRangeIndexes,
   ReadingPageText,
   ReadingWordMenu,
+  spanFromIndexes,
+  tokenizePageText,
   type FoundTextWord,
   type WordAnchor,
 } from "../../../../../src/features/reading";
 import { speakPassage, speakWord, stopSpeech } from "../../../../../src/speech";
 import { useSession } from "../../../../../src/session";
-import { useTheme } from "../../../../../src/theme";
+import { shell, useTheme } from "../../../../../src/theme";
 import { type ChapterDetail, type ReadingPosition, type Vault } from "../../../../../src/types";
 import { ErrorText, Loading, Screen } from "../../../../../src/ui";
 
@@ -53,6 +57,8 @@ export default function ChapterReaderScreen() {
     anchor: WordAnchor;
     full?: boolean;
   } | null>(null);
+  const [rangeIndexes, setRangeIndexes] = useState<number[] | null>(null);
+  const [rangeAnchor, setRangeAnchor] = useState<WordAnchor | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const pageIndexRef = useRef(0);
   const pagesRef = useRef<ReturnType<typeof paginateReading>>([]);
@@ -145,6 +151,8 @@ export default function ChapterReaderScreen() {
 
   useEffect(() => {
     setSelection(null);
+    setRangeIndexes(null);
+    setRangeAnchor(null);
   }, [pageIndex, fontSize]);
 
   useEffect(() => {
@@ -184,8 +192,44 @@ export default function ChapterReaderScreen() {
     openedAt.current = Date.now();
     keepListening.current = false;
     setListening(false);
+    setRangeIndexes(null);
+    setRangeAnchor(null);
     setSelection({ clean, occurrence, anchor, full });
     speakWord(clean);
+  };
+
+  const beginRange = (clean: string, occurrence: number, anchor: WordAnchor, tokenIndex: number) => {
+    openedAt.current = Date.now();
+    keepListening.current = false;
+    setListening(false);
+    setSelection(null);
+    setRangeIndexes([tokenIndex]);
+    setRangeAnchor(anchor);
+    speakWord(clean);
+  };
+
+  const toggleRange = (tokenIndex: number, _clean: string, _occurrence: number, anchor: WordAnchor) => {
+    setRangeIndexes((current) => {
+      const next = nextRangeIndexes(current ?? [], tokenIndex, MAX_RANGE_WORDS);
+      return next;
+    });
+    setRangeAnchor(anchor);
+  };
+
+  const cancelRange = () => {
+    setRangeIndexes(null);
+    setRangeAnchor(null);
+  };
+
+  const confirmRange = () => {
+    if (!rangeIndexes?.length || !rangeSpan) return;
+    const sorted = [...rangeIndexes].sort((a, b) => a - b);
+    const first = pageTokens.find((token) => token.index === sorted[0]);
+    const occurrence = first?.occurrence ?? 0;
+    const anchor = rangeAnchor ?? { x: 0, y: 0, width: 0, height: 0 };
+    setRangeIndexes(null);
+    setRangeAnchor(null);
+    selectWord(rangeSpan, occurrence, anchor);
   };
 
   const playCurrentPage = useCallback(() => {
@@ -249,13 +293,29 @@ export default function ChapterReaderScreen() {
   const dismissFromScroll = () => {
     if (Date.now() - openedAt.current < 400) return;
     setSelection(null);
+    setRangeIndexes(null);
+    setRangeAnchor(null);
   };
+
+  const pageTokens = useMemo(() => {
+    const text = pages[pageIndex]?.text ?? "";
+    return tokenizePageText(text, vaultWords);
+  }, [pageIndex, pages, vaultWords]);
+
+  const rangeSpan = useMemo(() => {
+    if (!rangeIndexes?.length) return "";
+    return spanFromIndexes(pageTokens, rangeIndexes);
+  }, [pageTokens, rangeIndexes]);
 
   const onScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!settled || !width) return;
     const next = Math.round(event.nativeEvent.contentOffset.x / width);
     const clamped = Math.min(Math.max(next, 0), Math.max(pages.length - 1, 0));
-    if (clamped !== pageIndexRef.current) setSelection(null);
+    if (clamped !== pageIndexRef.current) {
+      setSelection(null);
+      setRangeIndexes(null);
+      setRangeAnchor(null);
+    }
     pageIndexRef.current = clamped;
     setPageIndex(clamped);
   };
@@ -342,7 +402,10 @@ export default function ChapterReaderScreen() {
                       vaultWords={vaultWords}
                       selectedClean={index === pageIndex ? (selection?.clean ?? null) : null}
                       selectedOccurrence={index === pageIndex ? (selection?.occurrence ?? null) : null}
+                      rangeIndexes={index === pageIndex ? rangeIndexes : null}
                       onSelectWord={selectWord}
+                      onLongPressWord={beginRange}
+                      onToggleRangeWord={toggleRange}
                     />
                   </ScrollView>
                 </View>
@@ -352,54 +415,105 @@ export default function ChapterReaderScreen() {
         </View>
       )}
       {chapter && pages.length > 0 ? (
-        <View style={{ flexDirection: "row", alignItems: "center", paddingTop: 8 }}>
-          <Pressable
-            onPress={toggleListen}
-            disabled={!(pages[pageIndex]?.text ?? "").trim()}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel={listening ? "Pausar leitura" : "Ouvir esta página"}
-            style={{ flex: 1, alignItems: "flex-start", minWidth: 56 }}
+        rangeIndexes ? (
+          <View
+            style={{
+              marginTop: 8,
+              borderRadius: 20,
+              backgroundColor: shell.tabBar,
+              paddingHorizontal: 14,
+              paddingVertical: 12,
+              flexDirection: "row",
+              alignItems: "center",
+              gap: 10,
+            }}
           >
-            <Ionicons
-              name={listening ? "pause" : "headset-outline"}
-              size={26}
-              color={listening ? theme.colors.green : theme.colors.foreground}
-            />
-          </Pressable>
-          <Text style={{ color: theme.colors.mutedForeground, fontFamily: theme.fonts.semibold }}>
-            {pageIndex + 1} / {pages.length}
-          </Text>
-          <Pressable
-            onPress={() => setWordsOpen(true)}
-            hitSlop={12}
-            accessibilityRole="button"
-            accessibilityLabel={`${listedWords.length} palavras salvas neste livro`}
-            style={{ flex: 1, alignItems: "flex-end", minWidth: 56 }}
-          >
-            <View>
-              <Ionicons name="list-outline" size={26} color={theme.colors.foreground} />
-              <View
-                style={{
-                  position: "absolute",
-                  top: -6,
-                  right: -10,
-                  minWidth: 18,
-                  height: 18,
-                  borderRadius: 9,
-                  paddingHorizontal: 4,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: theme.colors.green,
-                }}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                numberOfLines={1}
+                style={{ color: shell.foreground, fontFamily: theme.fonts.bold, fontSize: 15 }}
               >
-                <Text style={{ color: "#ffffff", fontFamily: theme.fonts.bold, fontSize: 10 }}>
-                  {listedWords.length}
-                </Text>
-              </View>
+                {rangeSpan || "…"}
+              </Text>
+              <Text style={{ marginTop: 2, color: shell.muted, fontFamily: theme.fonts.medium, fontSize: 12 }}>
+                {rangeIndexes.length}/{MAX_RANGE_WORDS} · toque nas vizinhas
+              </Text>
             </View>
-          </Pressable>
-        </View>
+            <Pressable
+              onPress={cancelRange}
+              hitSlop={8}
+              style={{
+                paddingHorizontal: 12,
+                paddingVertical: 10,
+                borderRadius: 999,
+                backgroundColor: shell.chip,
+              }}
+            >
+              <Text style={{ color: shell.chipText, fontFamily: theme.fonts.semibold, fontSize: 13 }}>Cancelar</Text>
+            </Pressable>
+            <Pressable
+              onPress={confirmRange}
+              hitSlop={8}
+              style={{
+                paddingHorizontal: 14,
+                paddingVertical: 10,
+                borderRadius: 999,
+                backgroundColor: shell.tones.green,
+              }}
+            >
+              <Text style={{ color: shell.onPastel, fontFamily: theme.fonts.bold, fontSize: 13 }}>Abrir</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={{ flexDirection: "row", alignItems: "center", paddingTop: 8 }}>
+            <Pressable
+              onPress={toggleListen}
+              disabled={!(pages[pageIndex]?.text ?? "").trim()}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={listening ? "Pausar leitura" : "Ouvir esta página"}
+              style={{ flex: 1, alignItems: "flex-start", minWidth: 56 }}
+            >
+              <Ionicons
+                name={listening ? "pause" : "headset-outline"}
+                size={26}
+                color={listening ? theme.colors.green : theme.colors.foreground}
+              />
+            </Pressable>
+            <Text style={{ color: theme.colors.mutedForeground, fontFamily: theme.fonts.semibold }}>
+              {pageIndex + 1} / {pages.length}
+            </Text>
+            <Pressable
+              onPress={() => setWordsOpen(true)}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={`${listedWords.length} palavras salvas neste livro`}
+              style={{ flex: 1, alignItems: "flex-end", minWidth: 56 }}
+            >
+              <View>
+                <Ionicons name="list-outline" size={26} color={theme.colors.foreground} />
+                <View
+                  style={{
+                    position: "absolute",
+                    top: -6,
+                    right: -10,
+                    minWidth: 18,
+                    height: 18,
+                    borderRadius: 9,
+                    paddingHorizontal: 4,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: theme.colors.green,
+                  }}
+                >
+                  <Text style={{ color: "#ffffff", fontFamily: theme.fonts.bold, fontSize: 10 }}>
+                    {listedWords.length}
+                  </Text>
+                </View>
+              </View>
+            </Pressable>
+          </View>
+        )
       ) : null}
       <BookWordsSheet
         open={wordsOpen}

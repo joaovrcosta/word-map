@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -800,13 +800,7 @@ export function ReadingWordMenu({
           <Pressable disabled={!context} onPress={() => void handleContextualize()}>
             <Text style={[styles.contextAction, { fontFamily: theme.fonts.semibold }]}>Explicar contexto</Text>
           </Pressable>
-          {sheet ? (
-            <Text style={[styles.contextBody, { fontFamily: theme.fonts.regular }]}>{explanation}</Text>
-          ) : (
-            <Text style={[styles.contextBody, { fontFamily: theme.fonts.regular }]} numberOfLines={5}>
-              {explanation}
-            </Text>
-          )}
+          <Text style={[styles.contextBody, { fontFamily: theme.fonts.regular }]}>{explanation}</Text>
           {suggestedTranslation ? (
             <View style={styles.translationRow}>
               <View style={{ flex: 1 }}>
