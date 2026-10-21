@@ -91,7 +91,7 @@ function LevelTrack({ points }: { points: LevelPoint[] }) {
   return (
     <View style={{ marginTop: 12 }} onLayout={(event) => setWidth(event.nativeEvent.layout.width)}>
       {story ? (
-        <Text style={{ color: shell.foreground, fontFamily: theme.fonts.regular, fontSize: 13, lineHeight: 18 }}>
+        <Text style={{ color: shell.muted, fontFamily: theme.fonts.medium, fontSize: 14, lineHeight: 20 }}>
           {story}
         </Text>
       ) : null}
@@ -733,13 +733,15 @@ export function ReadingWordMenu({
     <View style={[styles.footer, sheet && styles.sheetFooter]}>
       {localSaved ? (
         <Pressable disabled={saving} onPress={() => void handleRemove()} style={styles.removeButton}>
-          <Ionicons name="trash-outline" size={sheet ? 18 : 14} color={shell.muted} />
+          <View style={styles.iconChip}>
+            <Ionicons name="trash-outline" size={sheet ? 18 : 14} color={shell.foreground} />
+          </View>
           {sheet ? null : (
             <Text style={{ color: shell.muted, fontFamily: theme.fonts.semibold, fontSize: 12 }}>Remover</Text>
           )}
         </Pressable>
       ) : (
-        <View style={{ width: sheet ? 36 : 0 }} />
+        <View style={{ width: sheet ? 42 : 0 }} />
       )}
       <View style={styles.levels}>
         {[1, 2, 3, 4].map((level) => {
@@ -776,7 +778,7 @@ export function ReadingWordMenu({
           onPress={onClose}
           style={[styles.sheetDone, { backgroundColor: theme.colors.green }]}
         >
-          <Ionicons name="checkmark" size={20} color={shell.foreground} />
+          <Ionicons name="checkmark" size={22} color={shell.foreground} />
         </Pressable>
       ) : null}
     </View>
@@ -826,8 +828,8 @@ export function ReadingWordMenu({
           onPress={() => void handleContextualize()}
           style={styles.contextButton}
         >
-          <Ionicons name="sparkles" size={14} color={shell.onPastel} />
-          <Text style={{ color: shell.onPastel, fontFamily: theme.fonts.semibold, fontSize: 13 }}>
+          <Ionicons name="sparkles" size={16} color={shell.onPastel} />
+          <Text style={{ color: shell.onPastel, fontFamily: theme.fonts.bold, fontSize: 15 }}>
             {explaining ? "Explicando..." : "Explicar contexto"}
           </Text>
         </Pressable>
@@ -859,14 +861,15 @@ export function ReadingWordMenu({
               style={sheet ? { flex: 1 } : { maxHeight: Math.max(140, maxCard - dockReserve) }}
               contentContainerStyle={{ paddingBottom: sheet ? 24 : 8 }}
             >
-              <View style={[styles.header, sheet && { paddingHorizontal: 16, paddingTop: 12 }]}>
+              <View style={[styles.header, sheet && { paddingHorizontal: 20, paddingTop: 16 }]}>
                 <View style={styles.headerTitle}>
-                  <IconButton
-                    label={`Ouvir ${clean}`}
-                    name="volume-high-outline"
-                    color={shell.muted}
+                  <Pressable
+                    accessibilityLabel={`Ouvir ${clean}`}
                     onPress={() => speakWord(clean)}
-                  />
+                    style={styles.iconChip}
+                  >
+                    <Ionicons name="volume-high-outline" size={18} color={shell.foreground} />
+                  </Pressable>
                   <Text numberOfLines={1} style={[styles.word, { fontFamily: theme.fonts.bold }]}>
                     {clean}
                   </Text>
@@ -882,29 +885,38 @@ export function ReadingWordMenu({
                       onPress={() => void handleRemove()}
                     />
                   )}
-                  <IconButton label="Fechar painel" name="close" color={shell.muted} onPress={onClose} />
+                  <Pressable accessibilityLabel="Fechar painel" onPress={onClose} style={styles.iconChip}>
+                    <Ionicons name="close" size={18} color={shell.foreground} />
+                  </Pressable>
                 </View>
               </View>
 
-              <View style={[styles.body, sheet && { paddingHorizontal: 16 }]}>
+              <View style={[styles.body, sheet && { paddingHorizontal: 20 }]}>
                 <View style={styles.badges}>
                   {confidence > 0 ? (
                     <View style={[styles.level, { backgroundColor: LEVEL_COLORS[Math.min(confidence, 4) - 1] }]}>
-                      <Text style={{ color: LEVEL_TEXT[Math.min(confidence, 4) - 1], fontFamily: theme.fonts.bold, fontSize: 11 }}>
+                      <Text style={{ color: LEVEL_TEXT[Math.min(confidence, 4) - 1], fontFamily: theme.fonts.bold, fontSize: 12 }}>
                         {confidence}
                       </Text>
                     </View>
                   ) : null}
                   {partOfSpeechBadges.map((badge) => {
                     const slug = resolveGrammarSlug(badge);
+                    const active = Boolean(slug && grammarSlug === slug);
                     return (
                       <Pressable
                         key={badge}
                         disabled={!slug}
                         onPress={() => setGrammarSlug((current) => (current === slug ? null : slug))}
-                        style={styles.badge}
+                        style={[styles.badge, active && styles.badgeActive]}
                       >
-                        <Text style={{ color: shell.chipText, fontSize: 12, fontFamily: theme.fonts.medium }}>
+                        <Text
+                          style={{
+                            color: active ? shell.chipActiveText : shell.chipText,
+                            fontSize: 13,
+                            fontFamily: theme.fonts.medium,
+                          }}
+                        >
                           {grammarClassLabel(badge)}
                         </Text>
                       </Pressable>
@@ -953,21 +965,33 @@ export function ReadingWordMenu({
                     placeholderTextColor={shell.muted}
                     style={[styles.input, sheet && styles.inputBox, { fontFamily: theme.fonts.regular }]}
                   />
-                  <IconButton
-                    label="Sugerir tradução"
-                    name="sparkles"
-                    color={shell.tones.lilac}
+                  <Pressable
+                    accessibilityLabel="Sugerir tradução"
                     disabled={!clean || suggesting || suggestionLocked}
                     onPress={() => void handleSuggest()}
-                  />
+                    style={[styles.iconChip, { opacity: !clean || suggesting || suggestionLocked ? 0.35 : 1 }]}
+                  >
+                    <Ionicons name="sparkles" size={18} color={shell.tones.lilac} />
+                  </Pressable>
                   {suggesting ? <ActivityIndicator size="small" color={shell.tones.lilac} /> : null}
-                  <IconButton
-                    label="Adicionar significado"
-                    name="add"
-                    color={shell.foreground}
+                  <Pressable
+                    accessibilityLabel="Adicionar significado"
                     disabled={!customMeaning.trim() || saving || !resolvedVaultId}
                     onPress={() => void handleAddMeaning(customMeaning)}
-                  />
+                    style={[
+                      styles.iconChip,
+                      {
+                        backgroundColor: customMeaning.trim() ? shell.tones.cream : shell.chip,
+                        opacity: !customMeaning.trim() || saving || !resolvedVaultId ? 0.35 : 1,
+                      },
+                    ]}
+                  >
+                    <Ionicons
+                      name="add"
+                      size={20}
+                      color={customMeaning.trim() ? shell.onPastel : shell.foreground}
+                    />
+                  </Pressable>
                 </View>
                 {suggestError ? (
                   <Text style={[styles.error, { fontFamily: theme.fonts.regular }]}>{suggestError}</Text>
@@ -992,9 +1016,9 @@ export function ReadingWordMenu({
                             >
                               <Text
                                 style={{
-                                  color: active ? theme.colors.green : shell.foreground,
+                                  color: active ? shell.chipActiveText : shell.chipText,
                                   fontFamily: theme.fonts.semibold,
-                                  fontSize: 12,
+                                  fontSize: 13,
                                 }}
                               >
                                 {vault.name}
@@ -1007,14 +1031,14 @@ export function ReadingWordMenu({
 
                     {selectedMeanings.length > 0 ? (
                       <View style={{ marginTop: 8 }}>
-                        <Text style={[styles.section, { fontFamily: theme.fonts.semibold }]}>Significados salvos</Text>
+                        <Text style={[styles.section, { fontFamily: theme.fonts.bold }]}>Significados salvos</Text>
                         {selectedMeanings.map((item) => (
                           <View key={item} style={styles.savedRow}>
-                            <Text style={[styles.savedText, { fontFamily: theme.fonts.regular }]}>{item}</Text>
+                            <Text style={[styles.savedText, { fontFamily: theme.fonts.medium }]}>{item}</Text>
                             <IconButton
                               label={`Remover ${item}`}
                               name="close"
-                              color={shell.onPastel}
+                              color={shell.actionOnPastel}
                               onPress={() => void handleRemoveMeaning(item)}
                             />
                           </View>
@@ -1022,7 +1046,7 @@ export function ReadingWordMenu({
                       </View>
                     ) : null}
 
-                    <Text style={[styles.section, { fontFamily: theme.fonts.semibold }]}>Significados populares</Text>
+                    <Text style={[styles.section, { fontFamily: theme.fonts.bold }]}>Significados populares</Text>
                     {(loadingInfo || translating) && (
                       <Text style={[styles.hint, { fontFamily: theme.fonts.regular }]}>Buscando tradução…</Text>
                     )}
@@ -1037,21 +1061,33 @@ export function ReadingWordMenu({
                             onPress={() => void handleAddMeaning(item)}
                             style={styles.popularRow}
                           >
-                            <Text style={[styles.popularText, { fontFamily: theme.fonts.regular }]}>{item}</Text>
-                            <Ionicons name="add" size={16} color={shell.muted} />
+                            <Text style={[styles.popularText, { fontFamily: theme.fonts.medium }]}>{item}</Text>
+                            <View style={[styles.iconChip, { width: 32, height: 32, borderRadius: 16 }]}>
+                              <Ionicons name="add" size={18} color={shell.foreground} />
+                            </View>
                           </Pressable>
                         ))
                       : null}
 
                     {relatedPhrases.length > 0 ? (
-                      <View style={{ marginTop: 14 }}>
-                        <Text style={[styles.section, { fontFamily: theme.fonts.semibold }]}>Frases relacionadas</Text>
+                      <View style={{ marginTop: 18 }}>
+                        <Text style={[styles.section, { fontFamily: theme.fonts.bold }]}>Frases relacionadas</Text>
                         <View style={styles.phraseWrap}>
-                          {relatedPhrases.map((phrase) => (
-                            <View key={phrase} style={styles.phraseChip}>
-                              <Text style={[styles.phraseChipText, { fontFamily: theme.fonts.regular }]}>{phrase}</Text>
-                            </View>
-                          ))}
+                          {relatedPhrases.map((phrase) => {
+                            const short = phrase.trim().split(/\s+/).length <= 6;
+                            return (
+                              <View key={phrase} style={short ? styles.phraseChip : styles.phraseCard}>
+                                <Text
+                                  style={[
+                                    short ? styles.phraseChipText : styles.phraseCardText,
+                                    { fontFamily: theme.fonts.regular },
+                                  ]}
+                                >
+                                  {phrase}
+                                </Text>
+                              </View>
+                            );
+                          })}
                         </View>
                       </View>
                     ) : null}
@@ -1059,13 +1095,13 @@ export function ReadingWordMenu({
                     {sheet ? contextPanel : null}
 
                     {origins.length > 0 ? (
-                      <View style={{ marginTop: 14 }}>
-                        <Text style={[styles.section, { fontFamily: theme.fonts.semibold }]}>
+                      <View style={{ marginTop: 18 }}>
+                        <Text style={[styles.section, { fontFamily: theme.fonts.bold }]}>
                           Origem dos significados
                         </Text>
                         {origins.map((item) => (
                           <View key={item.id} style={styles.origin}>
-                            <Text style={[styles.hint, { fontFamily: theme.fonts.regular }]}>
+                            <Text style={[styles.hint, { fontFamily: theme.fonts.medium }]}>
                               {formatOriginDate(item.createdAt)}
                               {" · "}
                               {item.sourceTitle || "No vault"}
@@ -1073,7 +1109,7 @@ export function ReadingWordMenu({
                             <Text style={[styles.phrase, { fontFamily: theme.fonts.regular }]}>
                               {item.sentence || "Adicionada no vault"}
                             </Text>
-                            <Text style={[styles.popularText, { fontFamily: theme.fonts.semibold }]}>
+                            <Text style={[styles.originMeaning, { fontFamily: theme.fonts.semibold }]}>
                               Significado: {item.meaning}
                             </Text>
                           </View>
@@ -1081,7 +1117,7 @@ export function ReadingWordMenu({
                       </View>
                     ) : null}
 
-                    <Text style={[styles.section, { marginTop: 14, fontFamily: theme.fonts.semibold }]}>Anotações</Text>
+                    <Text style={[styles.section, { marginTop: 18, fontFamily: theme.fonts.bold }]}>Anotações</Text>
                     <TextInput
                       value={notes}
                       onChangeText={setNotes}
@@ -1103,7 +1139,7 @@ export function ReadingWordMenu({
             </ScrollView>
             {details && !sheet ? contextPanel : null}
             {sheet ? (
-              <View style={{ paddingBottom: insets.bottom }}>{levelBar}</View>
+              <View style={[styles.sheetBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>{levelBar}</View>
             ) : (
               <Pressable
                 accessibilityLabel={expanded ? "Recolher painel" : "Expandir painel"}
@@ -1310,127 +1346,152 @@ const styles = StyleSheet.create({
     elevation: 0,
     shadowOpacity: 0,
   },
+  sheetBar: {
+    backgroundColor: shell.tabBar,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    marginHorizontal: 0,
+  },
   sheetFooter: {
     marginTop: 0,
     paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: shell.line,
+    paddingTop: 14,
+    paddingBottom: 4,
   },
-  sheetDone: { width: 42, height: 42, borderRadius: 21, alignItems: "center", justifyContent: "center" },
+  sheetDone: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  iconChip: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: shell.chip,
+  },
   inputBox: {
-    height: 48,
-    borderWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: shell.line,
-    borderRadius: 16,
+    height: 52,
+    borderWidth: 0,
+    borderBottomWidth: 0,
+    borderColor: "transparent",
+    borderRadius: 20,
     backgroundColor: shell.surface,
-    paddingHorizontal: 14,
+    paddingHorizontal: 16,
   },
-  phraseWrap: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 },
+  phraseWrap: { gap: 10, marginTop: 12 },
   phraseChip: {
+    alignSelf: "flex-start",
     backgroundColor: shell.chip,
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
   },
-  phraseChipText: { color: shell.chipText, fontSize: 13 },
+  phraseChipText: { color: shell.chipText, fontSize: 14 },
+  phraseCard: {
+    backgroundColor: shell.surface,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  phraseCardText: { color: shell.foreground, fontSize: 15, lineHeight: 22 },
   header: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    gap: 8,
+    gap: 12,
     paddingHorizontal: 12,
     paddingTop: 8,
   },
-  headerTitle: { flex: 1, flexDirection: "row", alignItems: "center", gap: 4, minWidth: 0 },
-  headerActions: { flexDirection: "row", alignItems: "center" },
+  headerTitle: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, minWidth: 0 },
+  headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   word: { flex: 1, color: shell.foreground, fontSize: 28 },
   body: { paddingHorizontal: 16, paddingBottom: 4 },
-  badges: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 8 },
+  badges: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 10, marginTop: 4 },
   level: {
-    minWidth: 24,
-    height: 24,
-    borderRadius: 12,
+    minWidth: 28,
+    height: 28,
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 6,
+    paddingHorizontal: 8,
   },
   badge: {
     backgroundColor: shell.chip,
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  badgeActive: {
+    backgroundColor: shell.chipActive,
   },
   grammar: {
     backgroundColor: shell.surface,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 20,
+    padding: 16,
     marginBottom: 8,
-    gap: 4,
+    gap: 6,
   },
-  grammarTitle: { color: shell.foreground, fontSize: 16 },
-  grammarText: { color: shell.muted, fontSize: 13, lineHeight: 18 },
-  grammarExample: { color: shell.foreground, fontSize: 13, marginTop: 4 },
+  grammarTitle: { color: shell.foreground, fontSize: 17 },
+  grammarText: { color: shell.muted, fontSize: 14, lineHeight: 20 },
+  grammarExample: { color: shell.foreground, fontSize: 14, marginTop: 4 },
   meaningRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: shell.line,
   },
-  meaning: { flex: 1, color: shell.foreground, fontSize: 14, lineHeight: 20 },
-  inputRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 8 },
+  meaning: { flex: 1, color: shell.foreground, fontSize: 15, lineHeight: 22 },
+  inputRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },
   input: {
     flex: 1,
-    height: 36,
+    height: 40,
     color: shell.foreground,
-    fontSize: 14,
+    fontSize: 15,
     borderBottomWidth: 1,
     borderBottomColor: shell.line,
     paddingHorizontal: 2,
   },
-  hint: { color: shell.muted, fontSize: 12, marginTop: 6, lineHeight: 18 },
-  error: { color: shell.dangerOnDark, fontSize: 12, marginTop: 6 },
-  section: { color: shell.muted, fontSize: 13, marginTop: 16 },
+  hint: { color: shell.muted, fontSize: 13, marginTop: 8, lineHeight: 18 },
+  error: { color: shell.dangerOnDark, fontSize: 13, marginTop: 8 },
+  section: { color: shell.foreground, fontSize: 18, marginTop: 20 },
   savedRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
     backgroundColor: shell.tones.green,
-    borderRadius: 14,
-    paddingLeft: 12,
-    paddingVertical: 4,
-    marginTop: 8,
+    borderRadius: 20,
+    paddingLeft: 16,
+    paddingRight: 4,
+    paddingVertical: 8,
+    marginTop: 10,
   },
-  savedText: { flex: 1, color: shell.onPastel, fontSize: 14, lineHeight: 20 },
+  savedText: { flex: 1, color: shell.onPastel, fontSize: 15, lineHeight: 22 },
   popularRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: shell.chip,
-    borderRadius: 14,
-    paddingHorizontal: 12,
-    paddingVertical: 12,
-    marginTop: 8,
-  },
-  popularText: { flex: 1, color: shell.foreground, fontSize: 14, lineHeight: 20 },
-  phrase: { color: shell.muted, fontSize: 12, lineHeight: 18, marginTop: 4 },
-  contextBox: {
-    borderWidth: 1,
-    borderColor: shell.line,
     backgroundColor: shell.surface,
-    borderRadius: 16,
-    padding: 14,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 10,
   },
-  contextAction: { color: shell.foreground, fontSize: 13 },
-  contextBody: { color: shell.foreground, fontSize: 14, lineHeight: 20, marginTop: 6 },
+  popularText: { flex: 1, color: shell.foreground, fontSize: 15, lineHeight: 22 },
+  phrase: { color: shell.muted, fontSize: 13, lineHeight: 20, marginTop: 6 },
+  originMeaning: { color: shell.foreground, fontSize: 14, lineHeight: 20, marginTop: 6 },
+  contextBox: {
+    borderWidth: 0,
+    borderColor: "transparent",
+    backgroundColor: shell.surface,
+    borderRadius: 20,
+    padding: 16,
+  },
+  contextAction: { color: shell.foreground, fontSize: 14 },
+  contextBody: { color: shell.foreground, fontSize: 15, lineHeight: 22, marginTop: 8 },
   contextDock: {
     paddingHorizontal: 12,
-    paddingTop: 8,
-    paddingBottom: 4,
+    paddingTop: 10,
+    paddingBottom: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: shell.line,
   },
@@ -1438,32 +1499,42 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
+    gap: 8,
     backgroundColor: shell.tones.lilac,
-    borderRadius: 16,
-    paddingVertical: 14,
+    borderRadius: 20,
+    paddingVertical: 16,
+    marginTop: 4,
   },
-  translationRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 8 },
+  translationRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
   saveChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
     backgroundColor: shell.chip,
     borderRadius: 999,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
   },
-  origin: { borderLeftWidth: 3, borderLeftColor: shell.tones.green, paddingLeft: 10, marginTop: 10 },
+  origin: {
+    backgroundColor: shell.surface,
+    borderLeftWidth: 8,
+    borderLeftColor: shell.tones.cream,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    marginTop: 10,
+    overflow: "hidden",
+  },
   notes: {
-    minHeight: 72,
-    marginTop: 8,
-    borderWidth: 1,
-    borderColor: shell.line,
-    borderRadius: 16,
+    minHeight: 88,
+    marginTop: 12,
+    borderWidth: 0,
+    borderColor: "transparent",
+    borderRadius: 20,
     backgroundColor: shell.surface,
     color: shell.foreground,
-    fontSize: 14,
-    padding: 12,
+    fontSize: 15,
+    padding: 16,
     textAlignVertical: "top",
   },
   footer: {
@@ -1472,19 +1543,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-between",
   },
-  removeButton: { flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 6 },
-  levels: { flexDirection: "row", gap: 8 },
-  levelButton: { width: 32, height: 32, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  levelButtonSheet: { width: 42, height: 42, borderRadius: 21 },
+  removeButton: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 2 },
+  levels: { flexDirection: "row", gap: 10 },
+  levelButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  levelButtonSheet: { width: 46, height: 46, borderRadius: 23 },
   vaults: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   vaultChip: {
     backgroundColor: shell.chip,
-    borderWidth: 1,
-    borderColor: shell.chip,
+    borderWidth: 0,
+    borderColor: "transparent",
     borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
   },
-  vaultChipActive: { borderColor: shell.tones.green },
-  chevron: { alignItems: "center", justifyContent: "center", paddingVertical: 6 },
+  vaultChipActive: { backgroundColor: shell.chipActive },
+  chevron: { alignItems: "center", justifyContent: "center", paddingVertical: 8 },
 });
