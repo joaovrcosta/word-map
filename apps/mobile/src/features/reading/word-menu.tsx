@@ -70,12 +70,12 @@ function levelStory(points: LevelPoint[]) {
   return `${dayPhrase(previous.date, today)}, nível ${previous.level}. ${dayPhrase(last.date, today)}, nível ${last.level}.`;
 }
 
-function LevelTrack({ points }: { points: LevelPoint[] }) {
+function LevelTrack({ points, compact = false }: { points: LevelPoint[]; compact?: boolean }) {
   const theme = useTheme();
   const story = levelStory(points);
   const shown = points.slice(-14);
   const [width, setWidth] = useState(0);
-  const height = 120;
+  const height = compact ? 72 : 120;
   const labelW = 16;
   const padRight = 8;
   const padTop = 8;
@@ -717,6 +717,9 @@ export function ReadingWordMenu({
   const details = sheet || expanded;
   const margin = 12;
   const gap = 8;
+  const edgePad = Math.max(insets.bottom, 12) + 8;
+  const arrowH = 8;
+  const chevronH = 36;
   const cardWidth = sheet ? window.width : Math.min(340, window.width - margin * 2);
   const safeAnchor =
     anchor.width > 0
@@ -725,10 +728,17 @@ export function ReadingWordMenu({
   let left = safeAnchor.x + safeAnchor.width / 2 - cardWidth / 2;
   left = Math.max(margin, Math.min(left, window.width - cardWidth - margin));
   const belowTop = safeAnchor.y + safeAnchor.height + gap;
-  const placeAbove = boxHeight > 0 && belowTop + boxHeight > window.height - 16 && safeAnchor.y - gap - boxHeight >= 8;
-  const top = placeAbove ? safeAnchor.y - gap - boxHeight : belowTop;
+  const spaceBelow = Math.max(160, window.height - belowTop - edgePad);
+  const spaceAbove = Math.max(160, safeAnchor.y - gap - edgePad);
+  const placeAbove =
+    boxHeight > 0 && belowTop + boxHeight > window.height - edgePad && spaceAbove >= spaceBelow;
+  const available = (placeAbove ? spaceAbove : spaceBelow) - arrowH;
+  const maxCard = Math.min(details ? window.height * 0.7 : window.height * 0.45, available);
+  const top = placeAbove
+    ? Math.max(edgePad, safeAnchor.y - gap - Math.min(boxHeight || maxCard, maxCard + arrowH))
+    : belowTop;
   const arrowLeft = Math.max(16, Math.min(safeAnchor.x + safeAnchor.width / 2 - left, cardWidth - 16));
-  const maxCard = details ? Math.min(window.height * 0.72, 560) : Math.min(window.height * 0.46, 380);
+  const scrollMax = Math.max(140, maxCard - chevronH);
   const levelBar = (
     <View style={[styles.footer, sheet && styles.sheetFooter]}>
       {localSaved ? (
@@ -793,15 +803,24 @@ export function ReadingWordMenu({
           {sheet ? (
             <Text style={[styles.contextBody, { fontFamily: theme.fonts.regular }]}>{explanation}</Text>
           ) : (
-            <ScrollView style={{ maxHeight: 112 }} nestedScrollEnabled>
-              <Text style={[styles.contextBody, { fontFamily: theme.fonts.regular }]}>{explanation}</Text>
-            </ScrollView>
+            <Text style={[styles.contextBody, { fontFamily: theme.fonts.regular }]} numberOfLines={5}>
+              {explanation}
+            </Text>
           )}
           {suggestedTranslation ? (
             <View style={styles.translationRow}>
               <View style={{ flex: 1 }}>
-                <Text style={[styles.section, { fontFamily: theme.fonts.semibold, color: theme.colors.greenText }]}>Tradução</Text>
-                <Text style={[styles.contextBody, { fontFamily: theme.fonts.semibold, color: shell.foreground }]}>
+                <Text
+                  style={{
+                    color: theme.colors.greenText,
+                    fontFamily: theme.fonts.semibold,
+                    fontSize: 13,
+                    marginTop: 4,
+                  }}
+                >
+                  Tradução
+                </Text>
+                <Text style={[styles.contextBody, { fontFamily: theme.fonts.semibold, color: shell.foreground, marginTop: 2 }]}>
                   {suggestedTranslation}
                 </Text>
               </View>
@@ -839,8 +858,6 @@ export function ReadingWordMenu({
       ) : null}
     </View>
   );
-  const dockReserve = !sheet && details ? (explanation && !explaining ? 168 : 84) : 36;
-
   return (
     <Modal transparent={!sheet} visible animationType={sheet ? "slide" : "fade"} onRequestClose={onClose} statusBarTranslucent>
       <View style={{ flex: 1, backgroundColor: sheet ? shell.background : "transparent" }}>
@@ -851,15 +868,27 @@ export function ReadingWordMenu({
             const next = event.nativeEvent.layout.height;
             setBoxHeight((current) => (Math.abs(current - next) < 1 ? current : next));
           }}
-          style={sheet ? styles.sheet : { position: "absolute", top, left, width: cardWidth }}
+          style={
+            sheet
+              ? styles.sheet
+              : { position: "absolute", top, left, width: cardWidth, maxHeight: maxCard + arrowH }
+          }
         >
           {!sheet && !placeAbove ? <Arrow pointing="up" left={arrowLeft} /> : null}
-          <View style={[styles.card, sheet && styles.cardSheet, sheet && { paddingTop: insets.top }]}>
+          <View
+            style={[
+              styles.card,
+              sheet && styles.cardSheet,
+              sheet && { paddingTop: insets.top },
+              !sheet && { maxHeight: maxCard },
+            ]}
+          >
             <ScrollView
               keyboardShouldPersistTaps="handled"
               bounces={sheet}
-              style={sheet ? { flex: 1 } : { maxHeight: Math.max(140, maxCard - dockReserve) }}
-              contentContainerStyle={{ paddingBottom: sheet ? 24 : 8 }}
+              nestedScrollEnabled
+              style={sheet ? { flex: 1 } : { maxHeight: scrollMax }}
+              contentContainerStyle={{ paddingBottom: sheet ? 24 : 12 }}
             >
               <View style={[styles.header, sheet && { paddingHorizontal: 20, paddingTop: 16 }]}>
                 <View style={styles.headerTitle}>
@@ -926,6 +955,7 @@ export function ReadingWordMenu({
 
                 {localSaved ? (
                   <LevelTrack
+                    compact={!sheet}
                     points={
                       levels.length > 0
                         ? levels
@@ -1092,7 +1122,7 @@ export function ReadingWordMenu({
                       </View>
                     ) : null}
 
-                    {sheet ? contextPanel : null}
+                    {contextPanel}
 
                     {origins.length > 0 ? (
                       <View style={{ marginTop: 18 }}>
@@ -1125,7 +1155,11 @@ export function ReadingWordMenu({
                       placeholder="Adicionar anotação aqui"
                       placeholderTextColor={shell.muted}
                       multiline
-                      style={[styles.notes, { fontFamily: theme.fonts.regular }]}
+                      style={[
+                        styles.notes,
+                        !sheet && styles.notesCompact,
+                        { fontFamily: theme.fonts.regular },
+                      ]}
                     />
 
                     {sheet ? null : levelBar}
@@ -1137,7 +1171,6 @@ export function ReadingWordMenu({
                 ) : null}
               </View>
             </ScrollView>
-            {details && !sheet ? contextPanel : null}
             {sheet ? (
               <View style={[styles.sheetBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>{levelBar}</View>
             ) : (
@@ -1536,6 +1569,12 @@ const styles = StyleSheet.create({
     fontSize: 15,
     padding: 16,
     textAlignVertical: "top",
+  },
+  notesCompact: {
+    minHeight: 56,
+    marginTop: 8,
+    padding: 12,
+    borderRadius: 16,
   },
   footer: {
     marginTop: 14,
