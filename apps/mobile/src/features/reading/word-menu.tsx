@@ -794,7 +794,7 @@ export function ReadingWordMenu({
     </View>
   );
   const contextPanel = (
-    <View style={sheet ? { marginTop: 14 } : styles.contextDock}>
+    <View>
       {explanation && !explaining ? (
         <View style={styles.contextBox}>
           <Pressable disabled={!context} onPress={() => void handleContextualize()}>
@@ -1032,8 +1032,10 @@ export function ReadingWordMenu({
                   </Text>
                 ) : null}
 
+                <View style={{ marginTop: 12 }}>{contextPanel}</View>
+
                 {details ? (
-                  <View style={{ marginTop: 12 }}>
+                  <View style={{ marginTop: 4 }}>
                     {!localSaved && vaults.length > 1 ? (
                       <View style={styles.vaults}>
                         {vaults.map((vault) => {
@@ -1121,8 +1123,6 @@ export function ReadingWordMenu({
                         </View>
                       </View>
                     ) : null}
-
-                    {contextPanel}
 
                     {origins.length > 0 ? (
                       <View style={{ marginTop: 18 }}>
@@ -1521,13 +1521,6 @@ const styles = StyleSheet.create({
   },
   contextAction: { color: shell.foreground, fontSize: 14 },
   contextBody: { color: shell.foreground, fontSize: 15, lineHeight: 22, marginTop: 8 },
-  contextDock: {
-    paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 6,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: shell.line,
-  },
   contextButton: {
     flexDirection: "row",
     alignItems: "center",

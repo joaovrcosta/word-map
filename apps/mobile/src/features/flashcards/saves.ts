@@ -52,7 +52,11 @@ export async function flushSaves(pending: PendingSave[], request: Request) {
       } else {
         await request(`/flashcards/words/${save.wordId}/result`, {
           method: "POST",
-          body: JSON.stringify({ correct: save.correct, challenge: save.challenge }),
+          body: JSON.stringify({
+            correct: save.correct,
+            challenge: save.challenge,
+            streak: save.streak,
+          }),
         });
       }
     } catch {

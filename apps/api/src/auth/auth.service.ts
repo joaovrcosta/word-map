@@ -35,11 +35,23 @@ export interface RegisterData {
 }
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
+const DEFAULT_VAULT_NAME = "Meu dicionario";
 
 export function normalizeUsername(value: string): string | null {
   const username = value.trim().replace(/^@+/, "").toLowerCase();
   if (!USERNAME_PATTERN.test(username)) return null;
   return username;
+}
+
+async function ensureDefaultVault(userId: number) {
+  const existing = await prisma.vault.count({ where: { userId } });
+  if (existing > 0) return;
+  await prisma.vault.create({
+    data: {
+      name: DEFAULT_VAULT_NAME,
+      userId,
+    },
+  });
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key";
@@ -179,8 +191,9 @@ export async function registerUser(
         role: roleForEmail(email),
       },
     });
+    await ensureDefaultVault(user.id);
 
-    return { success: true, user: toPublicUser(user) };
+    return sessionFor(user);
   } catch (error) {
     return {
       success: false,
@@ -332,6 +345,7 @@ export async function loginWithGoogle(
         },
       });
     }
+    await ensureDefaultVault(user.id);
 
     return sessionFor(await ensureModeratorRole(await ensureAdminRole(user)));
   } catch (error) {

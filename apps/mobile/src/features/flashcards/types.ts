@@ -2,7 +2,7 @@ export type ChallengeKind = "listen" | "match" | "cloze";
 
 export type PendingSave =
   | { kind: "progress"; wordId: number; confidence: number }
-  | { kind: "result"; wordId: number; correct: boolean; challenge: ChallengeKind };
+  | { kind: "result"; wordId: number; correct: boolean; challenge: ChallengeKind; streak: number };
 
 export type ReviewKind = "recall" | ChallengeKind;
 

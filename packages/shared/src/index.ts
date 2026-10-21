@@ -3,6 +3,7 @@ export * from "./word-origin";
 export * from "./cloze-text";
 export * from "./flashcard-schedule";
 export * from "./flashcard-queue";
+export * from "./flashcard-points";
 export * from "./reading-pages";
 export * from "./reading-context";
 export * from "./grammar-guide";

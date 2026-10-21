@@ -47,10 +47,18 @@ type GoogleSignInResult =
   | { error: string }
   | null;
 
+export type SignUpData = {
+  name: string;
+  email: string;
+  password: string;
+  username: string;
+};
+
 type Session = {
   ready: boolean;
   user: MobileUser | null;
   signIn: (email: string, password: string) => Promise<string | null>;
+  signUp: (data: SignUpData) => Promise<string | null>;
   signInWithGoogle: (credential: string, username?: string) => Promise<GoogleSignInResult>;
   signOut: () => Promise<void>;
   request: <T>(path: string, init?: RequestInit) => Promise<T>;
@@ -109,6 +117,51 @@ export function SessionProvider({ children }: { children: ReactNode }) {
     return null;
   }, []);
 
+  const signUp = useCallback(async (data: SignUpData) => {
+    const email = data.email.trim();
+    const password = data.password;
+    const result = await apiRequest<{
+      success: boolean;
+      error?: string;
+      token?: string;
+      user?: MobileUser;
+    }>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify({
+        name: data.name.trim(),
+        email,
+        password,
+        username: data.username.trim().replace(/^@+/, ""),
+      }),
+    });
+    if (!result.success) {
+      return result.error || "Não foi possível criar a conta";
+    }
+    if (result.token && result.user) {
+      await writeToken(result.token);
+      setToken(result.token);
+      setUser(result.user);
+      return null;
+    }
+    // Conta criada sem token na resposta: entra com email/senha.
+    const login = await apiRequest<{
+      success: boolean;
+      error?: string;
+      token?: string;
+      user?: MobileUser;
+    }>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    if (!login.success || !login.token || !login.user) {
+      return login.error || "Conta criada. Faça login para continuar.";
+    }
+    await writeToken(login.token);
+    setToken(login.token);
+    setUser(login.user);
+    return null;
+  }, []);
+
   const signInWithGoogle = useCallback(async (credential: string, username?: string) => {
     const result = await apiRequest<{
       success: boolean;
@@ -151,8 +204,8 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   );
 
   const value = useMemo(
-    () => ({ ready, user: token ? user : null, signIn, signInWithGoogle, signOut, request }),
-    [ready, token, user, signIn, signInWithGoogle, signOut, request]
+    () => ({ ready, user: token ? user : null, signIn, signUp, signInWithGoogle, signOut, request }),
+    [ready, token, user, signIn, signUp, signInWithGoogle, signOut, request]
   );
 
   return (

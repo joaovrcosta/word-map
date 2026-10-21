@@ -214,21 +214,145 @@ export function FlipCard({
   );
 }
 
-export function ProgressFill({ progress, color, height = 16 }: { progress: number; color: string; height?: number }) {
+function fireColors(heat: number, fallback: string) {
+  if (heat <= 0) return { base: fallback, mid: fallback, tip: "rgba(255,255,255,0.35)", spark: fallback };
+  if (heat === 1) return { base: fallback, mid: "#ffc800", tip: "#ffe08a", spark: "#ffc800" };
+  if (heat === 2) return { base: "#ff9600", mid: "#ffc800", tip: "#ff4b4b", spark: "#ff6b1a" };
+  return { base: "#ff6b1a", mid: "#ff4b4b", tip: "#ffc800", spark: "#ff9600" };
+}
+
+function FireSpark({ delay, color, heat }: { delay: number; color: string; heat: number }) {
+  const progress = useSharedValue(0);
+  const motion = useMotionEnabled();
+
+  useEffect(() => {
+    if (!motion || heat < 1) {
+      progress.value = 0;
+      return;
+    }
+    progress.value = 0;
+    progress.value = withDelay(
+      delay,
+      withSequence(
+        withTiming(1, { duration: 520, easing: Easing.out(Easing.cubic) }),
+        withTiming(0, { duration: 0 })
+      )
+    );
+    const timer = setInterval(() => {
+      progress.value = 0;
+      progress.value = withDelay(
+        delay,
+        withSequence(
+          withTiming(1, { duration: 520, easing: Easing.out(Easing.cubic) }),
+          withTiming(0, { duration: 0 })
+        )
+      );
+    }, 700);
+    return () => clearInterval(timer);
+  }, [delay, heat, motion, progress]);
+
+  const style = useAnimatedStyle(() => ({
+    opacity: progress.value < 0.2 ? progress.value / 0.2 : 1 - (progress.value - 0.2) / 0.8,
+    transform: [
+      { translateY: -2 - progress.value * (10 + heat * 4) },
+      { translateX: (delay % 3 === 0 ? -1 : 1) * progress.value * 4 },
+      { scale: 0.5 + progress.value * 0.8 },
+    ],
+  }));
+
+  if (heat < 1) return null;
+  return (
+    <Animated.View
+      style={[
+        {
+          position: "absolute",
+          right: 4 + (delay % 5) * 3,
+          bottom: 2,
+          width: 5,
+          height: 5,
+          borderRadius: 3,
+          backgroundColor: color,
+        },
+        style,
+      ]}
+    />
+  );
+}
+
+export function ProgressFill({
+  progress,
+  color,
+  height = 16,
+  heat = 0,
+}: {
+  progress: number;
+  color: string;
+  height?: number;
+  heat?: number;
+}) {
   const motion = useMotionEnabled();
   const width = useSharedValue(progress);
+  const pulse = useSharedValue(1);
+  const colors = fireColors(heat, color);
 
   useEffect(() => {
     width.value = motion ? withTiming(progress, { duration: 280, easing: Easing.out(Easing.cubic) }) : progress;
   }, [motion, progress, width]);
 
+  useEffect(() => {
+    if (!motion || heat < 2) {
+      pulse.value = 1;
+      return;
+    }
+    pulse.value = withSequence(
+      withTiming(1.04, { duration: 220 }),
+      withTiming(1, { duration: 220 }),
+      withTiming(1.03, { duration: 220 }),
+      withTiming(1, { duration: 220 })
+    );
+  }, [heat, motion, pulse, progress]);
+
   const fill = useAnimatedStyle(() => ({
     width: `${width.value}%`,
+    transform: [{ scaleY: pulse.value }],
   }));
 
   return (
-    <Animated.View style={[{ height, borderRadius: 999, overflow: "hidden", backgroundColor: color }, fill]}>
+    <Animated.View style={[{ height, borderRadius: 999, overflow: "hidden", backgroundColor: colors.base }, fill]}>
+      {heat > 0 ? (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            right: 0,
+            width: "42%",
+            backgroundColor: colors.mid,
+            opacity: 0.85,
+          }}
+        />
+      ) : null}
+      {heat > 1 ? (
+        <View
+          style={{
+            position: "absolute",
+            top: 0,
+            bottom: 0,
+            right: 0,
+            width: "22%",
+            backgroundColor: colors.tip,
+            opacity: 0.9,
+          }}
+        />
+      ) : null}
       <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, backgroundColor: "rgba(255,255,255,0.3)" }} />
+      {heat >= 1 ? (
+        <>
+          <FireSpark delay={0} color={colors.spark} heat={heat} />
+          <FireSpark delay={120} color={colors.tip} heat={heat} />
+          <FireSpark delay={240} color={colors.spark} heat={heat} />
+        </>
+      ) : null}
     </Animated.View>
   );
 }

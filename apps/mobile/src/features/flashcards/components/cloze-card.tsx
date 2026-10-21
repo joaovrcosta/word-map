@@ -26,7 +26,7 @@ export function ClozeCard({
   const aliveRef = useRef(true);
   const hint = clozeTranslationHint(word.translations, answer);
   const parts = splitSentenceAtAnswer(sentence, answer);
-  const initial = answer.trim().slice(0, 1);
+  const initial = answer.trim().slice(0, 2);
 
   useEffect(() => {
     aliveRef.current = true;

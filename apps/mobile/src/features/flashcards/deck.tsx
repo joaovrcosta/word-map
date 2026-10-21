@@ -5,6 +5,7 @@ import * as Speech from "expo-speech";
 import Animated, { SlideInRight, SlideOutLeft } from "react-native-reanimated";
 import {
   buildFlashcardQueue,
+  challengeXpForStreak,
   recognitionRetry,
   selectPracticeWords,
   shouldRecordClozeResult,
@@ -15,7 +16,7 @@ import {
 } from "@word-map/shared";
 import { ClozeCard } from "./components/cloze-card";
 import { ExitConfirm } from "./components/exit-confirm";
-import { CloseButton, EnergyMark, StreakChip, XpFloat } from "./components/lesson-bar";
+import { CloseButton, EnergyMark, StreakChip, streakHeat, XpFloat } from "./components/lesson-bar";
 import { ListenCard } from "./components/listen-card";
 import { MatchCard } from "./components/match-card";
 import { RecallCard } from "./components/recall-card";
@@ -74,6 +75,8 @@ export function FlashcardDeck({
   const [soundOn, setSoundOn] = useState(true);
   const [streak, setStreak] = useState(0);
   const [xpToken, setXpToken] = useState(0);
+  const [lastXpGain, setLastXpGain] = useState(0);
+  const [sessionXp, setSessionXp] = useState(0);
   const [confirmExit, setConfirmExit] = useState(false);
   useLessonCues();
   const stepsRef = useRef<FlashcardStep[]>([]);
@@ -85,6 +88,7 @@ export function FlashcardDeck({
   const reviewTokenRef = useRef(0);
   const pendingSavesRef = useRef<PendingSave[]>([]);
   const levelsRef = useRef<Map<number, { id: number; name: string; start: number; current: number }>>(new Map());
+  const streakRef = useRef(0);
   const autostartRef = useRef(false);
 
   useEffect(() => {
@@ -269,8 +273,11 @@ export function FlashcardDeck({
       setAnalysis(null);
       setAnalysisState("none");
       setNextPractice(null);
+      streakRef.current = 0;
       setStreak(0);
       setXpToken(0);
+      setLastXpGain(0);
+      setSessionXp(0);
       setChallengeStats({ correct: 0, total: 0 });
       setSession({
         vaultName: created.vaultName || vaultName,
@@ -329,8 +336,17 @@ export function FlashcardDeck({
   };
 
   const noteChallenge = (word: FlashcardWord, correct: boolean, kind: ChallengeKind, typed?: string) => {
-    setStreak((current) => (correct ? current + 1 : 0));
-    if (correct) setXpToken((current) => current + 1);
+    if (correct) {
+      streakRef.current += 1;
+      const gain = challengeXpForStreak(streakRef.current);
+      setStreak(streakRef.current);
+      setLastXpGain(gain);
+      setSessionXp((current) => current + gain);
+      setXpToken((current) => current + 1);
+    } else {
+      streakRef.current = 0;
+      setStreak(0);
+    }
     setChallengeStats((stats) => ({
       total: stats.total + 1,
       correct: stats.correct + (correct ? 1 : 0),
@@ -338,7 +354,13 @@ export function FlashcardDeck({
     rememberOutcome(word, kind, correct ? "ok" : "miss", typed);
     const base = levelsRef.current.get(word.id)?.current ?? word.confidence;
     rememberLevel(word, correct ? base + 1 : base - 1);
-    pendingSavesRef.current.push({ kind: "result", wordId: word.id, correct, challenge: kind });
+    pendingSavesRef.current.push({
+      kind: "result",
+      wordId: word.id,
+      correct,
+      challenge: kind,
+      streak: correct ? streakRef.current : 0,
+    });
   };
 
   const handleAnswer = (confidence: number) => {
@@ -417,10 +439,12 @@ export function FlashcardDeck({
         session={session}
         challengeCorrect={challengeStats.correct}
         challengeTotal={challengeStats.total}
+        sessionXp={sessionXp}
         analysis={analysis}
         analysisState={analysisState}
         nextPractice={nextPractice}
         evolved={evolved}
+        onContinue={onLeave}
         onRestart={() => {
           setShowSummary(false);
           void startSession();
@@ -504,9 +528,9 @@ export function FlashcardDeck({
               backgroundColor: "#4b5563",
             }}
           >
-            <ProgressFill progress={progress} color={theme.colors.green} />
+            <ProgressFill progress={progress} color={theme.colors.green} heat={streakHeat(streak)} />
           </View>
-          <XpFloat token={xpToken} />
+          <XpFloat token={xpToken} amount={lastXpGain} />
         </View>
         <StreakChip streak={streak} />
         <Pressable

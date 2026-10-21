@@ -26,7 +26,7 @@ export function ClozeChallenge({
   const [picked, setPicked] = useState<boolean | null>(null);
   const hint = clozeTranslationHint(word.translations, answer);
   const parts = splitSentenceAtAnswer(sentence, answer);
-  const initial = answer.trim().slice(0, 1);
+  const initial = answer.trim().slice(0, 2);
 
   const finish = (correct: boolean) => {
     if (picked !== null) return;

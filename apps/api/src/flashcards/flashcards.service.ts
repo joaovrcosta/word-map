@@ -228,8 +228,8 @@ export class FlashcardsService {
     return updateWordProgress(wordId, confidence, reviewCount);
   }
 
-  result(wordId: number, correct: boolean, challenge: ChallengeKind) {
-    return recordChallengeResult(wordId, correct, challenge);
+  result(wordId: number, correct: boolean, challenge: ChallengeKind, streak?: number) {
+    return recordChallengeResult(wordId, correct, challenge, streak);
   }
 
   session(vaultId: number) {

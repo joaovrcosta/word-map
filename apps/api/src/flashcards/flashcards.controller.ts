@@ -17,6 +17,10 @@ class ResultDto {
 
   @IsIn(["listen", "match", "cloze"])
   challenge!: ChallengeKind;
+
+  @IsOptional()
+  @IsInt()
+  streak?: number;
 }
 
 class ScheduleDto {
@@ -106,6 +110,6 @@ export class FlashcardsController {
 
   @Post("words/:id/result")
   result(@Param("id", ParseIntPipe) id: number, @Body() body: ResultDto) {
-    return this.flashcards.result(id, body.correct, body.challenge);
+    return this.flashcards.result(id, body.correct, body.challenge, body.streak);
   }
 }

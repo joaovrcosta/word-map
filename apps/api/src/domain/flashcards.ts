@@ -195,7 +195,8 @@ export async function updateWordProgress(
 export async function recordChallengeResult(
   wordId: number,
   correct: boolean,
-  challenge: ChallengeKind
+  challenge: ChallengeKind,
+  streak = 1
 ): Promise<void> {
   try {
     const user = await getCurrentUser();
@@ -236,7 +237,7 @@ export async function recordChallengeResult(
       },
     });
     if (correct) {
-      await awardFlashcardPoints(user.id, wordId, review.id);
+      await awardFlashcardPoints(user.id, wordId, review.id, streak);
     }
     if (nextConfidence !== existingWord.confidence) {
       await recordWordLevel(wordId, nextConfidence);

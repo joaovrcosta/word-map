@@ -1,8 +1,9 @@
 import { Prisma } from "@prisma/client";
+import { challengeXpForStreak, CHALLENGE_XP_BASE } from "@word-map/shared";
 import { prisma } from "../prisma/client";
 
 export const POINTS_PER_SAVED_WORD = 10;
-export const POINTS_PER_CHALLENGE = 10;
+export const POINTS_PER_CHALLENGE = CHALLENGE_XP_BASE;
 
 export const RANKING_PERIODS = ["week", "month", "lifetime"] as const;
 export type RankingPeriod = (typeof RANKING_PERIODS)[number];
@@ -78,12 +79,14 @@ export type RankingEntry = {
 export async function awardFlashcardPoints(
   userId: number,
   wordId: number,
-  reviewId: number
+  reviewId: number,
+  streak = 1
 ): Promise<void> {
+  const points = challengeXpForStreak(Math.min(20, Math.max(1, Math.floor(streak) || 1)));
   try {
     await prisma.$executeRaw`
       INSERT INTO "PointAward" ("userId", "wordId", "points", "source", "dedupeKey", "createdAt")
-      VALUES (${userId}, ${wordId}, ${POINTS_PER_CHALLENGE}, 'flashcard', ${`flashcard:${reviewId}`}, ${new Date()})
+      VALUES (${userId}, ${wordId}, ${points}, 'flashcard', ${`flashcard:${reviewId}`}, ${new Date()})
       ON CONFLICT ("dedupeKey") DO NOTHING
     `;
   } catch (error) {

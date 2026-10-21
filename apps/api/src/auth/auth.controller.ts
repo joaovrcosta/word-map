@@ -20,9 +20,10 @@ import {
 } from "../common/cookies";
 import type { User } from "./current-user";
 
-function sessionBody(result: AuthActionResult, mobile: boolean) {
+function sessionBody(result: AuthActionResult, _mobile = false) {
   if (!result.success) return result;
-  if (mobile && result.token) {
+  // Sempre devolve o token no JSON: o mobile precisa dele; o web pode ignorar e usar o cookie.
+  if (result.token) {
     return { success: true as const, user: result.user, token: result.token };
   }
   return { success: true as const, user: result.user };
@@ -34,8 +35,16 @@ export class AuthController {
 
   @Public()
   @Post("register")
-  register(@Body() body: RegisterDto) {
-    return this.auth.register(body);
+  async register(
+    @Body() body: RegisterDto,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response
+  ) {
+    const result = await this.auth.register(body);
+    if (result.success && result.token) {
+      response.cookie(AUTH_COOKIE, result.token, authCookieOptions());
+    }
+    return sessionBody(result, isMobileClient(request.get(MOBILE_CLIENT_HEADER)));
   }
 
   @Public()
