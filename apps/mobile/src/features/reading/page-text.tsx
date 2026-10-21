@@ -1,10 +1,33 @@
 import { useRef, type ComponentRef, type ReactNode, type RefObject } from "react";
 import { Text, type GestureResponderEvent } from "react-native";
-import { normalizeToken, splitTokenEdges } from "@word-map/shared";
+import { normalizePhrase, normalizeToken, splitTokenEdges } from "@word-map/shared";
 import { useTheme } from "../../theme";
 
 export const MAX_RANGE_WORDS = 6;
 export const RANGE_LONG_PRESS_MS = 480;
+
+/** Marca índices cobertos por frases do vault (prioriza as mais longas). */
+export function phraseCoverage(
+  tokens: Array<{ index: number; clean: string }>,
+  phrases: string[]
+): Map<number, string> {
+  const covered = new Map<number, string>();
+  const normalized = phrases
+    .map((phrase) => normalizePhrase(phrase))
+    .filter((phrase) => phrase.split(" ").filter(Boolean).length >= 2)
+    .sort((left, right) => right.split(" ").length - left.split(" ").length);
+
+  for (const phrase of normalized) {
+    const parts = phrase.split(" ").filter(Boolean);
+    for (let start = 0; start <= tokens.length - parts.length; start += 1) {
+      const slice = tokens.slice(start, start + parts.length);
+      if (!parts.every((part, offset) => slice[offset]?.clean === part)) continue;
+      if (slice.some((token) => covered.has(token.index))) continue;
+      for (const token of slice) covered.set(token.index, phrase);
+    }
+  }
+  return covered;
+}
 
 export type WordAnchor = {
   x: number;
@@ -83,6 +106,7 @@ export function ReadingPageText({
   width,
   fontSize,
   vaultWords,
+  vaultPhrases = [],
   selectedClean,
   selectedOccurrence,
   rangeIndexes,
@@ -94,6 +118,7 @@ export function ReadingPageText({
   width: number;
   fontSize: number;
   vaultWords: Set<string>;
+  vaultPhrases?: string[];
   selectedClean: string | null;
   selectedOccurrence: number | null;
   rangeIndexes: number[] | null;
@@ -125,6 +150,7 @@ export function ReadingPageText({
     clean: string;
     occurrence: number;
     inVault: boolean;
+    phrase: string | null;
   };
 
   const parsed: Parsed[] = [];
@@ -146,18 +172,33 @@ export function ReadingPageText({
         clean,
         occurrence,
         inVault: vaultWords.has(clean),
+        phrase: null,
       });
     }
     tokenIndex += 1;
     match = pattern.exec(text);
   }
 
+  const phrases = [...vaultPhrases];
+  if (selectedClean && normalizePhrase(selectedClean).includes(" ")) {
+    phrases.push(selectedClean);
+  }
+  const covered = phraseCoverage(parsed, phrases);
+  for (const item of parsed) {
+    const phrase = covered.get(item.index) ?? null;
+    item.phrase = phrase;
+    if (phrase) item.inVault = true;
+  }
+
+  const selectedPhrase = selectedClean ? normalizePhrase(selectedClean) : "";
   const selectedSet = new Set<number>();
   for (const item of parsed) {
     const inRange = rangeSet?.has(item.index) ?? false;
     const alone =
       !ranging && selectedClean === item.clean && selectedOccurrence === item.occurrence;
-    if (inRange || alone) selectedSet.add(item.index);
+    const phraseSelected =
+      !ranging && Boolean(selectedPhrase.includes(" ") && item.phrase === selectedPhrase);
+    if (inRange || alone || phraseSelected) selectedSet.add(item.index);
   }
 
   const nodes: ReactNode[] = [];
@@ -169,18 +210,23 @@ export function ReadingPageText({
     const nextSelected = Boolean(next && selectedSet.has(next.index));
     const prev = parsed[order - 1];
     const prevSelected = Boolean(prev && selectedSet.has(prev.index));
-    const contiguous = selected && (prevSelected || nextSelected);
-    const rangeRole: SelectRole = !selected
+    const nextJoined =
+      (selected && nextSelected) ||
+      (Boolean(item.phrase) && next?.phrase === item.phrase && !ranging);
+    const prevJoined =
+      (selected && prevSelected) ||
+      (Boolean(item.phrase) && prev?.phrase === item.phrase && !ranging);
+    const joined = selected || (Boolean(item.phrase) && !ranging);
+    const rangeRole: SelectRole = !joined
       ? null
-      : contiguous
-        ? prevSelected && nextSelected
+      : prevJoined || nextJoined
+        ? prevJoined && nextJoined
           ? "middle"
-          : prevSelected
+          : prevJoined
             ? "end"
             : "start"
         : "solo";
-    const bridge =
-      selected && nextSelected && next ? text.slice(item.end, next.start) : "";
+    const bridge = nextJoined && next ? text.slice(item.end, next.start) : "";
     nodes.push(
       <WordToken
         key={`word-${item.index}`}
@@ -201,6 +247,10 @@ export function ReadingPageText({
             onToggleRangeWord(item.index, item.clean, item.occurrence, anchor);
             return;
           }
+          if (item.phrase) {
+            onSelectWord(item.phrase, 0, anchor);
+            return;
+          }
           onSelectWord(item.clean, item.occurrence, anchor);
         }}
         onLongPress={(anchor) => {
@@ -208,7 +258,7 @@ export function ReadingPageText({
         }}
       />
     );
-    cursor = selected && nextSelected && next ? next.start : item.end;
+    cursor = nextJoined && next ? next.start : item.end;
   });
   if (cursor < text.length) nodes.push(text.slice(cursor));
 
@@ -306,7 +356,11 @@ function WordToken({
   const pressPoint = useRef({ pageX: 0, pageY: 0 });
   const { leading, core, trailing } = splitTokenEdges(surface);
   const marked = inVault || similar || selected;
-  const radii = selectRadii(selected ? selectRole : marked ? "solo" : null);
+  const radii = selectRadii(selectRole ?? (marked ? "solo" : null));
+  const padLeft =
+    selectRole === "middle" || selectRole === "end" ? 0 : marked ? 5 : 0;
+  const padRight =
+    selectRole === "middle" || selectRole === "start" ? 0 : marked ? 5 : 0;
 
   const clearLong = () => {
     if (longTimer.current) {
@@ -371,8 +425,9 @@ function WordToken({
                 ? "rgba(36,200,117,0.28)"
                 : "transparent",
           overflow: "hidden",
-          paddingHorizontal: marked ? 5 : 0,
-          paddingVertical: selected ? 1 : 0,
+          paddingLeft: padLeft,
+          paddingRight: padRight,
+          paddingVertical: selected || inVault ? 1 : 0,
           ...radii,
         }}
       >

@@ -68,6 +68,19 @@ export interface SearchResult {
   };
 }
 
+const DEFAULT_PHRASES_VAULT_NAME = "Minhas frases";
+
+async function ensurePhrasesVault(userId: number) {
+  const existing = await prisma.vault.findFirst({
+    where: { userId, name: DEFAULT_PHRASES_VAULT_NAME },
+    select: { id: true },
+  });
+  if (existing) return;
+  await prisma.vault.create({
+    data: { name: DEFAULT_PHRASES_VAULT_NAME, userId },
+  });
+}
+
 // Buscar todos os vaults do usuário autenticado
 export async function getVaults(): Promise<Vault[]> {
   try {
@@ -76,6 +89,8 @@ export async function getVaults(): Promise<Vault[]> {
     if (!user) {
       throw new Error("Usuário não autenticado");
     }
+
+    await ensurePhrasesVault(user.id);
 
     const vaults = await prisma.vault.findMany({
       where: {

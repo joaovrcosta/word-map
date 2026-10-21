@@ -112,7 +112,7 @@ function getMultiWordTokenCount(name: string): number {
 function isMultiWordVaultEntry(word: MatchableVault["words"][number]): boolean {
   if (isPhrasalVaultWord(word.name)) return false;
   const count = getMultiWordTokenCount(word.name);
-  return count >= 2 && count <= 3;
+  return count >= 2 && count <= 6;
 }
 
 function isFraseVaultWord(word: MatchableVault["words"][number]): boolean {
@@ -277,7 +277,7 @@ export function matchTextToVaultWords(
   if (vaultHasExactPhraseEntries(userVaults)) {
     const tokens = extractTextTokenStream(content);
 
-    for (const size of [3, 2]) {
+    for (const size of [6, 5, 4, 3, 2]) {
       for (let i = 0; i <= tokens.length - size; i += 1) {
         const displaySurface = buildNgramSurface(tokens, i, size);
         if (!displaySurface) continue;

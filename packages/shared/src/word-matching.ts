@@ -148,8 +148,16 @@ export function parseSelectionTokens(text: string): string[] {
   return tokens;
 }
 
+export const DEFAULT_WORDS_VAULT_NAME = "Meu dicionario";
+export const DEFAULT_PHRASES_VAULT_NAME = "Minhas frases";
+export const MAX_PHRASE_WORDS = 6;
+
 export function isValidSelectionForSave(tokens: string[]): boolean {
-  return tokens.length === 2 || tokens.length === 3;
+  return tokens.length >= 2 && tokens.length <= MAX_PHRASE_WORDS;
+}
+
+export function isPhraseName(name: string): boolean {
+  return normalizePhrase(name).split(" ").filter(Boolean).length >= 2;
 }
 
 export function getSelectionDisplayText(text: string): string {

@@ -146,11 +146,13 @@ describe("word-matching", () => {
       ]);
     });
 
-    it("valida seleções de 2 ou 3 palavras", () => {
+    it("valida seleções de 2 a 6 palavras", () => {
       expect(isValidSelectionForSave(["shook", "up"])).toBe(true);
       expect(isValidSelectionForSave(["in", "the", "meantime"])).toBe(true);
+      expect(isValidSelectionForSave(["a", "b", "c", "d"])).toBe(true);
+      expect(isValidSelectionForSave(["a", "b", "c", "d", "e", "f"])).toBe(true);
       expect(isValidSelectionForSave(["word"])).toBe(false);
-      expect(isValidSelectionForSave(["a", "b", "c", "d"])).toBe(false);
+      expect(isValidSelectionForSave(["a", "b", "c", "d", "e", "f", "g"])).toBe(false);
     });
 
     it("monta n-gramas a partir do stream de tokens", () => {

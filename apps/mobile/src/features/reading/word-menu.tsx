@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Modal,
@@ -15,11 +15,15 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Speech from "expo-speech";
 import {
   buildReadingContext,
+  DEFAULT_PHRASES_VAULT_NAME,
+  DEFAULT_WORDS_VAULT_NAME,
   extractRelatedSentences,
   formatOriginDate,
   grammarClassBySlug,
   grammarClassLabel,
+  isPhraseName,
   normalizeGrammaticalClass,
+  normalizePhrase,
   resolveGrammarSlug,
   splitParagraphs,
   type DictionaryEntry,
@@ -221,12 +225,18 @@ export function findSavedReadingWord(
   vaults: Vault[],
   clean: string
 ): SavedReadingWord | null {
-  const match = foundWords.find((item) => item.word.toLowerCase() === clean.toLowerCase());
+  const needle = normalizePhrase(clean);
+  const match = foundWords.find(
+    (item) =>
+      normalizePhrase(item.word) === needle || item.word.toLowerCase() === clean.toLowerCase()
+  );
   if (!match) return null;
   const vault = match.vaultInfo[0];
   const word =
-    vault?.words.find((item) => item.name.toLowerCase() === clean.toLowerCase()) ??
-    vault?.words[0];
+    vault?.words.find(
+      (item) =>
+        normalizePhrase(item.name) === needle || item.name.toLowerCase() === clean.toLowerCase()
+    ) ?? vault?.words[0];
   if (!vault || !word) return null;
   const stored = vaults
     .find((item) => item.id === vault.id)
@@ -280,7 +290,17 @@ export function ReadingWordMenu({
   const [selectedMeanings, setSelectedMeanings] = useState<string[]>(saved?.translations ?? []);
   const [customMeaning, setCustomMeaning] = useState("");
   const [notes, setNotes] = useState(saved?.notes ?? "");
-  const [vaultId, setVaultId] = useState(saved ? String(saved.vaultId) : vaults[0] ? String(vaults[0].id) : "");
+  const phraseSelection = isPhraseName(clean);
+  const defaultVaultId = (() => {
+    if (saved) return String(saved.vaultId);
+    if (phraseSelection) {
+      const phrases = vaults.find((item) => item.name === DEFAULT_PHRASES_VAULT_NAME);
+      if (phrases) return String(phrases.id);
+    }
+    const words = vaults.find((item) => item.name === DEFAULT_WORDS_VAULT_NAME);
+    return String(words?.id ?? vaults[0]?.id ?? "");
+  })();
+  const [vaultId, setVaultId] = useState(defaultVaultId);
   const [wordInfo, setWordInfo] = useState<DictionaryEntry | null>(null);
   const [candidateMeanings, setCandidateMeanings] = useState<string[]>([]);
   const [loadingInfo, setLoadingInfo] = useState(false);
@@ -329,9 +349,20 @@ export function ReadingWordMenu({
   }, [clean, full]);
 
   useEffect(() => {
-    if (vaultId || localSaved || vaults.length === 0) return;
-    setVaultId(String(vaults[0].id));
-  }, [vaultId, localSaved, vaults]);
+    if (localSaved) {
+      setVaultId(String(localSaved.vaultId));
+      return;
+    }
+    if (phraseSelection) {
+      const phrases = vaults.find((item) => item.name === DEFAULT_PHRASES_VAULT_NAME);
+      if (phrases) {
+        setVaultId(String(phrases.id));
+        return;
+      }
+    }
+    const words = vaults.find((item) => item.name === DEFAULT_WORDS_VAULT_NAME);
+    setVaultId(String(words?.id ?? vaults[0]?.id ?? ""));
+  }, [clean, localSaved, phraseSelection, vaults]);
 
   useEffect(() => {
     if (!localSaved) {
@@ -466,9 +497,11 @@ export function ReadingWordMenu({
     };
   }, [context, request]);
 
-  const suggestedClass = normalizeGrammaticalClass(
-    localSaved?.grammaticalClass || wordInfo?.meanings?.[0]?.partOfSpeech
-  );
+  const suggestedClass = phraseSelection
+    ? "frase"
+    : normalizeGrammaticalClass(
+        localSaved?.grammaticalClass || wordInfo?.meanings?.[0]?.partOfSpeech
+      );
 
   const partOfSpeechBadges = useMemo(() => {
     if (localSaved?.grammaticalClass) return [localSaved.grammaticalClass];
@@ -524,7 +557,7 @@ export function ReadingWordMenu({
         const created = await request<Word>("/words", {
           method: "POST",
           body: JSON.stringify({
-            name: clean,
+            name: phraseSelection ? normalizePhrase(clean) : clean,
             grammaticalClass: suggestedClass,
             translations: translations.length ? translations : [clean],
             notes: notes.trim() || null,

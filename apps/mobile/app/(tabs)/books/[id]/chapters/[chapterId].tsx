@@ -169,7 +169,20 @@ export default function ChapterReaderScreen() {
   }, [chapter, chapterId, pageIndex, pages, request, settled]);
 
   const vaultWords = useMemo(
-    () => new Set(foundWords.map((item) => normalizeToken(item.word))),
+    () =>
+      new Set(
+        foundWords
+          .map((item) => normalizeToken(item.word))
+          .filter((word) => word && !word.includes(" "))
+      ),
+    [foundWords]
+  );
+
+  const vaultPhrases = useMemo(
+    () =>
+      foundWords
+        .map((item) => item.word.trim())
+        .filter((word) => word.split(/\s+/).filter(Boolean).length >= 2),
     [foundWords]
   );
 
@@ -400,6 +413,7 @@ export default function ChapterReaderScreen() {
                       width={width}
                       fontSize={fontSize}
                       vaultWords={vaultWords}
+                      vaultPhrases={vaultPhrases}
                       selectedClean={index === pageIndex ? (selection?.clean ?? null) : null}
                       selectedOccurrence={index === pageIndex ? (selection?.occurrence ?? null) : null}
                       rangeIndexes={index === pageIndex ? rangeIndexes : null}

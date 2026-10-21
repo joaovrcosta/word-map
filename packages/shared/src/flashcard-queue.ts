@@ -1,5 +1,6 @@
 import { isSingleWordName } from "./cloze-text";
 import { daysUntilDue, isWordDue, latenessDays } from "./flashcard-schedule";
+import { isPhraseName } from "./word-matching";
 
 export type FlashcardWord = {
   id: number;
@@ -14,6 +15,10 @@ export type FlashcardWord = {
   createdAt: Date;
   updatedAt: Date;
 };
+
+export function isPhraseFlashcard(word: Pick<FlashcardWord, "name" | "grammaticalClass">) {
+  return word.grammaticalClass === "frase" || isPhraseName(word.name);
+}
 
 export type RecallStep = {
   type: "recall";
@@ -246,7 +251,9 @@ export function buildFlashcardQueue(
   };
 
   const followFresh = (list: FlashcardWord[]) => {
-    const unmatched = list.filter((word) => !matchedIds.has(word.id));
+    const unmatched = list.filter(
+      (word) => !matchedIds.has(word.id) && !isPhraseFlashcard(word)
+    );
     if (unmatched.length >= 2 && canMatch(unmatched, 2)) {
       push(matchStep(unmatched));
     }
@@ -255,6 +262,7 @@ export function buildFlashcardQueue(
       if (listen.type === "listen") push(listen);
     }
     for (const word of list) {
+      if (isPhraseFlashcard(word)) continue;
       const cloze = clozeStep(word);
       if (cloze) push(cloze);
     }
@@ -285,6 +293,20 @@ export function buildFlashcardQueue(
 
   for (const word of words) {
     if (steps.length >= SESSION_CARDS && buffer.length < 4) break;
+    if (isPhraseFlashcard(word)) {
+      if (!word.lastPractice) {
+        if (fresh >= NEW_WORD_LIMIT) continue;
+        fresh += 1;
+        if (push({ type: "recall", word })) {
+          const listen = listenOrRecall(word, words, random);
+          if (listen.type === "listen") push(listen);
+        }
+        continue;
+      }
+      if (steps.length >= SESSION_CARDS) continue;
+      push(listenOrRecall(word, words, random));
+      continue;
+    }
     if (!word.lastPractice) {
       if (fresh >= NEW_WORD_LIMIT) continue;
       fresh += 1;

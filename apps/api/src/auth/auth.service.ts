@@ -35,7 +35,8 @@ export interface RegisterData {
 }
 
 const USERNAME_PATTERN = /^[a-z0-9_]{3,20}$/;
-const DEFAULT_VAULT_NAME = "Meu dicionario";
+const DEFAULT_WORDS_VAULT_NAME = "Meu dicionario";
+const DEFAULT_PHRASES_VAULT_NAME = "Minhas frases";
 
 export function normalizeUsername(value: string): string | null {
   const username = value.trim().replace(/^@+/, "").toLowerCase();
@@ -44,14 +45,22 @@ export function normalizeUsername(value: string): string | null {
 }
 
 async function ensureDefaultVault(userId: number) {
-  const existing = await prisma.vault.count({ where: { userId } });
-  if (existing > 0) return;
-  await prisma.vault.create({
-    data: {
-      name: DEFAULT_VAULT_NAME,
-      userId,
-    },
+  const vaults = await prisma.vault.findMany({
+    where: { userId },
+    select: { name: true },
   });
+  const names = new Set(vaults.map((vault) => vault.name));
+  if (vaults.length === 0) {
+    await prisma.vault.create({
+      data: { name: DEFAULT_WORDS_VAULT_NAME, userId },
+    });
+    names.add(DEFAULT_WORDS_VAULT_NAME);
+  }
+  if (!names.has(DEFAULT_PHRASES_VAULT_NAME)) {
+    await prisma.vault.create({
+      data: { name: DEFAULT_PHRASES_VAULT_NAME, userId },
+    });
+  }
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key";

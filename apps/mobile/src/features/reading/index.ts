@@ -1,6 +1,7 @@
 export {
   MAX_RANGE_WORDS,
   nextRangeIndexes,
+  phraseCoverage,
   ReadingPageText,
   spanFromIndexes,
   tokenizePageText,
