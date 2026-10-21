@@ -1,4 +1,4 @@
-export type ChallengeKind = "listen" | "match" | "cloze";
+export type ChallengeKind = "listen" | "match" | "cloze" | "speak";
 
 export type PendingSave =
   | { kind: "progress"; wordId: number; confidence: number }
@@ -41,7 +41,7 @@ export type RawWord = {
   updatedAt: string;
 };
 
-export const LESSON_KINDS = ["recall", "listen", "match", "cloze"] as const;
+export const LESSON_KINDS = ["recall", "listen", "match", "cloze", "speak"] as const;
 export type LessonKind = (typeof LESSON_KINDS)[number];
 
 export type WordFocus = { id: number; kinds: LessonKind[] };

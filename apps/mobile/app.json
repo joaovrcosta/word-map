@@ -49,6 +49,13 @@
         {
           "iosUrlScheme": "com.googleusercontent.apps.219407875255-85kn7bgse6shvo9c96ga6tcjomg24ebt"
         }
+      ],
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "O Word Map usa o microfone para o exercício de fala.",
+          "speechRecognitionPermission": "O Word Map usa reconhecimento de fala para o exercício de compreensão oral."
+        }
       ]
     ],
     "experiments": {

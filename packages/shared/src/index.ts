@@ -9,3 +9,4 @@ export * from "./reading-context";
 export * from "./grammar-guide";
 export * from "./translate-config";
 export * from "./dictionary";
+export * from "./speak-align";

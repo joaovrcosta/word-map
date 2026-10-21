@@ -15,7 +15,7 @@ class ResultDto {
   @IsBoolean()
   correct!: boolean;
 
-  @IsIn(["listen", "match", "cloze"])
+  @IsIn(["listen", "match", "cloze", "speak"])
   challenge!: ChallengeKind;
 
   @IsOptional()

@@ -21,7 +21,7 @@ export interface FlashcardWord {
   updatedAt: Date;
 }
 
-export type ChallengeKind = "listen" | "match" | "cloze";
+export type ChallengeKind = "listen" | "match" | "cloze" | "speak";
 
 export interface FlashcardProgress {
   wordId: number;

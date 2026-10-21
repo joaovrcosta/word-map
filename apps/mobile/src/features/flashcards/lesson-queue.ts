@@ -9,6 +9,7 @@ const KIND_LABEL: Record<LessonKind, string> = {
   listen: "ouvir",
   match: "combinar",
   cloze: "completar",
+  speak: "falar",
 };
 
 export function focusKey(vaultId: number) {

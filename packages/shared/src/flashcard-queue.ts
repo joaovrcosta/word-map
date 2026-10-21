@@ -52,13 +52,23 @@ export type ClozeStep = {
   retry?: boolean;
 };
 
+export type SpeakStep = {
+  type: "speak";
+  word: FlashcardWord;
+  retry?: boolean;
+};
+
 export type ClozeSource = {
   wordId: number;
   sentence: string;
   answer: string;
 };
 
-export type FlashcardStep = RecallStep | ListenStep | MatchStep | ClozeStep;
+export type FlashcardQueueOptions = {
+  speakEnabled?: boolean;
+};
+
+export type FlashcardStep = RecallStep | ListenStep | MatchStep | ClozeStep | SpeakStep;
 
 export function stepWordIds(step: FlashcardStep): number[] {
   if (step.type === "match") return step.pairs.map((pair) => pair.word.id);
@@ -226,11 +236,41 @@ export function recognitionRetry(
   return listenOrRecall(word, words, random, true);
 }
 
+function phraseFollowUp(
+  word: FlashcardWord,
+  words: FlashcardWord[],
+  random: () => number,
+  speakEnabled: boolean,
+  retry = false
+): ListenStep | RecallStep | SpeakStep {
+  if (speakEnabled) {
+    return { type: "speak", word, ...(retry ? { retry: true } : {}) };
+  }
+  return listenOrRecall(word, words, random, retry);
+}
+
+/** Fila só de fala (frases). Sempre emite `speak` — nunca listen. */
+export function buildSpeakQueue(
+  words: FlashcardWord[],
+  _random: () => number = Math.random,
+  _options: FlashcardQueueOptions = {}
+): FlashcardStep[] {
+  const phrases = words.filter(isPhraseFlashcard);
+  const steps: FlashcardStep[] = [];
+  for (const word of phrases) {
+    if (steps.length >= SESSION_CARDS) break;
+    steps.push({ type: "speak", word });
+  }
+  return steps;
+}
+
 export function buildFlashcardQueue(
   words: FlashcardWord[],
   random: () => number = Math.random,
-  clozes: ClozeSource[] = []
+  clozes: ClozeSource[] = [],
+  options: FlashcardQueueOptions = {}
 ): FlashcardStep[] {
+  const speakEnabled = Boolean(options.speakEnabled);
   const steps: FlashcardStep[] = [];
   const clozeById = new Map(clozes.map((cloze) => [cloze.wordId, cloze]));
   const buffer: Array<{ word: FlashcardWord; fresh: boolean }> = [];
@@ -298,13 +338,13 @@ export function buildFlashcardQueue(
         if (fresh >= NEW_WORD_LIMIT) continue;
         fresh += 1;
         if (push({ type: "recall", word })) {
-          const listen = listenOrRecall(word, words, random);
-          if (listen.type === "listen") push(listen);
+          const follow = phraseFollowUp(word, words, random, speakEnabled);
+          if (follow.type === "listen" || follow.type === "speak") push(follow);
         }
         continue;
       }
       if (steps.length >= SESSION_CARDS) continue;
-      push(listenOrRecall(word, words, random));
+      push(phraseFollowUp(word, words, random, speakEnabled));
       continue;
     }
     if (!word.lastPractice) {
