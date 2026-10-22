@@ -43,6 +43,9 @@ import { useSession } from "../../session";
 import { isSpeechRecognitionAvailable } from "../../speech-recognition";
 import { useTheme } from "../../theme";
 
+/** Desliga fala na fila ate o build nativo estar liberado. */
+const SPEAK_MODE_LOCKED = true;
+
 
 
 

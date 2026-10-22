@@ -43,12 +43,14 @@ export default function TabsLayout() {
               borderTopWidth: 0,
               paddingTop: 6,
               paddingBottom: 6,
-              paddingHorizontal: 0,
+              paddingHorizontal: 4,
               overflow: "hidden",
             },
         tabBarLabelPosition: "below-icon",
         tabBarItemStyle: {
+          flex: 1,
           justifyContent: "center",
+          alignItems: "center",
           paddingVertical: 0,
         },
         tabBarLabelStyle: {
@@ -73,6 +75,26 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
+        name="search"
+        options={{
+          title: "Busca",
+          tabBarIcon: ({ focused }) => (
+            <View
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: 14,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: focused ? theme.shell.tones.cream : theme.shell.tones.green,
+              }}
+            >
+              <Ionicons name="search" size={16} color={theme.shell.onPastel} />
+            </View>
+          ),
+        }}
+      />
+      <Tabs.Screen
         name="flashcards"
         options={{
           title: "Treino",
@@ -86,13 +108,7 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="book" size={size} color={color} />,
         }}
       />
-      <Tabs.Screen
-        name="profile"
-        options={{
-          title: "Perfil",
-          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
-        }}
-      />
+      <Tabs.Screen name="profile" options={{ href: null }} />
       <Tabs.Screen name="ranking" options={{ href: null }} />
     </Tabs>
   );

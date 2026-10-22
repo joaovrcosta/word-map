@@ -772,60 +772,6 @@ export function ReadingWordMenu({
     : belowTop;
   const arrowLeft = Math.max(16, Math.min(safeAnchor.x + safeAnchor.width / 2 - left, cardWidth - 16));
   const scrollMax = Math.max(140, maxCard - chevronH);
-  const levelBar = (
-    <View style={[styles.footer, sheet && styles.sheetFooter]}>
-      {localSaved ? (
-        <Pressable disabled={saving} onPress={() => void handleRemove()} style={styles.removeButton}>
-          <View style={styles.iconChip}>
-            <Ionicons name="trash-outline" size={sheet ? 18 : 14} color={shell.foreground} />
-          </View>
-          {sheet ? null : (
-            <Text style={{ color: shell.muted, fontFamily: theme.fonts.semibold, fontSize: 12 }}>Remover</Text>
-          )}
-        </Pressable>
-      ) : (
-        <View style={{ width: sheet ? 42 : 0 }} />
-      )}
-      <View style={styles.levels}>
-        {[1, 2, 3, 4].map((level) => {
-          const active = confidence === level;
-          return (
-            <Pressable
-              key={level}
-              disabled={saving || (!localSaved && !resolvedVaultId)}
-              onPress={() => void handleConfidence(level)}
-              style={[
-                styles.levelButton,
-                sheet && styles.levelButtonSheet,
-                {
-                  backgroundColor: active ? LEVEL_COLORS[level - 1] : shell.chip,
-                },
-              ]}
-            >
-              <Text
-                style={{
-                  color: active ? LEVEL_TEXT[level - 1] : shell.muted,
-                  fontFamily: theme.fonts.bold,
-                  fontSize: 13,
-                }}
-              >
-                {level}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-      {sheet ? (
-        <Pressable
-          accessibilityLabel="Fechar painel"
-          onPress={onClose}
-          style={[styles.sheetDone, { backgroundColor: theme.colors.green }]}
-        >
-          <Ionicons name="checkmark" size={22} color={shell.foreground} />
-        </Pressable>
-      ) : null}
-    </View>
-  );
   const contextPanel = (
     <View>
       {explanation && !explaining ? (
@@ -882,6 +828,60 @@ export function ReadingWordMenu({
       )}
       {explanationError ? (
         <Text style={[styles.error, { fontFamily: theme.fonts.regular }]}>{explanationError}</Text>
+      ) : null}
+    </View>
+  );
+  const levelBar = (
+    <View style={[styles.footer, sheet && styles.sheetFooter]}>
+      {localSaved ? (
+        <Pressable disabled={saving} onPress={() => void handleRemove()} style={styles.removeButton}>
+          <View style={styles.iconChip}>
+            <Ionicons name="trash-outline" size={sheet ? 18 : 14} color={shell.foreground} />
+          </View>
+          {sheet ? null : (
+            <Text style={{ color: shell.muted, fontFamily: theme.fonts.semibold, fontSize: 12 }}>Remover</Text>
+          )}
+        </Pressable>
+      ) : (
+        <View style={{ width: sheet ? 42 : 0 }} />
+      )}
+      <View style={styles.levels}>
+        {[1, 2, 3, 4].map((level) => {
+          const active = confidence === level;
+          return (
+            <Pressable
+              key={level}
+              disabled={saving || (!localSaved && !resolvedVaultId)}
+              onPress={() => void handleConfidence(level)}
+              style={[
+                styles.levelButton,
+                sheet && styles.levelButtonSheet,
+                {
+                  backgroundColor: active ? LEVEL_COLORS[level - 1] : shell.chip,
+                },
+              ]}
+            >
+              <Text
+                style={{
+                  color: active ? LEVEL_TEXT[level - 1] : shell.muted,
+                  fontFamily: theme.fonts.bold,
+                  fontSize: 13,
+                }}
+              >
+                {level}
+              </Text>
+            </Pressable>
+          );
+        })}
+      </View>
+      {sheet ? (
+        <Pressable
+          accessibilityLabel="Fechar painel"
+          onPress={onClose}
+          style={[styles.sheetDone, { backgroundColor: theme.colors.green }]}
+        >
+          <Ionicons name="checkmark" size={22} color={shell.foreground} />
+        </Pressable>
       ) : null}
     </View>
   );
@@ -1059,7 +1059,7 @@ export function ReadingWordMenu({
                   </Text>
                 ) : null}
 
-                <View style={{ marginTop: 12 }}>{contextPanel}</View>
+                {!sheet ? <View style={{ marginTop: 12 }}>{contextPanel}</View> : null}
 
                 {details ? (
                   <View style={{ marginTop: 4 }}>
@@ -1539,35 +1539,6 @@ const styles = StyleSheet.create({
   popularText: { flex: 1, color: shell.foreground, fontSize: 15, lineHeight: 22 },
   phrase: { color: shell.muted, fontSize: 13, lineHeight: 20, marginTop: 6 },
   originMeaning: { color: shell.foreground, fontSize: 14, lineHeight: 20, marginTop: 6 },
-  contextBox: {
-    borderWidth: 0,
-    borderColor: "transparent",
-    backgroundColor: shell.surface,
-    borderRadius: 20,
-    padding: 16,
-  },
-  contextAction: { color: shell.foreground, fontSize: 14 },
-  contextBody: { color: shell.foreground, fontSize: 15, lineHeight: 22, marginTop: 8 },
-  contextButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: shell.tones.lilac,
-    borderRadius: 20,
-    paddingVertical: 16,
-    marginTop: 4,
-  },
-  translationRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
-  saveChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: shell.chip,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
   origin: {
     backgroundColor: shell.surface,
     borderLeftWidth: 8,
@@ -1616,5 +1587,34 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
   },
   vaultChipActive: { backgroundColor: shell.chipActive },
+  contextBox: {
+    borderWidth: 0,
+    borderColor: "transparent",
+    backgroundColor: shell.surface,
+    borderRadius: 20,
+    padding: 16,
+  },
+  contextAction: { color: shell.foreground, fontSize: 14 },
+  contextBody: { color: shell.foreground, fontSize: 15, lineHeight: 22, marginTop: 8 },
+  contextButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: shell.tones.lilac,
+    borderRadius: 20,
+    paddingVertical: 16,
+    marginTop: 4,
+  },
+  translationRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
+  saveChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: shell.chip,
+    borderRadius: 999,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
   chevron: { alignItems: "center", justifyContent: "center", paddingVertical: 8 },
 });
