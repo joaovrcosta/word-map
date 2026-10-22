@@ -91,7 +91,7 @@ export function FlashcardDeck({
   useLessonCues();
   const stepsRef = useRef<FlashcardStep[]>([]);
   const indexRef = useRef(0);
-  const studiedRef = useRef(0);
+  const studiedIdsRef = useRef(new Set<number>());
   const clozeAttemptsRef = useRef<Map<number, number>>(new Map());
   const outcomesRef = useRef<ReviewItem[]>([]);
   const practiceRef = useRef<PracticeMark[]>([]);
@@ -290,7 +290,7 @@ export function FlashcardDeck({
             body: JSON.stringify({ vaultId }),
           })
         : { vaultName: mode === "speak" ? "Fala" : "Treino" };
-      studiedRef.current = 0;
+      studiedIdsRef.current = new Set();
       clozeAttemptsRef.current = new Map();
       outcomesRef.current = [];
       practiceRef.current = [];
@@ -353,8 +353,8 @@ export function FlashcardDeck({
     practiceRef.current.push({ id: word.id, kind, result });
   };
 
-  const finishStep = (wordCount: number, extra: FlashcardStep[] = []) => {
-    studiedRef.current += wordCount;
+  const finishStep = (wordIds: number[], extra: FlashcardStep[] = []) => {
+    for (const id of wordIds) studiedIdsRef.current.add(id);
     const nextSteps = [...stepsRef.current, ...extra];
     const nextIndex = indexRef.current + 1;
 
@@ -362,7 +362,7 @@ export function FlashcardDeck({
     setShowAnswer(false);
 
     if (nextIndex >= nextSteps.length) {
-      closeSession(studiedRef.current);
+      closeSession(studiedIdsRef.current.size);
     }
   };
 
@@ -403,7 +403,7 @@ export function FlashcardDeck({
       rememberOutcome(step.word, "recall", String(confidence));
     }
     const again = !step.retry && confidence <= 2 ? [{ ...step, retry: true as const }] : [];
-    finishStep(step.retry ? 0 : 1, again);
+    finishStep(step.retry ? [] : [step.word.id], again);
   };
 
   if (loading) {
@@ -605,7 +605,7 @@ export function FlashcardDeck({
           options={step.options}
           onAnswer={(correct, typed) => {
             if (!step.retry) noteChallenge(step.word, correct, "listen", typed);
-            finishStep(step.retry ? 0 : 1, !correct && !step.retry ? [{ ...step, retry: true }] : []);
+            finishStep(step.retry ? [] : [step.word.id], !correct && !step.retry ? [{ ...step, retry: true }] : []);
           }}
         />
       ) : null}
@@ -622,7 +622,7 @@ export function FlashcardDeck({
               noteChallenge(step.word, correct, "cloze", typed);
             }
             const counted = !step.retry && shouldRecordClozeResult(attempts);
-            finishStep(counted ? 1 : 0, !correct && !step.retry ? [{ ...step, retry: true }] : []);
+            finishStep(counted ? [step.word.id] : [], !correct && !step.retry ? [{ ...step, retry: true }] : []);
           }}
         />
       ) : null}
@@ -633,7 +633,7 @@ export function FlashcardDeck({
           onPair={(word, correct, typed) => noteChallenge(word, correct, "match", typed)}
           onComplete={(missed) =>
             finishStep(
-              step.pairs.length,
+              step.pairs.map((pair) => pair.word.id),
               missed.map((word) => recognitionRetry(word, words))
             )
           }
@@ -645,9 +645,9 @@ export function FlashcardDeck({
           word={step.word}
           onAnswer={(correct) => {
             if (!step.retry) noteChallenge(step.word, correct, "speak");
-            finishStep(step.retry ? 0 : 1, !correct && !step.retry ? [{ ...step, retry: true }] : []);
+            finishStep(step.retry ? [] : [step.word.id], !correct && !step.retry ? [{ ...step, retry: true }] : []);
           }}
-          onSkip={() => finishStep(0)}
+          onSkip={() => finishStep([])}
         />
       ) : null}
       </Animated.View>

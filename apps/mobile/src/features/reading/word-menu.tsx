@@ -1,6 +1,7 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Animated,
   Modal,
   Pressable,
   ScrollView,
@@ -1010,7 +1011,7 @@ export function ReadingWordMenu({
                   />
                 ) : null}
                 {!details && !dropdownMeaning && (loadingInfo || translating) ? (
-                  <Text style={[styles.hint, { fontFamily: theme.fonts.regular }]}>Buscando tradução…</Text>
+                  <MeaningSkeleton rows={2} compact />
                 ) : null}
 
                 <View style={styles.inputRow}>
@@ -1106,9 +1107,7 @@ export function ReadingWordMenu({
                     ) : null}
 
                     <Text style={[styles.section, { fontFamily: theme.fonts.bold }]}>Significados populares</Text>
-                    {(loadingInfo || translating) && (
-                      <Text style={[styles.hint, { fontFamily: theme.fonts.regular }]}>Buscando tradução…</Text>
-                    )}
+                    {loadingInfo || translating ? <MeaningSkeleton rows={3} /> : null}
                     {!loadingInfo && !translating && availableMeanings.length === 0 ? (
                       <Text style={[styles.hint, { fontFamily: theme.fonts.regular }]}>Nenhum significado sugerido.</Text>
                     ) : null}
@@ -1237,6 +1236,45 @@ function MeaningRow({
       ) : (
         <IconButton label={`Salvar ${label}`} name="add" color={shell.muted} disabled={disabled} onPress={onAdd} />
       )}
+    </View>
+  );
+}
+
+function MeaningSkeleton({ rows = 3, compact = false }: { rows?: number; compact?: boolean }) {
+  const pulse = useRef(new Animated.Value(0.45)).current;
+
+  useEffect(() => {
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 0.9, duration: 700, useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0.45, duration: 700, useNativeDriver: true }),
+      ])
+    );
+    animation.start();
+    return () => animation.stop();
+  }, [pulse]);
+
+  const widths = [0.88, 0.72, 0.6];
+
+  return (
+    <View accessibilityLabel="Carregando significados" style={{ marginTop: compact ? 4 : 0 }}>
+      {Array.from({ length: rows }, (_, index) => (
+        <Animated.View
+          key={index}
+          style={[
+            compact ? styles.skeletonCompact : styles.skeletonRow,
+            { opacity: pulse },
+          ]}
+        >
+          <View
+            style={[
+              styles.skeletonBar,
+              { width: `${Math.round((widths[index % widths.length] ?? 0.7) * 100)}%` },
+            ]}
+          />
+          {!compact ? <View style={styles.skeletonChip} /> : null}
+        </Animated.View>
+      ))}
     </View>
   );
 }
@@ -1537,6 +1575,33 @@ const styles = StyleSheet.create({
     marginTop: 10,
   },
   popularText: { flex: 1, color: shell.foreground, fontSize: 15, lineHeight: 22 },
+  skeletonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: shell.surface,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingVertical: 18,
+    marginTop: 10,
+  },
+  skeletonCompact: {
+    paddingVertical: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: shell.line,
+  },
+  skeletonBar: {
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: shell.chip,
+  },
+  skeletonChip: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    marginLeft: "auto",
+    backgroundColor: shell.chip,
+  },
   phrase: { color: shell.muted, fontSize: 13, lineHeight: 20, marginTop: 6 },
   originMeaning: { color: shell.foreground, fontSize: 14, lineHeight: 20, marginTop: 6 },
   origin: {

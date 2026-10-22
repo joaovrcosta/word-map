@@ -1,7 +1,10 @@
 import { useCallback, useMemo, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   FlatList,
+  Image,
+  KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
@@ -9,9 +12,13 @@ import {
   Text,
   View,
 } from "react-native";
-import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { brand } from "@word-map/design-tokens";
+import { normalizeGrammaticalClass, type DictionaryEntry } from "@word-map/shared";
 import { useSession } from "../../../src/session";
+import { speakWord } from "../../../src/speech";
 import { useTheme } from "../../../src/theme";
 import {
   classLabel,
@@ -22,6 +29,7 @@ import {
 import { ReadingWordMenu, type SavedReadingWord } from "../../../src/features/reading/word-menu";
 import { ErrorText, Field, Heading, Loading, Muted, PrimaryButton, Screen } from "../../../src/ui";
 
+const novaWordIcon = require("../../../assets/icons/nova-word.png");
 const LEVELS = [brand.level1, brand.level2, brand.level3, brand.level4];
 
 type Draft = {
@@ -63,6 +71,7 @@ function askConfirm(title: string, message: string) {
 
 export default function VaultDetailScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { request } = useSession();
   const params = useLocalSearchParams<{ id: string }>();
   const vaultId = Number(params.id);
@@ -73,6 +82,8 @@ export default function VaultDetailScreen() {
   const [opened, setOpened] = useState<Word | null>(null);
   const [query, setQuery] = useState("");
   const [saving, setSaving] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestError, setSuggestError] = useState<string | null>(null);
 
   const words = useMemo(() => {
     if (!vault) return [];
@@ -159,66 +170,244 @@ export default function VaultDetailScreen() {
     }
   };
 
+  const openDraft = (next: Draft) => {
+    setSuggestError(null);
+    setSuggesting(false);
+    setDraft(next);
+  };
+
+  const suggestWithAi = async () => {
+    const word = draft?.name.trim();
+    if (!draft || !word || suggesting) return;
+    setSuggesting(true);
+    setSuggestError(null);
+    try {
+      const [suggestResult, dictionaryResult] = await Promise.all([
+        request<{ translation?: string }>("/tutor/suggest-translation", {
+          method: "POST",
+          body: JSON.stringify({ word }),
+        }).catch(() => null),
+        request<{ entry?: DictionaryEntry | null; entries?: DictionaryEntry[] }>(
+          `/dictionary?word=${encodeURIComponent(word)}`
+        ).catch(() => null),
+      ]);
+
+      const translation = suggestResult?.translation?.trim() ?? "";
+      const entry = dictionaryResult?.entry ?? dictionaryResult?.entries?.[0] ?? null;
+      const grammaticalClass = normalizeGrammaticalClass(entry?.meanings?.[0]?.partOfSpeech);
+
+      if (!translation && !entry) {
+        throw new Error("Não foi possível sugerir tradução e classe.");
+      }
+
+      setDraft((current) =>
+        current
+          ? {
+              ...current,
+              translation: translation || current.translation,
+              grammaticalClass: entry ? grammaticalClass : current.grammaticalClass,
+            }
+          : current
+      );
+
+      if (!translation) {
+        setSuggestError("Classe sugerida. A tradução da IA não ficou disponível.");
+      }
+    } catch (cause) {
+      setSuggestError(
+        cause instanceof Error ? cause.message : "Não foi possível sugerir com IA."
+      );
+    } finally {
+      setSuggesting(false);
+    }
+  };
+
   if (!vault && !missing && !error) return <Loading />;
+
+  const wordCount = vault?.words.length ?? 0;
+  const wordLabel = wordCount === 1 ? "palavra" : "palavras";
 
   return (
     <Screen>
-      <Pressable onPress={() => router.back()}>
+      <Pressable onPress={() => router.back()} hitSlop={8}>
         <Text style={{ color: theme.colors.greenText, fontFamily: theme.fonts.semibold, marginBottom: 8 }}>
           Voltar
         </Text>
       </Pressable>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Heading>{vault?.name ?? "Vault"}</Heading>
-        {vault ? (
-          <Pressable onPress={() => setDraft(blankDraft())}>
-            <Text style={{ color: theme.colors.greenText, fontFamily: theme.fonts.bold, fontSize: 16 }}>
-              Nova
-            </Text>
-          </Pressable>
-        ) : null}
-      </View>
+
       {error ? <ErrorText>{error}</ErrorText> : null}
       {missing ? <Muted>Este vault não está mais disponível.</Muted> : null}
-      {vault && vault.words.length === 0 ? (
+
+      {vault && wordCount === 0 ? (
         <View style={{ flex: 1, justifyContent: "center" }}>
-          <Muted>Nenhuma palavra ainda.</Muted>
-          <PrimaryButton label="Nova palavra" onPress={() => setDraft(blankDraft())} />
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 8 }}>
+            <View style={{ flex: 1 }}>
+              <Heading>Praticar palavras</Heading>
+              <Muted>
+                {vault.name} ainda não tem palavras. Adicione a primeira para começar a praticar.
+              </Muted>
+            </View>
+            <Image source={novaWordIcon} style={{ width: 88, height: 88 }} resizeMode="contain" />
+          </View>
+          <PrimaryButton label="Nova palavra" onPress={() => openDraft(blankDraft())} />
         </View>
       ) : null}
-      {vault && vault.words.length > 0 ? (
-        <Field
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Pesquisar palavra"
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
-      ) : null}
-      {vault && vault.words.length > 0 && words.length === 0 ? (
-        <Muted>Nenhuma palavra encontrada.</Muted>
-      ) : null}
-      {vault && words.length > 0 ? (
+
+      {vault && wordCount > 0 ? (
         <FlatList
           data={words}
           keyExtractor={(item) => String(item.id)}
-          style={{ marginTop: 8, flex: 1 }}
+          style={{ flex: 1 }}
           keyboardShouldPersistTaps="handled"
+          ListHeaderComponent={
+            <View style={{ paddingBottom: 8 }}>
+              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 14 }}>
+                <View style={{ flex: 1, paddingTop: 4 }}>
+                  <Text
+                    style={{
+                      color: theme.shell.foreground,
+                      fontFamily: theme.fonts.bold,
+                      fontSize: 28,
+                      lineHeight: 34,
+                    }}
+                  >
+                    Praticar palavras
+                  </Text>
+                  <Text
+                    style={{
+                      marginTop: 10,
+                      color: theme.shell.muted,
+                      fontFamily: theme.fonts.regular,
+                      fontSize: 16,
+                      lineHeight: 24,
+                    }}
+                  >
+                    Você tem{" "}
+                    <Text style={{ color: theme.shell.mascot.accent, fontFamily: theme.fonts.bold }}>
+                      {wordCount} {wordLabel}
+                    </Text>{" "}
+                    em “{vault.name}”. Vamos começar?
+                  </Text>
+                </View>
+                <Image source={novaWordIcon} style={{ width: 92, height: 92 }} resizeMode="contain" />
+              </View>
+
+              <Pressable
+                accessibilityRole="button"
+                onPress={() => router.push(`/flashcards/${vault.id}` as Href)}
+                style={{
+                  marginTop: 16,
+                  alignItems: "center",
+                  justifyContent: "center",
+                  paddingVertical: 16,
+                  borderRadius: 20,
+                  backgroundColor: theme.shell.tones.green,
+                }}
+              >
+                <Text
+                  style={{
+                    color: theme.shell.onPastel,
+                    fontFamily: theme.fonts.bold,
+                    fontSize: 17,
+                  }}
+                >
+                  {`Praticar ${wordCount} ${wordLabel}`}
+                </Text>
+              </Pressable>
+
+              <Field
+                value={query}
+                onChangeText={setQuery}
+                placeholder="Pesquisar palavra"
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+
+              <View
+                style={{
+                  marginTop: 22,
+                  marginBottom: 4,
+                  flexDirection: "row",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 12,
+                }}
+              >
+                <Text
+                  style={{
+                    flex: 1,
+                    color: theme.shell.foreground,
+                    fontFamily: theme.fonts.bold,
+                    fontSize: 20,
+                  }}
+                >
+                  Minhas {wordCount} {wordCount === 1 ? "Palavra" : "Palavras"}
+                </Text>
+                <Pressable
+                  accessibilityLabel="Nova palavra"
+                  onPress={() => openDraft(blankDraft())}
+                  hitSlop={8}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: theme.shell.chip,
+                  }}
+                >
+                  <Ionicons name="add" size={24} color={theme.shell.foreground} />
+                </Pressable>
+              </View>
+            </View>
+          }
+          ListEmptyComponent={
+            <Muted>Nenhuma palavra encontrada.</Muted>
+          }
           renderItem={({ item }) => {
             const level = Math.min(4, Math.max(1, item.confidence || 1));
             const translation = item.translations.filter(Boolean).join(", ");
             return (
-              <Pressable
-                onPress={() => setOpened(item)}
+              <View
                 style={{
                   flexDirection: "row",
                   alignItems: "center",
-                  gap: 12,
+                  gap: 14,
                   borderBottomWidth: 1,
-                  borderBottomColor: theme.colors.border,
-                  paddingVertical: 14,
+                  borderBottomColor: theme.shell.line,
+                  paddingVertical: 16,
                 }}
               >
+                <Pressable
+                  accessibilityLabel={`Ouvir ${item.name}`}
+                  onPress={() => speakWord(item.name)}
+                  hitSlop={8}
+                  style={{
+                    width: 40,
+                    height: 40,
+                    borderRadius: 20,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: theme.shell.chip,
+                  }}
+                >
+                  <Ionicons name="volume-medium" size={22} color={theme.colors.green} />
+                </Pressable>
+                <Pressable onPress={() => setOpened(item)} style={{ flex: 1 }}>
+                  <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.bold, fontSize: 18 }}>
+                    {item.name}
+                  </Text>
+                  <Text
+                    style={{
+                      color: theme.shell.muted,
+                      fontFamily: theme.fonts.regular,
+                      marginTop: 3,
+                      fontSize: 14,
+                    }}
+                  >
+                    {translation || classLabel(item.grammaticalClass)}
+                  </Text>
+                </Pressable>
                 <View
                   style={{
                     width: 28,
@@ -239,19 +428,12 @@ export default function VaultDetailScreen() {
                     {level}
                   </Text>
                 </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 17 }}>
-                    {item.name}
-                  </Text>
-                  <Text style={{ color: theme.colors.mutedForeground, fontFamily: theme.fonts.regular, marginTop: 2 }}>
-                    {translation || classLabel(item.grammaticalClass)}
-                  </Text>
-                </View>
-              </Pressable>
+              </View>
             );
           }}
         />
       ) : null}
+
       {vault && opened ? (
         <ReadingWordMenu
           clean={opened.name}
@@ -269,130 +451,289 @@ export default function VaultDetailScreen() {
         />
       ) : null}
       <Modal animationType="slide" transparent visible={draft != null} onRequestClose={() => setDraft(null)}>
-        <View style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.45)" }}>
-          <View
-            style={{
-              backgroundColor: theme.colors.card,
-              borderTopLeftRadius: theme.radii.xl,
-              borderTopRightRadius: theme.radii.xl,
-              maxHeight: "90%",
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <Pressable
+            style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.55)" }}
+            onPress={() => {
+              if (!saving) setDraft(null);
             }}
           >
-            <ScrollView contentContainerStyle={{ padding: 20 }} keyboardShouldPersistTaps="handled">
-            <Heading>{draft?.id == null ? "Nova palavra" : "Editar palavra"}</Heading>
-            <Field
-              value={draft?.name ?? ""}
-              onChangeText={(name) => setDraft((current) => (current ? { ...current, name } : current))}
-              placeholder="Palavra"
-              autoCapitalize="none"
-            />
-            <Field
-              value={draft?.translation ?? ""}
-              onChangeText={(translation) =>
-                setDraft((current) => (current ? { ...current, translation } : current))
-              }
-              placeholder="Tradução"
-            />
-            <Text
+            <Pressable
+              onPress={(event) => event.stopPropagation()}
               style={{
-                marginTop: 16,
-                color: theme.colors.mutedForeground,
-                fontFamily: theme.fonts.semibold,
+                backgroundColor: theme.shell.surface,
+                borderTopLeftRadius: 24,
+                borderTopRightRadius: 24,
+                maxHeight: "92%",
+                paddingBottom: Math.max(insets.bottom, 16),
               }}
             >
-              Classe
-            </Text>
-            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 8 }}>
-              {GRAMMATICAL_CLASSES.map(([value, label]) => {
-                const selected = draft?.grammaticalClass === value;
-                return (
-                  <Pressable
-                    key={value}
-                    onPress={() =>
-                      setDraft((current) => (current ? { ...current, grammaticalClass: value } : current))
-                    }
-                    style={{
-                      borderWidth: 1,
-                      borderColor: selected ? theme.colors.green : theme.colors.border,
-                      backgroundColor: selected ? theme.colors.greenSoft : theme.colors.background,
-                      borderRadius: theme.radii.md,
-                      paddingHorizontal: 10,
-                      paddingVertical: 8,
-                    }}
-                  >
-                    <Text
-                      style={{
-                        color: selected ? theme.colors.greenText : theme.colors.foreground,
-                        fontFamily: theme.fonts.semibold,
+              <View style={{ alignItems: "center", paddingTop: 10, paddingBottom: 4 }}>
+                <View
+                  style={{
+                    width: 40,
+                    height: 4,
+                    borderRadius: 2,
+                    backgroundColor: theme.shell.line,
+                  }}
+                />
+              </View>
+
+              <View
+                style={{
+                  flexDirection: "row",
+                  alignItems: "center",
+                  gap: 12,
+                  paddingHorizontal: 20,
+                  paddingTop: 8,
+                  paddingBottom: 4,
+                }}
+              >
+                <Text
+                  style={{
+                    flex: 1,
+                    color: theme.shell.foreground,
+                    fontFamily: theme.fonts.bold,
+                    fontSize: 22,
+                  }}
+                >
+                  {draft?.id == null ? "Nova palavra" : "Editar palavra"}
+                </Text>
+                <Pressable
+                  accessibilityLabel="Fechar"
+                  disabled={saving}
+                  onPress={() => setDraft(null)}
+                  style={{
+                    width: 36,
+                    height: 36,
+                    borderRadius: 18,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    backgroundColor: theme.shell.chip,
+                  }}
+                >
+                  <Ionicons name="close" size={18} color={theme.shell.foreground} />
+                </Pressable>
+              </View>
+
+              <ScrollView
+                contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 12 }}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                <View style={{ flexDirection: "row", alignItems: "flex-end", gap: 10 }}>
+                  <View style={{ flex: 1 }}>
+                    <Field
+                      value={draft?.name ?? ""}
+                      onChangeText={(name) => {
+                        setSuggestError(null);
+                        setDraft((current) => (current ? { ...current, name } : current));
                       }}
-                    >
-                      {label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-            <Text
-              style={{
-                marginTop: 16,
-                color: theme.colors.mutedForeground,
-                fontFamily: theme.fonts.semibold,
-              }}
-            >
-              Confiança
-            </Text>
-            <View style={{ flexDirection: "row", gap: 8, marginTop: 8 }}>
-              {LEVELS.map((color, index) => {
-                const level = index + 1;
-                const selected = draft?.confidence === level;
-                return (
+                      placeholder="Palavra"
+                      autoCapitalize="none"
+                      autoFocus={draft?.id == null}
+                    />
+                  </View>
                   <Pressable
-                    key={color}
-                    onPress={() => setDraft((current) => (current ? { ...current, confidence: level } : current))}
+                    accessibilityLabel="Sugerir tradução e classe com IA"
+                    disabled={!draft?.name.trim() || suggesting || saving}
+                    onPress={() => void suggestWithAi()}
                     style={{
-                      width: 36,
-                      height: 36,
-                      borderRadius: 18,
+                      width: 48,
+                      height: 48,
+                      borderRadius: 16,
+                      marginBottom: 1,
                       alignItems: "center",
                       justifyContent: "center",
-                      backgroundColor: color,
-                      borderWidth: selected ? 2 : 0,
-                      borderColor: theme.colors.foreground,
+                      backgroundColor: theme.shell.chip,
+                      opacity: !draft?.name.trim() || suggesting || saving ? 0.4 : 1,
                     }}
                   >
-                    <Text style={{ color: level === 3 ? "#3c3c3c" : "#ffffff", fontFamily: theme.fonts.bold }}>
-                      {level}
+                    {suggesting ? (
+                      <ActivityIndicator size="small" color={theme.shell.tones.lilac} />
+                    ) : (
+                      <Ionicons name="sparkles" size={22} color={theme.shell.tones.lilac} />
+                    )}
+                  </Pressable>
+                </View>
+                <Field
+                  value={draft?.translation ?? ""}
+                  onChangeText={(translation) =>
+                    setDraft((current) => (current ? { ...current, translation } : current))
+                  }
+                  placeholder="Tradução"
+                  editable={!suggesting}
+                />
+                {suggestError ? (
+                  <Text
+                    style={{
+                      marginTop: 8,
+                      color: theme.colors.destructive,
+                      fontFamily: theme.fonts.regular,
+                      fontSize: 13,
+                    }}
+                  >
+                    {suggestError}
+                  </Text>
+                ) : null}
+                {suggesting ? (
+                  <Text
+                    style={{
+                      marginTop: 8,
+                      color: theme.shell.muted,
+                      fontFamily: theme.fonts.regular,
+                      fontSize: 13,
+                    }}
+                  >
+                    Sugerindo tradução e classe…
+                  </Text>
+                ) : null}
+
+                <Text
+                  style={{
+                    marginTop: 20,
+                    color: theme.shell.muted,
+                    fontFamily: theme.fonts.semibold,
+                    fontSize: 13,
+                    letterSpacing: 0.4,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Classe
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                  {GRAMMATICAL_CLASSES.map(([value, label]) => {
+                    const selected = draft?.grammaticalClass === value;
+                    return (
+                      <Pressable
+                        key={value}
+                        onPress={() =>
+                          setDraft((current) => (current ? { ...current, grammaticalClass: value } : current))
+                        }
+                        style={{
+                          backgroundColor: selected ? theme.shell.chipActive : theme.shell.chip,
+                          borderRadius: 999,
+                          paddingHorizontal: 14,
+                          paddingVertical: 9,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: selected ? theme.shell.chipActiveText : theme.shell.chipText,
+                            fontFamily: theme.fonts.semibold,
+                            fontSize: 13,
+                          }}
+                        >
+                          {label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Text
+                  style={{
+                    marginTop: 20,
+                    color: theme.shell.muted,
+                    fontFamily: theme.fonts.semibold,
+                    fontSize: 13,
+                    letterSpacing: 0.4,
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Confiança
+                </Text>
+                <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
+                  {LEVELS.map((color, index) => {
+                    const level = index + 1;
+                    const selected = draft?.confidence === level;
+                    return (
+                      <Pressable
+                        key={color}
+                        onPress={() =>
+                          setDraft((current) => (current ? { ...current, confidence: level } : current))
+                        }
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: 22,
+                          alignItems: "center",
+                          justifyContent: "center",
+                          backgroundColor: color,
+                          borderWidth: selected ? 2 : 0,
+                          borderColor: theme.shell.foreground,
+                          transform: [{ scale: selected ? 1.05 : 1 }],
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: level === 3 ? "#3c3c3c" : "#ffffff",
+                            fontFamily: theme.fonts.bold,
+                            fontSize: 15,
+                          }}
+                        >
+                          {level}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={saving || !draft?.name.trim()}
+                  onPress={() => void saveWord()}
+                  style={{
+                    marginTop: 24,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingVertical: 16,
+                    borderRadius: 20,
+                    backgroundColor: theme.shell.tones.green,
+                    opacity: saving || !draft?.name.trim() ? 0.55 : 1,
+                  }}
+                >
+                  <Text
+                    style={{
+                      color: theme.shell.onPastel,
+                      fontFamily: theme.fonts.bold,
+                      fontSize: 17,
+                    }}
+                  >
+                    {saving ? "Salvando..." : "Salvar"}
+                  </Text>
+                </Pressable>
+
+                {draft?.id != null ? (
+                  <Pressable
+                    onPress={() => {
+                      const word = vault?.words.find((item) => item.id === draft.id);
+                      if (word) void removeWord(word);
+                    }}
+                    style={{ alignItems: "center", marginTop: 16 }}
+                  >
+                    <Text style={{ color: theme.colors.destructive, fontFamily: theme.fonts.semibold }}>
+                      Remover
                     </Text>
                   </Pressable>
-                );
-              })}
-            </View>
-            <PrimaryButton
-              label={saving ? "Salvando..." : "Salvar"}
-              disabled={saving || !draft?.name.trim()}
-              onPress={() => void saveWord()}
-            />
-            {draft?.id != null ? (
-              <Pressable
-                onPress={() => {
-                  const word = vault?.words.find((item) => item.id === draft.id);
-                  if (word) void removeWord(word);
-                }}
-                style={{ alignItems: "center", marginTop: 14 }}
-              >
-                <Text style={{ color: theme.colors.destructive, fontFamily: theme.fonts.semibold }}>
-                  Remover
-                </Text>
-              </Pressable>
-            ) : null}
-            <Pressable onPress={() => setDraft(null)} style={{ alignItems: "center", marginTop: 14, marginBottom: 8 }}>
-              <Text style={{ color: theme.colors.mutedForeground, fontFamily: theme.fonts.semibold }}>
-                Cancelar
-              </Text>
+                ) : null}
+
+                <Pressable
+                  onPress={() => setDraft(null)}
+                  disabled={saving}
+                  style={{ alignItems: "center", marginTop: 14, marginBottom: 4 }}
+                >
+                  <Text style={{ color: theme.shell.muted, fontFamily: theme.fonts.semibold }}>
+                    Cancelar
+                  </Text>
+                </Pressable>
+              </ScrollView>
             </Pressable>
-            </ScrollView>
-          </View>
-        </View>
+          </Pressable>
+        </KeyboardAvoidingView>
       </Modal>
     </Screen>
   );
