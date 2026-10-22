@@ -88,6 +88,7 @@ export function FlashcardDeck({
   const [lastXpGain, setLastXpGain] = useState(0);
   const [sessionXp, setSessionXp] = useState(0);
   const [confirmExit, setConfirmExit] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   useLessonCues();
   const stepsRef = useRef<FlashcardStep[]>([]);
   const indexRef = useRef(0);
@@ -99,6 +100,9 @@ export function FlashcardDeck({
   const pendingSavesRef = useRef<PendingSave[]>([]);
   const levelsRef = useRef<Map<number, { id: number; name: string; start: number; current: number }>>(new Map());
   const streakRef = useRef(0);
+  const goalStepsRef = useRef(0);
+  const [goalSteps, setGoalSteps] = useState(0);
+  const finishTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autostartRef = useRef(false);
 
   useEffect(() => {
@@ -140,6 +144,10 @@ export function FlashcardDeck({
     });
     return () => {
       alive = false;
+      if (finishTimerRef.current) {
+        clearTimeout(finishTimerRef.current);
+        finishTimerRef.current = null;
+      }
     };
   }, [mode, request, vaultId]);
 
@@ -190,6 +198,11 @@ export function FlashcardDeck({
 
   const leaveLesson = () => {
     Speech.stop();
+    if (finishTimerRef.current) {
+      clearTimeout(finishTimerRef.current);
+      finishTimerRef.current = null;
+    }
+    setFinishing(false);
     pendingSavesRef.current = [];
     onLeave();
   };
@@ -313,6 +326,13 @@ export function FlashcardDeck({
         startTime: new Date(),
         endTime: null,
       });
+      goalStepsRef.current = Math.max(queue.length, 1);
+      setGoalSteps(goalStepsRef.current);
+      if (finishTimerRef.current) {
+        clearTimeout(finishTimerRef.current);
+        finishTimerRef.current = null;
+      }
+      setFinishing(false);
       syncQueue(queue, 0);
       setIsSessionActive(true);
       setShowAnswer(false);
@@ -354,6 +374,7 @@ export function FlashcardDeck({
   };
 
   const finishStep = (wordIds: number[], extra: FlashcardStep[] = []) => {
+    if (finishing) return;
     for (const id of wordIds) studiedIdsRef.current.add(id);
     const nextSteps = [...stepsRef.current, ...extra];
     const nextIndex = indexRef.current + 1;
@@ -362,7 +383,14 @@ export function FlashcardDeck({
     setShowAnswer(false);
 
     if (nextIndex >= nextSteps.length) {
-      closeSession(studiedIdsRef.current.size);
+      const completed = studiedIdsRef.current.size;
+      setFinishing(true);
+      if (finishTimerRef.current) clearTimeout(finishTimerRef.current);
+      finishTimerRef.current = setTimeout(() => {
+        finishTimerRef.current = null;
+        setFinishing(false);
+        closeSession(completed);
+      }, 780);
     }
   };
 
@@ -552,29 +580,35 @@ export function FlashcardDeck({
   }
 
   const step = steps[stepIndex];
-  const progress = steps.length > 0 ? Math.min(((stepIndex + 1) / steps.length) * 100, 100) : 0;
+  const progress = finishing
+    ? 100
+    : goalSteps > 0
+      ? Math.min(100, Math.max(0, (stepIndex / goalSteps) * 100))
+      : 0;
 
   return (
     <View style={{ flex: 1 }}>
     <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
       <View style={{ flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 12 }}>
-        <CloseButton label="Sair da lição" onPress={() => setConfirmExit(true)} />
+        <CloseButton
+          label="Sair da lição"
+          onPress={() => {
+            if (!finishing) setConfirmExit(true);
+          }}
+        />
         <View style={{ flex: 1 }}>
-          <View
-            style={{
-              height: 16,
-              borderRadius: 999,
-              overflow: "hidden",
-              backgroundColor: "#4b5563",
-            }}
-          >
-            <ProgressFill progress={progress} color={theme.colors.green} heat={streakHeat(streak)} />
-          </View>
+          <ProgressFill
+            progress={progress}
+            color={theme.colors.green}
+            heat={finishing ? Math.max(streakHeat(streak), 2) : streakHeat(streak)}
+            height={14}
+          />
           <XpFloat token={xpToken} amount={lastXpGain} />
         </View>
         <StreakChip streak={streak} />
         <Pressable
           onPress={() => {
+            if (finishing) return;
             const next = !isSoundOn();
             syncSoundEnabled(next);
             setSoundOn(next);
@@ -589,6 +623,24 @@ export function FlashcardDeck({
       </View>
 
       <View style={{ flex: 1, overflow: "hidden" }}>
+      {finishing || !step ? (
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 24 }}>
+          <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.bold, fontSize: 22, textAlign: "center" }}>
+            Lição completa!
+          </Text>
+          <Text
+            style={{
+              marginTop: 8,
+              color: theme.shell.muted,
+              fontFamily: theme.fonts.regular,
+              fontSize: 15,
+              textAlign: "center",
+            }}
+          >
+            Preparando o resumo…
+          </Text>
+        </View>
+      ) : (
       <Animated.View
         key={step ? `${step.type}-${stepIndex}` : "empty"}
         entering={motion ? SlideInRight.duration(320) : undefined}
@@ -651,9 +703,10 @@ export function FlashcardDeck({
         />
       ) : null}
       </Animated.View>
+      )}
       </View>
     </ScrollView>
-    {confirmExit ? <ExitConfirm onStay={() => setConfirmExit(false)} onLeave={leaveLesson} /> : null}
+    {confirmExit && !finishing ? <ExitConfirm onStay={() => setConfirmExit(false)} onLeave={leaveLesson} /> : null}
     </View>
   );
 }

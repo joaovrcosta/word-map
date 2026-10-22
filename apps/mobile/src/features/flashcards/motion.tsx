@@ -1,5 +1,7 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { AccessibilityInfo, View, useWindowDimensions } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import Svg, { Path } from "react-native-svg";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -214,68 +216,55 @@ export function FlipCard({
   );
 }
 
-function fireColors(heat: number, fallback: string) {
-  if (heat <= 0) return { base: fallback, mid: fallback, tip: "rgba(255,255,255,0.35)", spark: fallback };
-  if (heat === 1) return { base: fallback, mid: "#ffc800", tip: "#ffe08a", spark: "#ffc800" };
-  if (heat === 2) return { base: "#ff9600", mid: "#ffc800", tip: "#ff4b4b", spark: "#ff6b1a" };
-  return { base: "#ff6b1a", mid: "#ff4b4b", tip: "#ffc800", spark: "#ff9600" };
+function fillGradient(heat: number, fallback: string): readonly [string, string, ...string[]] {
+  if (heat <= 0) return [fallback, "#58cc02", "#ffc800"];
+  if (heat === 1) return [fallback, "#89e219", "#ffc800"];
+  if (heat === 2) return ["#ff9600", "#ffc800", "#ffe08a"];
+  return ["#ff6b1a", "#ff9600", "#ffc800"];
 }
 
-function FireSpark({ delay, color, heat }: { delay: number; color: string; heat: number }) {
-  const progress = useSharedValue(0);
-  const motion = useMotionEnabled();
+function sparkColor(heat: number) {
+  if (heat >= 2) return "#ffe08a";
+  return "#ffc800";
+}
 
-  useEffect(() => {
-    if (!motion || heat < 1) {
-      progress.value = 0;
-      return;
-    }
-    progress.value = 0;
-    progress.value = withDelay(
-      delay,
-      withSequence(
-        withTiming(1, { duration: 520, easing: Easing.out(Easing.cubic) }),
-        withTiming(0, { duration: 0 })
-      )
-    );
-    const timer = setInterval(() => {
-      progress.value = 0;
-      progress.value = withDelay(
-        delay,
-        withSequence(
-          withTiming(1, { duration: 520, easing: Easing.out(Easing.cubic) }),
-          withTiming(0, { duration: 0 })
-        )
-      );
-    }, 700);
-    return () => clearInterval(timer);
-  }, [delay, heat, motion, progress]);
-
-  const style = useAnimatedStyle(() => ({
-    opacity: progress.value < 0.2 ? progress.value / 0.2 : 1 - (progress.value - 0.2) / 0.8,
-    transform: [
-      { translateY: -2 - progress.value * (10 + heat * 4) },
-      { translateX: (delay % 3 === 0 ? -1 : 1) * progress.value * 4 },
-      { scale: 0.5 + progress.value * 0.8 },
-    ],
-  }));
-
-  if (heat < 1) return null;
+/** Faíscas SVG no estilo Duolingo — zigue-zagues arredondados na ponta da barra. */
+function ProgressSparks({ color }: { color: string }) {
   return (
-    <Animated.View
-      style={[
-        {
-          position: "absolute",
-          right: 4 + (delay % 5) * 3,
-          bottom: 2,
-          width: 5,
-          height: 5,
-          borderRadius: 3,
-          backgroundColor: color,
-        },
-        style,
-      ]}
-    />
+    <Svg width={48} height={48} viewBox="0 0 48 48">
+      {/* superior: zigue-zague envolvendo a barra */}
+      <Path
+        d="M16 22 L22 12 L18 12 L28 4 L24 14 L33 8"
+        stroke={color}
+        strokeWidth={3.4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <Path
+        d="M26 16 L38 10"
+        stroke={color}
+        strokeWidth={2.8}
+        strokeLinecap="round"
+        fill="none"
+      />
+      {/* inferior */}
+      <Path
+        d="M16 26 L22 36 L18 36 L28 44 L24 34 L33 40"
+        stroke={color}
+        strokeWidth={3.4}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        fill="none"
+      />
+      <Path
+        d="M26 32 L38 38"
+        stroke={color}
+        strokeWidth={2.8}
+        strokeLinecap="round"
+        fill="none"
+      />
+    </Svg>
   );
 }
 
@@ -291,68 +280,96 @@ export function ProgressFill({
   heat?: number;
 }) {
   const motion = useMotionEnabled();
-  const width = useSharedValue(progress);
-  const pulse = useSharedValue(1);
-  const colors = fireColors(heat, color);
+  const width = useSharedValue(Math.max(0, Math.min(100, progress)));
+  const spark = useSharedValue(0);
+  const gradient = fillGradient(heat, color);
+  const sparks = sparkColor(heat);
 
   useEffect(() => {
-    width.value = motion ? withTiming(progress, { duration: 280, easing: Easing.out(Easing.cubic) }) : progress;
-  }, [motion, progress, width]);
-
-  useEffect(() => {
-    if (!motion || heat < 2) {
-      pulse.value = 1;
-      return;
+    const next = Math.max(0, Math.min(100, progress));
+    if (motion) {
+      width.value = withTiming(next, { duration: 320, easing: Easing.out(Easing.cubic) });
+      spark.value = 0;
+      spark.value = withSequence(
+        withTiming(1, { duration: 120, easing: Easing.out(Easing.cubic) }),
+        withDelay(260, withTiming(0, { duration: 320 }))
+      );
+    } else {
+      width.value = next;
+      spark.value = progress > 0 ? 1 : 0;
     }
-    pulse.value = withSequence(
-      withTiming(1.04, { duration: 220 }),
-      withTiming(1, { duration: 220 }),
-      withTiming(1.03, { duration: 220 }),
-      withTiming(1, { duration: 220 })
-    );
-  }, [heat, motion, pulse, progress]);
+  }, [motion, progress, spark, width]);
 
   const fill = useAnimatedStyle(() => ({
     width: `${width.value}%`,
-    transform: [{ scaleY: pulse.value }],
+  }));
+
+  const sparkStyle = useAnimatedStyle(() => ({
+    left: `${width.value}%`,
+    opacity: spark.value,
+    transform: [
+      { translateX: -24 },
+      { scale: 0.88 + spark.value * 0.22 },
+    ],
   }));
 
   return (
-    <Animated.View style={[{ height, borderRadius: 999, overflow: "hidden", backgroundColor: colors.base }, fill]}>
-      {heat > 0 ? (
-        <View
-          style={{
+    <View style={{ height, borderRadius: 999, overflow: "visible", justifyContent: "center" }}>
+      <View
+        style={{
+          height,
+          borderRadius: 999,
+          overflow: "hidden",
+          backgroundColor: "#374151",
+        }}
+      >
+        <Animated.View
+          style={[
+            {
+              height: "100%",
+              borderRadius: 999,
+              overflow: "hidden",
+              minWidth: progress > 0 ? height : 0,
+            },
+            fill,
+          ]}
+        >
+          <LinearGradient
+            colors={gradient}
+            start={{ x: 0, y: 0.5 }}
+            end={{ x: 1, y: 0.5 }}
+            style={{ flex: 1, borderRadius: 999 }}
+          />
+          <LinearGradient
+            colors={["rgba(255,255,255,0.45)", "rgba(255,255,255,0.12)", "transparent"]}
+            start={{ x: 0.5, y: 0 }}
+            end={{ x: 0.5, y: 1 }}
+            style={{
+              position: "absolute",
+              top: 2,
+              left: 6,
+              right: 6,
+              height: Math.max(3, Math.round(height * 0.34)),
+              borderRadius: 999,
+            }}
+          />
+        </Animated.View>
+      </View>
+
+      <Animated.View
+        pointerEvents="none"
+        style={[
+          {
             position: "absolute",
-            top: 0,
-            bottom: 0,
-            right: 0,
-            width: "42%",
-            backgroundColor: colors.mid,
-            opacity: 0.85,
-          }}
-        />
-      ) : null}
-      {heat > 1 ? (
-        <View
-          style={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            right: 0,
-            width: "22%",
-            backgroundColor: colors.tip,
-            opacity: 0.9,
-          }}
-        />
-      ) : null}
-      <View style={{ position: "absolute", top: 0, left: 0, right: 0, height: 3, backgroundColor: "rgba(255,255,255,0.3)" }} />
-      {heat >= 1 ? (
-        <>
-          <FireSpark delay={0} color={colors.spark} heat={heat} />
-          <FireSpark delay={120} color={colors.tip} heat={heat} />
-          <FireSpark delay={240} color={colors.spark} heat={heat} />
-        </>
-      ) : null}
-    </Animated.View>
+            top: (height - 48) / 2,
+            width: 48,
+            height: 48,
+          },
+          sparkStyle,
+        ]}
+      >
+        <ProgressSparks color={sparks} />
+      </Animated.View>
+    </View>
   );
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -11,9 +11,10 @@ import Animated, {
   withSequence,
   withTiming,
 } from "react-native-reanimated";
-import { shell, type ToneName, useTheme } from "../../../theme";
+import { shell, useTheme } from "../../../theme";
 import { useMotionEnabled } from "../motion";
 import { DuoButton } from "./duo-button";
+import { StreakAmazing } from "./streak-amazing";
 import { type LevelShift, type StudySession } from "../types";
 
 const CONFETTI_COLORS = [
@@ -67,32 +68,11 @@ function SummaryConfetti({ show }: { show: boolean }) {
   if (!show || !motion) return null;
   return (
     <View pointerEvents="none" style={{ position: "absolute", top: 0, left: 0, right: 0, height: 220 }}>
-      {Array.from({ length: 18 }, (_, index) => (
+      {Array.from({ length: 14 }, (_, index) => (
         <ConfettiBit key={index} index={index} />
       ))}
     </View>
   );
-}
-
-function CountUp({ value }: { value: number }) {
-  const motion = useMotionEnabled();
-  const [shown, setShown] = useState(motion ? 0 : value);
-
-  useEffect(() => {
-    if (!motion) {
-      setShown(value);
-      return;
-    }
-    const started = Date.now();
-    const timer = setInterval(() => {
-      const ratio = Math.min(1, (Date.now() - started) / 800);
-      setShown(Math.round(value * ratio));
-      if (ratio >= 1) clearInterval(timer);
-    }, 32);
-    return () => clearInterval(timer);
-  }, [motion, value]);
-
-  return <>{shown}</>;
 }
 
 function SummaryMascot() {
@@ -104,10 +84,10 @@ function SummaryMascot() {
     scale.value = withSequence(withTiming(1.06, { duration: 220 }), withTiming(1, { duration: 180 }));
   }, [motion, scale]);
 
-  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value * 0.78 }] }));
 
   return (
-    <Animated.View style={[{ width: 140, height: 140, alignItems: "center", justifyContent: "center" }, style]}>
+    <Animated.View style={[{ width: 108, height: 108, alignItems: "center", justifyContent: "center" }, style]}>
       <View
         style={{
           position: "absolute",
@@ -144,83 +124,7 @@ function SummaryMascot() {
           position: "absolute",
           top: 28,
           right: 22,
-          width: 22,
-          height: 22,
-          borderRadius: 11,
-          backgroundColor: shell.mascot.body,
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          top: 48,
-          left: 42,
-          width: 16,
-          height: 16,
-          borderRadius: 8,
-          backgroundColor: shell.mascot.eye,
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          top: 48,
-          left: 68,
-          width: 16,
-          height: 16,
-          borderRadius: 8,
-          backgroundColor: shell.mascot.eye,
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          top: 53,
-          left: 47,
-          width: 7,
-          height: 7,
-          borderRadius: 4,
-          backgroundColor: shell.mascot.pupil,
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          top: 53,
-          left: 73,
-          width: 7,
-          height: 7,
-          borderRadius: 4,
-          backgroundColor: shell.mascot.pupil,
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          top: 58,
-          left: 36,
-          width: 10,
-          height: 6,
-          borderRadius: 3,
-          backgroundColor: "#FF8FAB",
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          top: 58,
-          right: 36,
-          width: 10,
-          height: 6,
-          borderRadius: 3,
-          backgroundColor: "#FF8FAB",
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          bottom: 18,
-          width: 54,
+          width: 36,
           height: 28,
           borderRadius: 8,
           backgroundColor: shell.mascot.laptop,
@@ -229,79 +133,61 @@ function SummaryMascot() {
       <View
         style={{
           position: "absolute",
-          bottom: 10,
-          width: 64,
+          top: 40,
+          left: 34,
+          width: 10,
           height: 10,
           borderRadius: 5,
-          backgroundColor: shell.mascot.laptopBase,
+          backgroundColor: shell.mascot.eye,
+        }}
+      />
+      <View
+        style={{
+          position: "absolute",
+          top: 40,
+          left: 52,
+          width: 10,
+          height: 10,
+          borderRadius: 5,
+          backgroundColor: shell.mascot.eye,
         }}
       />
     </Animated.View>
   );
 }
 
-function StatCard({
-  tone,
+function Metric({
   icon,
   label,
-  delta,
-  total,
+  value,
   delay,
 }: {
-  tone: ToneName;
   icon: keyof typeof Ionicons.glyphMap;
   label: string;
-  delta: string;
-  total: string;
+  value: string;
   delay: number;
 }) {
   const theme = useTheme();
   const motion = useMotionEnabled();
-  const pastel = shell.tones[tone];
 
   return (
     <Animated.View
-      entering={motion ? FadeInDown.delay(delay).duration(260) : undefined}
-      style={{
-        flex: 1,
-        backgroundColor: pastel,
-        borderRadius: 20,
-        paddingTop: 14,
-        paddingHorizontal: 10,
-        paddingBottom: 10,
-        minHeight: 168,
-        justifyContent: "space-between",
-      }}
+      entering={motion ? FadeInDown.delay(delay).duration(240) : undefined}
+      style={{ flex: 1, alignItems: "center", gap: 6 }}
     >
-      <View>
-        <Ionicons name={icon} size={22} color={shell.onPastel} />
-        <Text
-          style={{
-            marginTop: 10,
-            color: shell.onPastelMuted,
-            fontFamily: theme.fonts.bold,
-            fontSize: 12,
-            lineHeight: 16,
-            minHeight: 32,
-          }}
-        >
-          {label}
-        </Text>
-        <Text style={{ marginTop: 6, color: shell.onPastel, fontFamily: theme.fonts.bold, fontSize: 22 }}>{delta}</Text>
-      </View>
-      <View
+      <Ionicons name={icon} size={18} color={shell.muted} />
+      <Text style={{ color: shell.foreground, fontFamily: theme.fonts.bold, fontSize: 22 }}>{value}</Text>
+      <Text
         style={{
-          marginTop: 12,
-          borderWidth: 2,
-          borderColor: shell.onPastel,
-          backgroundColor: "rgba(26,26,26,0.08)",
-          borderRadius: 14,
-          paddingVertical: 10,
-          alignItems: "center",
+          color: shell.muted,
+          fontFamily: theme.fonts.medium,
+          fontSize: 12,
+          textAlign: "center",
+          lineHeight: 16,
         }}
       >
-        <Text style={{ color: shell.onPastel, fontFamily: theme.fonts.bold, fontSize: 20 }}>{total}</Text>
-      </View>
+        {label}
+      </Text>
     </Animated.View>
   );
 }
@@ -339,7 +225,7 @@ export function SessionSummary({
   const celebrate = challengeTotal > 0 && challengeCorrect / challengeTotal >= 0.7;
   const xpGained = sessionXp;
   const headline = celebrate ? "É assim que se faz!" : challengeTotal > 0 ? "Boa sessão!" : "Sessão concluída";
-  const enter = (index: number) => (motion ? FadeInDown.delay(index * 70).duration(240) : undefined);
+  const enter = (index: number) => (motion ? FadeInDown.delay(index * 80).duration(260) : undefined);
 
   return (
     <View style={{ flex: 1 }}>
@@ -347,102 +233,87 @@ export function SessionSummary({
         style={{ flex: 1 }}
         contentContainerStyle={{
           flexGrow: 1,
-          paddingHorizontal: 20,
-          paddingTop: 8,
-          paddingBottom: 24,
+          paddingHorizontal: 24,
+          paddingTop: 12,
+          paddingBottom: 28,
         }}
+        showsVerticalScrollIndicator={false}
       >
         <SummaryConfetti show={celebrate} />
+
         <View style={{ alignItems: "center", marginTop: 12 }}>
           <SummaryMascot />
         </View>
+
         <Animated.Text
           entering={enter(1)}
           style={{
-            marginTop: 8,
+            marginTop: 16,
             color: shell.foreground,
             fontFamily: theme.fonts.bold,
-            fontSize: 30,
+            fontSize: 26,
             textAlign: "center",
-            lineHeight: 36,
+            lineHeight: 32,
           }}
         >
           {headline}
         </Animated.Text>
 
-        <View style={{ flexDirection: "row", gap: 10, marginTop: 28 }}>
-          <StatCard
-            tone="green"
-            icon="book"
-            label={"Palavras\nestudadas"}
-            delta={`+${session.completedWords}`}
-            total={String(session.completedWords)}
-            delay={120}
-          />
-          <StatCard
-            tone="blue"
-            icon="flash"
-            label={"XP\nganhos"}
-            delta={`+${xpGained}`}
-            total={String(xpGained)}
-            delay={180}
-          />
-          <StatCard
-            tone="cream"
-            icon="timer"
-            label={"Tempo\npraticado"}
-            delta={`+${clock}`}
-            total={clock}
-            delay={240}
-          />
-        </View>
+        <StreakAmazing points={xpGained} />
 
-        {challengeTotal > 0 ? (
-          <Animated.Text
-            entering={enter(3)}
-            style={{
-              marginTop: 18,
-              color: shell.muted,
-              fontFamily: theme.fonts.medium,
-              fontSize: 14,
-              textAlign: "center",
-            }}
-          >
-            <CountUp value={challengeCorrect} /> de {challengeTotal}{" "}
-            {challengeTotal === 1 ? "desafio certo" : "desafios certos"}
-          </Animated.Text>
-        ) : null}
+        <Animated.View
+          entering={enter(2)}
+          style={{
+            marginTop: 28,
+            flexDirection: "row",
+            alignItems: "flex-start",
+            justifyContent: "space-between",
+            gap: 8,
+          }}
+        >
+          <Metric icon="book-outline" label="Palavras" value={`+${session.completedWords}`} delay={140} />
+          <Metric
+            icon="checkmark-circle-outline"
+            label="Acertos"
+            value={challengeTotal > 0 ? `${challengeCorrect}/${challengeTotal}` : "—"}
+            delay={200}
+          />
+          <Metric icon="time-outline" label="Tempo" value={clock} delay={260} />
+        </Animated.View>
 
         {evolved.length > 0 ? (
-          <Animated.View
-            entering={enter(3)}
-            style={{
-              marginTop: 24,
-              alignSelf: "stretch",
-              backgroundColor: shell.surface,
-              borderRadius: 20,
-              padding: 16,
-            }}
-          >
-            <Text style={{ color: shell.foreground, fontFamily: theme.fonts.bold, fontSize: 16 }}>Evoluíram</Text>
+          <Animated.View entering={enter(3)} style={{ marginTop: 32 }}>
+            <Text
+              style={{
+                color: shell.muted,
+                fontFamily: theme.fonts.semibold,
+                fontSize: 12,
+                letterSpacing: 0.5,
+                textTransform: "uppercase",
+                marginBottom: 10,
+              }}
+            >
+              Evoluíram
+            </Text>
             {evolved.map((item) => (
               <View
                 key={item.id}
                 style={{
-                  marginTop: 12,
                   flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  gap: 12,
+                  paddingVertical: 10,
+                  borderBottomWidth: 1,
+                  borderBottomColor: shell.line,
                 }}
               >
                 <Text
                   numberOfLines={1}
-                  style={{ flex: 1, color: shell.foreground, fontFamily: theme.fonts.semibold, fontSize: 15 }}
+                  style={{ flex: 1, color: shell.foreground, fontFamily: theme.fonts.medium, fontSize: 15 }}
                 >
                   {item.name}
                 </Text>
-                <Text style={{ color: shell.tones.green, fontFamily: theme.fonts.bold, fontSize: 15 }}>
+                <Text style={{ color: shell.muted, fontFamily: theme.fonts.semibold, fontSize: 14 }}>
                   {item.from} → {item.to}
                 </Text>
               </View>
@@ -451,66 +322,65 @@ export function SessionSummary({
         ) : null}
 
         {nextPractice ? (
-          <Text
+          <Animated.Text
+            entering={enter(3)}
             style={{
-              marginTop: 20,
-              color: shell.foreground,
-              fontFamily: theme.fonts.bold,
-              fontSize: 15,
-              lineHeight: 22,
+              marginTop: 28,
+              color: shell.muted,
+              fontFamily: theme.fonts.regular,
+              fontSize: 14,
+              lineHeight: 21,
               textAlign: "center",
             }}
           >
             {nextPractice}
-          </Text>
+          </Animated.Text>
         ) : null}
 
         {analysisState === "loading" ? (
-          <Animated.View entering={enter(4)} style={{ marginTop: 24, width: "100%", alignItems: "flex-start" }}>
-            <Text style={{ color: shell.muted, fontFamily: theme.fonts.bold, fontSize: 13 }}>
-              CARREGANDO O FEEDBACK DA SESSÃO
-            </Text>
-            <ActivityIndicator color={theme.colors.green} style={{ marginTop: 16 }} />
-          </Animated.View>
+          <View style={{ marginTop: 28, alignItems: "center" }}>
+            <ActivityIndicator color={theme.colors.green} />
+          </View>
         ) : null}
 
         {analysisState === "ready" && analysis ? (
-          <Animated.View
+          <Animated.Text
             entering={enter(4)}
             style={{
-              marginTop: 20,
-              alignSelf: "stretch",
-              backgroundColor: shell.surface,
-              borderRadius: 20,
-              padding: 16,
+              marginTop: 28,
+              color: shell.muted,
+              fontFamily: theme.fonts.regular,
+              fontSize: 14,
+              lineHeight: 22,
+              textAlign: "center",
             }}
           >
-            <Text style={{ color: shell.foreground, fontFamily: theme.fonts.regular, fontSize: 15, lineHeight: 22 }}>
-              {analysis}
-            </Text>
-          </Animated.View>
+            {analysis}
+          </Animated.Text>
         ) : null}
 
         {analysisState === "unavailable" ? (
           <Animated.Text
             entering={enter(4)}
             style={{
-              marginTop: 20,
+              marginTop: 28,
               color: shell.muted,
               fontFamily: theme.fonts.regular,
-              fontSize: 15,
+              fontSize: 14,
               lineHeight: 22,
               textAlign: "center",
             }}
           >
-            O feedback não ficou pronto desta vez. Os números da sessão continuam acima.
+            O feedback não ficou pronto desta vez.
           </Animated.Text>
         ) : null}
+
+        <View style={{ flex: 1, minHeight: 24 }} />
       </ScrollView>
 
-      <View style={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: Math.max(insets.bottom, 16), gap: 10 }}>
+      <View style={{ paddingHorizontal: 24, paddingTop: 12, paddingBottom: Math.max(insets.bottom, 18), gap: 12 }}>
         <DuoButton label="CONTINUAR" onPress={onContinue} color={shell.mascot.body} edge="#1A6FBF" />
-        <Pressable onPress={onRestart} style={{ alignItems: "center", paddingVertical: 8 }}>
+        <Pressable onPress={onRestart} style={{ alignItems: "center", paddingVertical: 6 }}>
           <Text style={{ color: shell.muted, fontFamily: theme.fonts.semibold, fontSize: 14 }}>Estudar de novo</Text>
         </Pressable>
       </View>
