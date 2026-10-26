@@ -2,13 +2,13 @@ import { useCallback, useState } from "react";
 import { Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, router, useFocusEffect } from "expo-router";
+import { isSpeakModeLocked } from "../../../src/features/flashcards/speak-mode";
 import { useSession } from "../../../src/session";
 import { useTheme } from "../../../src/theme";
 import { type Vault } from "../../../src/types";
 import { Card, Heading, Loading, Muted, PrimaryButton, Screen } from "../../../src/ui";
 
-/** Flag local até o build nativo de fala estar pronto. */
-const SPEAK_MODE_LOCKED = true;
+const SPEAK_MODE_LOCKED = isSpeakModeLocked();
 
 export default function TrainingScreen() {
   const theme = useTheme();

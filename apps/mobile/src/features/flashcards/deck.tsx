@@ -42,9 +42,10 @@ import { flushSaves, writeFocus } from "./saves";
 import { useSession } from "../../session";
 import { isSpeechRecognitionAvailable } from "../../speech-recognition";
 import { useTheme } from "../../theme";
+import { isSpeakModeLocked } from "./speak-mode";
 
-/** Desliga fala na fila ate o build nativo estar liberado. */
-const SPEAK_MODE_LOCKED = true;
+/** Desliga fala na fila no Expo Go; liberado no APK. */
+const SPEAK_MODE_LOCKED = isSpeakModeLocked();
 
 
 

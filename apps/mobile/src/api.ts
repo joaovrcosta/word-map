@@ -1,4 +1,7 @@
+import { Platform } from "react-native";
+
 const MOBILE_CLIENT_HEADER = "X-WordMap-Client";
+const PRODUCTION_API_URL = "https://word-map.onrender.com";
 
 export type MobileUser = {
   id: number;
@@ -20,8 +23,11 @@ export function apiErrorMessage(payload: unknown) {
 function apiBase() {
   const configured = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "");
   if (configured) return configured;
-  // Produção (Render). Emulador/local: defina EXPO_PUBLIC_API_URL no .env.
-  return "https://word-map.onrender.com";
+  // Expo Go / dev sem .env → API local. Builds EAS (preview/prod) usam Render via eas.json.
+  if (__DEV__) {
+    return Platform.OS === "android" ? "http://10.0.2.2:3001" : "http://localhost:3001";
+  }
+  return PRODUCTION_API_URL;
 }
 
 export async function apiRequest<T>(

@@ -2,9 +2,10 @@ import { useEffect } from "react";
 import { View } from "react-native";
 import { router } from "expo-router";
 import { FlashcardDeck } from "../../../src/features/flashcards";
+import { isSpeakModeLocked } from "../../../src/features/flashcards/speak-mode";
 
-/** Mesmo flag da tela de Treino — evita entrada direta na rota. */
-const SPEAK_MODE_LOCKED = true;
+/** Mesmo critério da tela de Treino — evita entrada direta no Expo Go. */
+const SPEAK_MODE_LOCKED = isSpeakModeLocked();
 
 export default function SpeakTrainingScreen() {
   useEffect(() => {
