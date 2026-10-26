@@ -38,6 +38,23 @@ class SuggestDto {
   wordId?: unknown;
 }
 
+class FollowUpDto {
+  @IsOptional()
+  span?: unknown;
+
+  @IsOptional()
+  sentence?: unknown;
+
+  @IsOptional()
+  explanation?: unknown;
+
+  @IsOptional()
+  question?: unknown;
+
+  @IsOptional()
+  previousTurns?: unknown;
+}
+
 @Controller("tutor")
 export class TutorController {
   constructor(private readonly tutor: TutorService) {}
@@ -55,5 +72,10 @@ export class TutorController {
   @Post("suggest-translation")
   suggest(@Body() body: SuggestDto) {
     return this.tutor.suggest(body);
+  }
+
+  @Post("follow-up")
+  followUp(@Body() body: FollowUpDto) {
+    return this.tutor.followUp(body);
   }
 }

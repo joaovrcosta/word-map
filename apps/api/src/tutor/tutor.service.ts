@@ -19,6 +19,20 @@ import {
   buildSuggestTranslationPrompt,
   parseSuggestTranslation,
 } from "../lib/suggest-translation";
+import {
+  FOLLOW_UP_MAX_TOKENS,
+  buildFollowUpPrompt,
+  parseFollowUpAnswer,
+} from "../lib/tutor-follow-up";
+import {
+  MAX_FOLLOW_UPS_PER_EXPLANATION,
+  MAX_FOLLOW_UP_ANSWER,
+  MAX_FOLLOW_UP_EXPLANATION,
+  MAX_FOLLOW_UP_QUESTION,
+  MAX_FOLLOW_UP_SENTENCE,
+  MAX_FOLLOW_UP_SPAN,
+  type TutorFollowUpTurn,
+} from "@word-map/shared";
 
 const FIELD_LIMITS = {
   span: 200,
@@ -32,6 +46,22 @@ function readField(value: unknown, max: number): string | null {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > max) return null;
   return trimmed;
+}
+
+function readFollowUpTurns(value: unknown): TutorFollowUpTurn[] | null {
+  if (value == null) return [];
+  if (!Array.isArray(value)) return null;
+  if (value.length > MAX_FOLLOW_UPS_PER_EXPLANATION) return null;
+  const turns: TutorFollowUpTurn[] = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return null;
+    const row = item as { question?: unknown; answer?: unknown };
+    const question = readField(row.question, MAX_FOLLOW_UP_QUESTION);
+    const answer = readField(row.answer, MAX_FOLLOW_UP_ANSWER);
+    if (!question || !answer) return null;
+    turns.push({ question, answer });
+  }
+  return turns;
 }
 
 function fail(status: number, error: string): never {
@@ -188,6 +218,58 @@ export class TutorService {
       if (error instanceof HttpException) throw error;
       console.error("Falha ao contextualizar:", error);
       fail(502, "Explicação indisponível");
+    }
+  }
+
+  async followUp(body: {
+    span?: unknown;
+    sentence?: unknown;
+    explanation?: unknown;
+    question?: unknown;
+    previousTurns?: unknown;
+  }) {
+    const user = await getCurrentUser();
+    if (!user) fail(401, "Não autorizado");
+
+    const span = readField(body.span, MAX_FOLLOW_UP_SPAN);
+    const sentence = readField(body.sentence, MAX_FOLLOW_UP_SENTENCE);
+    const explanation = readField(body.explanation, MAX_FOLLOW_UP_EXPLANATION);
+    const question = readField(body.question, MAX_FOLLOW_UP_QUESTION);
+    if (!span || !sentence || !explanation || !question) {
+      fail(400, "Pergunta inválida");
+    }
+
+    const previousTurns = readFollowUpTurns(body.previousTurns);
+    if (previousTurns === null) fail(400, "Pergunta inválida");
+    if (previousTurns.length >= MAX_FOLLOW_UPS_PER_EXPLANATION) {
+      fail(400, "Limite de perguntas nesta explicação");
+    }
+
+    const allowed = await consumeTutorQuota(user.id);
+    if (!allowed) fail(429, "Muitas explicações em pouco tempo.");
+
+    try {
+      const result = await createOpenAITutor().completeJson(
+        buildFollowUpPrompt({
+          span,
+          sentence,
+          explanation,
+          question,
+          previousTurns,
+        }),
+        FOLLOW_UP_MAX_TOKENS
+      );
+      const parsed = parseFollowUpAnswer(result.text, result.blocked);
+      if (!parsed.ok || result.truncated) {
+        await refundTutorQuota(user.id);
+        fail(502, "Não foi possível responder esta dúvida.");
+      }
+      return { answer: parsed.answer };
+    } catch (error) {
+      if (error instanceof HttpException) throw error;
+      console.error("Falha no follow-up do tutor:", error);
+      await refundTutorQuota(user.id);
+      fail(502, "Resposta indisponível");
     }
   }
 

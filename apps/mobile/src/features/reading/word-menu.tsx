@@ -23,12 +23,17 @@ import {
   grammarClassBySlug,
   grammarClassLabel,
   isPhraseName,
+  MAX_FOLLOW_UP_QUESTION,
+  MAX_FOLLOW_UP_SENTENCE,
+  MAX_FOLLOW_UPS_PER_EXPLANATION,
   normalizeGrammaticalClass,
   normalizePhrase,
   resolveGrammarSlug,
   splitParagraphs,
   type DictionaryEntry,
   type ReadingPage,
+  type TutorFollowUpResponse,
+  type TutorFollowUpTurn,
 } from "@word-map/shared";
 import { useSession } from "../../session";
 import { speakWord } from "../../speech";
@@ -314,11 +319,17 @@ export function ReadingWordMenu({
   const [suggesting, setSuggesting] = useState(false);
   const [suggestionLocked, setSuggestionLocked] = useState(false);
   const [suggestError, setSuggestError] = useState<string | null>(null);
+  const [followUps, setFollowUps] = useState<TutorFollowUpTurn[]>([]);
+  const [followOpen, setFollowOpen] = useState(false);
+  const [followQuestion, setFollowQuestion] = useState("");
+  const [followBusy, setFollowBusy] = useState(false);
+  const [followError, setFollowError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [levels, setLevels] = useState<LevelPoint[]>([]);
   const [grammarSlug, setGrammarSlug] = useState<string | null>(null);
   const suggestingRef = useRef(false);
+  const followBusyRef = useRef(false);
 
   const savedKey = saved
     ? `${saved.id}|${saved.translations.join("\n")}|${saved.confidence}|${saved.notes ?? ""}|${saved.vaultId}|${saved.grammaticalClass}`
@@ -346,6 +357,12 @@ export function ReadingWordMenu({
     setExplanation(null);
     setSuggestedTranslation(null);
     setExplanationError(null);
+    setFollowUps([]);
+    setFollowOpen(false);
+    setFollowQuestion("");
+    setFollowBusy(false);
+    setFollowError(null);
+    followBusyRef.current = false;
     setActionError(null);
   }, [clean, full]);
 
@@ -725,10 +742,20 @@ export function ReadingWordMenu({
     }
   };
 
+  const resetFollowUps = () => {
+    setFollowUps([]);
+    setFollowOpen(false);
+    setFollowQuestion("");
+    setFollowError(null);
+    setFollowBusy(false);
+    followBusyRef.current = false;
+  };
+
   const handleContextualize = async () => {
     if (!context || explaining) return;
     setExplaining(true);
     setExplanationError(null);
+    resetFollowUps();
     try {
       const result = await request<Passage>("/tutor/contextualize", {
         method: "POST",
@@ -746,6 +773,37 @@ export function ReadingWordMenu({
       setExplanationError(error instanceof Error ? error.message : "Não foi possível explicar este trecho.");
     } finally {
       setExplaining(false);
+    }
+  };
+
+  const handleFollowUp = async () => {
+    if (!context || !explanation || followBusyRef.current || followBusy) return;
+    if (followUps.length >= MAX_FOLLOW_UPS_PER_EXPLANATION) return;
+    const question = followQuestion.trim().slice(0, MAX_FOLLOW_UP_QUESTION);
+    if (!question) return;
+    followBusyRef.current = true;
+    setFollowBusy(true);
+    setFollowError(null);
+    try {
+      const data = await request<TutorFollowUpResponse>("/tutor/follow-up", {
+        method: "POST",
+        body: JSON.stringify({
+          span: context.span,
+          sentence: context.sentence.slice(0, MAX_FOLLOW_UP_SENTENCE),
+          explanation,
+          question,
+          previousTurns: followUps,
+        }),
+      });
+      const answer = data.answer?.trim();
+      if (!answer) throw new Error("Não foi possível responder esta dúvida.");
+      setFollowUps((current) => [...current, { question, answer }]);
+      setFollowQuestion("");
+    } catch (error) {
+      setFollowError(error instanceof Error ? error.message : "Não foi possível responder esta dúvida.");
+    } finally {
+      setFollowBusy(false);
+      followBusyRef.current = false;
     }
   };
 
@@ -816,6 +874,71 @@ export function ReadingWordMenu({
               </Pressable>
             </View>
           ) : null}
+          <View style={styles.followBox}>
+            {!followOpen ? (
+              <Pressable onPress={() => setFollowOpen(true)} hitSlop={6}>
+                <Text style={[styles.followGate, { color: shell.muted, fontFamily: theme.fonts.medium }]}>
+                  Não entendi ainda
+                </Text>
+              </Pressable>
+            ) : (
+              <>
+                <Text style={[styles.followTitle, { color: shell.muted, fontFamily: theme.fonts.semibold }]}>
+                  Ainda com dúvida? · {followUps.length}/{MAX_FOLLOW_UPS_PER_EXPLANATION}
+                </Text>
+                {followUps.map((turn, index) => (
+                  <View key={`${index}-${turn.question}`} style={styles.followTurn}>
+                    <Text style={[styles.followQuestion, { color: shell.foreground, fontFamily: theme.fonts.semibold }]}>
+                      {turn.question}
+                    </Text>
+                    <Text style={[styles.contextBody, { fontFamily: theme.fonts.regular }]}>{turn.answer}</Text>
+                  </View>
+                ))}
+                {followUps.length < MAX_FOLLOW_UPS_PER_EXPLANATION ? (
+                  <View style={styles.followRow}>
+                    <TextInput
+                      value={followQuestion}
+                      onChangeText={(value) => setFollowQuestion(value.slice(0, MAX_FOLLOW_UP_QUESTION))}
+                      placeholder="Pergunte sobre esta explicação"
+                      placeholderTextColor={shell.muted}
+                      editable={!followBusy}
+                      autoFocus
+                      style={[
+                        styles.followInput,
+                        {
+                          color: shell.foreground,
+                          fontFamily: theme.fonts.regular,
+                          backgroundColor: theme.shell.chip,
+                          borderColor: theme.shell.line,
+                        },
+                      ]}
+                      onSubmitEditing={() => void handleFollowUp()}
+                      returnKeyType="send"
+                    />
+                    <Pressable
+                      accessibilityLabel="Enviar dúvida"
+                      disabled={followBusy || !followQuestion.trim()}
+                      onPress={() => void handleFollowUp()}
+                      style={[styles.iconChip, { opacity: followBusy || !followQuestion.trim() ? 0.35 : 1 }]}
+                    >
+                      {followBusy ? (
+                        <ActivityIndicator color={theme.colors.green} />
+                      ) : (
+                        <Ionicons name="send" size={16} color={theme.colors.greenText} />
+                      )}
+                    </Pressable>
+                  </View>
+                ) : (
+                  <Text style={[styles.followLimit, { color: shell.muted, fontFamily: theme.fonts.regular }]}>
+                    Limite de 2 perguntas nesta explicação
+                  </Text>
+                )}
+                {followError ? (
+                  <Text style={[styles.error, { fontFamily: theme.fonts.regular }]}>{followError}</Text>
+                ) : null}
+              </>
+            )}
+          </View>
         </View>
       ) : (
         <Pressable
@@ -1663,6 +1786,21 @@ const styles = StyleSheet.create({
   },
   contextAction: { color: shell.foreground, fontSize: 14 },
   contextBody: { color: shell.foreground, fontSize: 15, lineHeight: 22, marginTop: 8 },
+  followBox: { marginTop: 14, gap: 8 },
+  followGate: { fontSize: 13, textDecorationLine: "underline" },
+  followTitle: { fontSize: 12, textTransform: "uppercase", letterSpacing: 0.3 },
+  followTurn: { gap: 2, marginTop: 4 },
+  followQuestion: { fontSize: 13, marginTop: 4 },
+  followRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
+  followInput: {
+    flex: 1,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    fontSize: 14,
+  },
+  followLimit: { fontSize: 12, marginTop: 4 },
   contextButton: {
     flexDirection: "row",
     alignItems: "center",

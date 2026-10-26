@@ -11,7 +11,13 @@ import {
   ChevronDown,
   ChevronUp,
   Sparkles,
+  Send,
 } from "lucide-react";
+import {
+  MAX_FOLLOW_UP_QUESTION,
+  MAX_FOLLOW_UPS_PER_EXPLANATION,
+  type TutorFollowUpTurn,
+} from "@word-map/shared";
 import { translateDefinitions } from "@/lib/translate";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -34,6 +40,7 @@ import {
   type ContextualizePayload,
 } from "@/lib/contextualize-client";
 import { requestSuggestTranslation } from "@/lib/suggest-translation-client";
+import { requestTutorFollowUp } from "@/lib/tutor-follow-up-client";
 import { normalizeGrammaticalClass } from "@/lib/dictionary";
 import { GrammarClassLink } from "@/components/grammar-class-link";
 import type { Vault } from "@/actions/actions";
@@ -368,6 +375,12 @@ export function ReadingWordPanel({
   );
   const [explanationError, setExplanationError] = useState<string | null>(null);
   const [isExplaining, setIsExplaining] = useState(false);
+  const [followUps, setFollowUps] = useState<TutorFollowUpTurn[]>([]);
+  const [followOpen, setFollowOpen] = useState(false);
+  const [followQuestion, setFollowQuestion] = useState("");
+  const [followBusy, setFollowBusy] = useState(false);
+  const [followError, setFollowError] = useState<string | null>(null);
+  const followBusyRef = useRef(false);
   const [isSuggesting, setIsSuggesting] = useState(false);
   const [suggestionLocked, setSuggestionLocked] = useState(false);
   const suggestingRef = useRef(false);
@@ -537,11 +550,21 @@ export function ReadingWordPanel({
   const passageSpan = contextPayload?.span ?? "";
   const passageSentence = contextPayload?.sentence ?? "";
 
+  const resetFollowUps = () => {
+    setFollowUps([]);
+    setFollowOpen(false);
+    setFollowQuestion("");
+    setFollowError(null);
+    setFollowBusy(false);
+    followBusyRef.current = false;
+  };
+
   useEffect(() => {
     if (!showContextualize || !passageSpan || !passageSentence) {
       setExplanation(null);
       setSuggestedTranslation(null);
       setExplanationError(null);
+      resetFollowUps();
       return;
     }
 
@@ -549,6 +572,7 @@ export function ReadingWordPanel({
     setExplanation(null);
     setSuggestedTranslation(null);
     setExplanationError(null);
+    resetFollowUps();
     void getPassageExplanation(passageSpan, passageSentence).then((saved) => {
       if (cancelled || !saved) return;
       setExplanation(saved.explanation);
@@ -564,6 +588,7 @@ export function ReadingWordPanel({
     if (!contextPayload) return;
     setIsExplaining(true);
     setExplanationError(null);
+    resetFollowUps();
     void requestContextualize(contextPayload)
       .then((result) => {
         setExplanation(result.explanation);
@@ -578,6 +603,38 @@ export function ReadingWordPanel({
       })
       .finally(() => {
         setIsExplaining(false);
+      });
+  };
+
+  const handleFollowUp = () => {
+    if (!contextPayload || !explanation || followBusyRef.current || followBusy) return;
+    if (followUps.length >= MAX_FOLLOW_UPS_PER_EXPLANATION) return;
+    const question = followQuestion.trim().slice(0, MAX_FOLLOW_UP_QUESTION);
+    if (!question) return;
+    followBusyRef.current = true;
+    setFollowBusy(true);
+    setFollowError(null);
+    void requestTutorFollowUp({
+      span: contextPayload.span,
+      sentence: contextPayload.sentence,
+      explanation,
+      question,
+      previousTurns: followUps,
+    })
+      .then((answer) => {
+        setFollowUps((current) => [...current, { question, answer }]);
+        setFollowQuestion("");
+      })
+      .catch((error: unknown) => {
+        setFollowError(
+          error instanceof Error
+            ? error.message
+            : "Não foi possível responder esta dúvida."
+        );
+      })
+      .finally(() => {
+        setFollowBusy(false);
+        followBusyRef.current = false;
       });
   };
 
@@ -1255,6 +1312,77 @@ export function ReadingWordPanel({
                   </button>
                 </div>
               ) : null}
+              <div className="mt-3 border-t border-violet-200/70 pt-3 dark:border-violet-400/15">
+                {!followOpen ? (
+                  <button
+                    type="button"
+                    onClick={() => setFollowOpen(true)}
+                    className="text-[13px] text-[#8a8a8a] underline underline-offset-2 hover:text-[#666] dark:text-zinc-400 dark:hover:text-zinc-300"
+                  >
+                    Não entendi ainda
+                  </button>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-[11px] font-medium uppercase tracking-wide text-violet-700/80 dark:text-violet-300/80">
+                      Ainda com dúvida? · {followUps.length}/{MAX_FOLLOW_UPS_PER_EXPLANATION}
+                    </p>
+                    {followUps.map((turn, index) => (
+                      <div key={`${index}-${turn.question}`} className="space-y-1">
+                        <p className="text-[12px] font-medium text-[#3c3c3c] dark:text-zinc-200">
+                          {turn.question}
+                        </p>
+                        <p className="text-[13px] leading-snug text-[#444] dark:text-zinc-300">
+                          {turn.answer}
+                        </p>
+                      </div>
+                    ))}
+                    {followUps.length < MAX_FOLLOW_UPS_PER_EXPLANATION ? (
+                      <div className="flex items-center gap-2">
+                        <Input
+                          value={followQuestion}
+                          onChange={(event) =>
+                            setFollowQuestion(
+                              event.target.value.slice(0, MAX_FOLLOW_UP_QUESTION)
+                            )
+                          }
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter") {
+                              event.preventDefault();
+                              handleFollowUp();
+                            }
+                          }}
+                          disabled={followBusy}
+                          autoFocus
+                          placeholder="Pergunte sobre esta explicação"
+                          className="h-9 rounded-md border-[#e5e5e5] text-[13px] shadow-none dark:border-gray-700 dark:bg-zinc-900"
+                        />
+                        <button
+                          type="button"
+                          aria-label="Enviar dúvida"
+                          disabled={followBusy || !followQuestion.trim()}
+                          onClick={handleFollowUp}
+                          className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-white text-violet-700 hover:bg-violet-100 disabled:opacity-40 dark:bg-zinc-900 dark:text-violet-300"
+                        >
+                          {followBusy ? (
+                            <Sparkles className="h-3.5 w-3.5 ai-sparkle" aria-hidden />
+                          ) : (
+                            <Send className="h-3.5 w-3.5" aria-hidden />
+                          )}
+                        </button>
+                      </div>
+                    ) : (
+                      <p className="text-[12px] text-[#8a8a8a] dark:text-zinc-400">
+                        Limite de 2 perguntas nesta explicação
+                      </p>
+                    )}
+                    {followError ? (
+                      <p className="text-[12px] leading-snug text-rose-700 dark:text-rose-300">
+                        {followError}
+                      </p>
+                    ) : null}
+                  </div>
+                )}
+              </div>
             </div>
           ) : (
             <div className="mt-4">
