@@ -2,6 +2,7 @@ import { useState } from "react";
 import { ActivityIndicator, Pressable, Text, TextInput, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, Redirect, router } from "expo-router";
+import { getSharedPayloads } from "expo-sharing";
 import { AuthShell, useAuthStyles } from "../src/auth-shell";
 import { GoogleContinueButton } from "../src/google-continue";
 import { useSession } from "../src/session";
@@ -28,7 +29,16 @@ export default function LoginScreen() {
     );
   }
 
-  if (user) return <Redirect href="/home" />;
+  if (user) {
+    try {
+      if (getSharedPayloads().length > 0) {
+        return <Redirect href={"/share" as Href} />;
+      }
+    } catch {
+      // Expo Go / web sem share nativo
+    }
+    return <Redirect href={"/home" as Href} />;
+  }
 
   const submit = async () => {
     setSubmitting(true);

@@ -1,5 +1,3 @@
-import { Platform } from "react-native";
-
 const MOBILE_CLIENT_HEADER = "X-WordMap-Client";
 
 export type MobileUser = {
@@ -22,10 +20,8 @@ export function apiErrorMessage(payload: unknown) {
 function apiBase() {
   const configured = process.env.EXPO_PUBLIC_API_URL?.replace(/\/$/, "");
   if (configured) return configured;
-  // O emulador Android enxerga a máquina host em 10.0.2.2, não em localhost.
-  return Platform.OS === "android"
-    ? "http://10.0.2.2:3001"
-    : "http://localhost:3001";
+  // Produção (Render). Emulador/local: defina EXPO_PUBLIC_API_URL no .env.
+  return "https://word-map.onrender.com";
 }
 
 export async function apiRequest<T>(

@@ -15,7 +15,11 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.wordmap"
+      "bundleIdentifier": "app.wordmap",
+      "infoPlist": {
+        "NSSpeechRecognitionUsageDescription": "O Word Map usa reconhecimento de fala para o exercício de compreensão oral.",
+        "NSMicrophoneUsageDescription": "O Word Map usa o microfone para o exercício de fala."
+      }
     },
     "android": {
       "package": "app.wordmap",
@@ -25,7 +29,13 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -56,10 +66,32 @@
           "microphonePermission": "O Word Map usa o microfone para o exercício de fala.",
           "speechRecognitionPermission": "O Word Map usa reconhecimento de fala para o exercício de compreensão oral."
         }
+      ],
+      [
+        "expo-sharing",
+        {
+          "ios": {
+            "enabled": true,
+            "activationRule": {
+              "supportsText": true
+            }
+          },
+          "android": {
+            "enabled": true,
+            "singleShareMimeTypes": ["text/plain", "text/*"]
+          }
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "c351f9a9-3fe4-4944-ba8e-5094431b1a3f"
+      }
+    },
+    "owner": "joaovrcosta"
   }
 }
