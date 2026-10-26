@@ -198,10 +198,11 @@ export class TutorService {
     let word = readField(body.word, MAX_SUGGEST_WORD);
     if (!word) fail(400, "Palavra inválida");
 
+    // Frases literárias costumam passar do limite — corta em vez de rejeitar a palavra.
     let sentence: string | null = null;
-    if (body.sentence != null && body.sentence !== "") {
-      sentence = readField(body.sentence, MAX_SUGGEST_SENTENCE);
-      if (!sentence) fail(400, "Palavra inválida");
+    if (typeof body.sentence === "string") {
+      const trimmed = body.sentence.trim();
+      if (trimmed) sentence = trimmed.slice(0, MAX_SUGGEST_SENTENCE);
     }
 
     if (typeof body.wordId === "number") {

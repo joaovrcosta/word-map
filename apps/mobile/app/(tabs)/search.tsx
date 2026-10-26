@@ -69,7 +69,7 @@ export default function SearchScreen() {
   const [debounced, setDebounced] = useState("");
   const [vaults, setVaults] = useState<Vault[]>([]);
   const [vaultHits, setVaultHits] = useState<VaultHit[]>([]);
-  const [dictionaryHit, setDictionaryHit] = useState<DictionaryHit | null>(null);
+  const [dictionaryHits, setDictionaryHits] = useState<DictionaryHit[]>([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingWord | null>(null);
@@ -86,31 +86,40 @@ export default function SearchScreen() {
   const [creating, setCreating] = useState(false);
   const sheetDragY = useRef(new Animated.Value(0)).current;
   const busyVaultIdRef = useRef<number | null>(null);
+  const creatingRef = useRef(false);
+  const dismissSheetRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     busyVaultIdRef.current = busyVaultId;
   }, [busyVaultId]);
 
+  useEffect(() => {
+    creatingRef.current = creating;
+  }, [creating]);
+
   const sheetPan = useRef(
     PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderTerminationRequest: () => false,
+      onPanResponderGrant: () => {
+        sheetDragY.stopAnimation();
+        sheetDragY.setValue(0);
+      },
       onPanResponderMove: (_, gesture) => {
-        if (gesture.dy > 0) sheetDragY.setValue(gesture.dy);
+        sheetDragY.setValue(Math.max(0, gesture.dy));
       },
       onPanResponderRelease: (_, gesture) => {
-        if (busyVaultIdRef.current != null) {
+        if (busyVaultIdRef.current != null || creatingRef.current) {
           Animated.spring(sheetDragY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
           return;
         }
-        if (gesture.dy > 110 || gesture.vy > 1.1) {
-          Animated.timing(sheetDragY, { toValue: 480, duration: 180, useNativeDriver: true }).start(() => {
+        if (gesture.dy > 80 || gesture.vy > 0.9) {
+          Animated.timing(sheetDragY, { toValue: 520, duration: 180, useNativeDriver: true }).start(() => {
             sheetDragY.setValue(0);
-            setPending(null);
-            setVaultFilter("");
-            setActionError(null);
-            setActionOk(null);
-            setCreatingVault(false);
-            setNewVaultName("");
+            dismissSheetRef.current();
           });
           return;
         }
@@ -147,7 +156,7 @@ export default function SearchScreen() {
   useEffect(() => {
     if (!debounced) {
       setVaultHits([]);
-      setDictionaryHit(null);
+      setDictionaryHits([]);
       setSavedNames(new Set());
       setSearching(false);
       setError(null);
@@ -158,13 +167,56 @@ export default function SearchScreen() {
     setSearching(true);
     setError(null);
 
+    const sameTerm = (a: string, b: string) => a.trim().toLowerCase() === b.trim().toLowerCase();
+
+    const lookupDictionary = async (term: string) => {
+      const dictionary = await request<{ entry?: DictionaryEntry | null; entries?: DictionaryEntry[] }>(
+        `/dictionary?word=${encodeURIComponent(term)}`
+      ).catch(() => ({ entry: null, entries: [] }));
+      return dictionary.entry ?? dictionary.entries?.[0] ?? null;
+    };
+
+    const translateText = async (text: string, source: string, target: string) => {
+      try {
+        const data = await request<{ translatedText?: string }>("/translate", {
+          method: "POST",
+          body: JSON.stringify({ text, source, target }),
+        });
+        return data.translatedText?.trim() || "";
+      } catch {
+        return "";
+      }
+    };
+
+    const hitFromEntry = async (entry: DictionaryEntry, preferPt?: string): Promise<DictionaryHit | null> => {
+      if (!entry.word) return null;
+      const definitionsEn = (entry.meanings ?? [])
+        .flatMap((meaning) => (meaning.definitions ?? []).map((item) => item.definition?.trim() ?? ""))
+        .filter(Boolean)
+        .slice(0, 3);
+      const translated = definitionsEn.length
+        ? await Promise.all(definitionsEn.map((text) => translateText(text, "en", "pt").then((pt) => pt || text)))
+        : [];
+      const prefer = preferPt?.trim();
+      let definitions = translated;
+      if (prefer) {
+        const lower = prefer.toLowerCase();
+        if (!translated.some((item) => item.toLowerCase() === lower)) {
+          definitions = [prefer, ...translated].slice(0, 3);
+        }
+      }
+      return {
+        word: entry.word,
+        grammaticalClass: normalizeGrammaticalClass(entry.meanings?.[0]?.partOfSpeech),
+        definitions,
+      };
+    };
+
     (async () => {
       try {
-        const [searchRows, dictionary] = await Promise.all([
+        const [searchRows, directEntry] = await Promise.all([
           request<VaultHit[]>(`/words/search?q=${encodeURIComponent(debounced)}`).catch(() => []),
-          request<{ entry?: DictionaryEntry | null; entries?: DictionaryEntry[] }>(
-            `/dictionary?word=${encodeURIComponent(debounced)}`
-          ).catch(() => ({ entry: null, entries: [] })),
+          lookupDictionary(debounced),
         ]);
         if (cancelled) return;
 
@@ -172,40 +224,60 @@ export default function SearchScreen() {
         setVaultHits(rows);
         setSavedNames(new Set(rows.map((hit) => hit.word.name.trim().toLowerCase())));
 
-        const entry = dictionary.entry ?? dictionary.entries?.[0] ?? null;
-        if (entry?.word) {
-          const definitionsEn = (entry.meanings ?? [])
-            .flatMap((meaning) => (meaning.definitions ?? []).map((item) => item.definition?.trim() ?? ""))
-            .filter(Boolean)
-            .slice(0, 3);
-          const definitions = definitionsEn.length
-            ? await Promise.all(
-                definitionsEn.map(async (text) => {
-                  try {
-                    const data = await request<{ translatedText?: string }>("/translate", {
-                      method: "POST",
-                      body: JSON.stringify({ text, source: "en", target: "pt" }),
-                    });
-                    return data.translatedText?.trim() || text;
-                  } catch {
-                    return text;
-                  }
-                })
-              )
-            : [];
+        const exactDirect =
+          directEntry?.word && sameTerm(directEntry.word, debounced) ? directEntry : null;
+        const fuzzyDirect =
+          directEntry?.word && !exactDirect ? directEntry : null;
+
+        const hits: DictionaryHit[] = [];
+        const seen = new Set<string>();
+        const pushHit = (hit: DictionaryHit | null) => {
+          if (!hit?.word) return;
+          const key = hit.word.trim().toLowerCase();
+          if (seen.has(key)) return;
+          seen.add(key);
+          hits.push(hit);
+        };
+
+        // Match exato em inglês: usa direto e não traduz (run, give up…).
+        if (exactDirect) {
+          pushHit(await hitFromEntry(exactDirect));
           if (cancelled) return;
-          setDictionaryHit({
-            word: entry.word,
-            grammaticalClass: normalizeGrammaticalClass(entry.meanings?.[0]?.partOfSpeech),
-            definitions,
-          });
-        } else {
-          setDictionaryHit(null);
+          setDictionaryHits(hits);
+          return;
         }
+
+        // Sem match exato: tenta PT→EN (desistir → give up), mesmo se houver fuzzy (desister).
+        const english = await translateText(debounced, "pt", "en");
+        if (cancelled) return;
+        const englishTerm = english.trim();
+        if (englishTerm && !sameTerm(englishTerm, debounced)) {
+          const translatedEntry = await lookupDictionary(englishTerm);
+          if (cancelled) return;
+          if (translatedEntry?.word) {
+            pushHit(await hitFromEntry(translatedEntry, debounced));
+          } else {
+            pushHit({
+              word: englishTerm,
+              grammaticalClass: "substantivo",
+              definitions: [debounced],
+            });
+          }
+          if (cancelled) return;
+        }
+
+        // Fuzzy só se a tradução PT→EN não deu resultado (ex.: typo em inglês).
+        // Evita ruído tipo escada → espada / desistir → desister.
+        if (hits.length === 0 && fuzzyDirect?.word) {
+          pushHit(await hitFromEntry(fuzzyDirect));
+          if (cancelled) return;
+        }
+
+        setDictionaryHits(hits);
       } catch (cause) {
         if (!cancelled) {
           setVaultHits([]);
-          setDictionaryHit(null);
+          setDictionaryHits([]);
           setSavedNames(new Set());
           setError(cause instanceof Error ? cause.message : "Não foi possível pesquisar.");
         }
@@ -258,6 +330,15 @@ export default function SearchScreen() {
   const closePicker = () => {
     if (busyVaultId != null || creating) return;
     sheetDragY.setValue(0);
+    setPending(null);
+    setVaultFilter("");
+    setActionError(null);
+    setActionOk(null);
+    setCreatingVault(false);
+    setNewVaultName("");
+  };
+
+  dismissSheetRef.current = () => {
     setPending(null);
     setVaultFilter("");
     setActionError(null);
@@ -355,9 +436,9 @@ export default function SearchScreen() {
   const exactVaultHit = vaultHits.some(
     (hit) => hit.word.name.trim().toLowerCase() === debounced.toLowerCase()
   );
-  const dictionaryExact =
-    Boolean(dictionaryHit) &&
-    dictionaryHit!.word.trim().toLowerCase() === debounced.toLowerCase();
+  const dictionaryExact = dictionaryHits.some(
+    (hit) => hit.word.trim().toLowerCase() === debounced.toLowerCase()
+  );
   const showManual =
     Boolean(debounced) && !searching && !exactVaultHit && !dictionaryExact;
 
@@ -377,7 +458,7 @@ export default function SearchScreen() {
         </Text>
       </Pressable>
       <Heading>Buscar</Heading>
-      <Muted>Pesquise palavras e salve nos seus vaults.</Muted>
+      <Muted>Busque em inglês ou português e salve nos seus vaults.</Muted>
 
       <View
         style={[
@@ -392,7 +473,7 @@ export default function SearchScreen() {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Adicione palavras em seus vaults"
+          placeholder="Ex.: give up ou desistir"
           placeholderTextColor={theme.shell.muted}
           autoCapitalize="none"
           autoCorrect={false}
@@ -410,7 +491,7 @@ export default function SearchScreen() {
 
       {!debounced ? (
         <View style={styles.empty}>
-          <Muted>Digite uma palavra para pesquisar no dicionário e nos seus vaults.</Muted>
+          <Muted>Digite em inglês ou português para pesquisar no dicionário e nos seus vaults.</Muted>
         </View>
       ) : searching ? (
         <View style={styles.empty}>
@@ -457,53 +538,56 @@ export default function SearchScreen() {
             </View>
           ) : null}
 
-          {dictionaryHit ? (
+          {dictionaryHits.length > 0 ? (
             <View style={{ marginTop: 18 }}>
               <Text style={[styles.section, { color: theme.shell.muted, fontFamily: theme.fonts.semibold }]}>
-                Dicionário
+                Dicionário · {dictionaryHits.length}
               </Text>
-              <ResultRow
-                title={dictionaryHit.word}
-                subtitle={classLabel(dictionaryHit.grammaticalClass)}
-                detail={dictionaryHit.definitions.join(" · ")}
-                icon="globe-outline"
-                saved={isSaved(dictionaryHit.word)}
-                onPress={() => {
-                  const hit = vaultHits.find(
-                    (item) =>
-                      item.word.name.trim().toLowerCase() === dictionaryHit.word.trim().toLowerCase()
-                  );
-                  setOpened({
-                    clean: dictionaryHit.word,
-                    saved: hit ? savedFromVaultHit(hit) : null,
-                  });
-                }}
-                onAdd={() =>
-                  void openVaultPicker({
-                    name: dictionaryHit.word,
-                    grammaticalClass: dictionaryHit.grammaticalClass,
-                    translations: dictionaryHit.definitions,
-                    translate: false,
-                  })
-                }
-              />
+              {dictionaryHits.map((dictionaryHit) => (
+                <ResultRow
+                  key={dictionaryHit.word}
+                  title={dictionaryHit.word}
+                  subtitle={classLabel(dictionaryHit.grammaticalClass)}
+                  detail={dictionaryHit.definitions.join(" · ")}
+                  icon="globe-outline"
+                  saved={isSaved(dictionaryHit.word)}
+                  onPress={() => {
+                    const hit = vaultHits.find(
+                      (item) =>
+                        item.word.name.trim().toLowerCase() === dictionaryHit.word.trim().toLowerCase()
+                    );
+                    setOpened({
+                      clean: dictionaryHit.word,
+                      saved: hit ? savedFromVaultHit(hit) : null,
+                    });
+                  }}
+                  onAdd={() =>
+                    void openVaultPicker({
+                      name: dictionaryHit.word,
+                      grammaticalClass: dictionaryHit.grammaticalClass,
+                      translations: dictionaryHit.definitions,
+                      translate: false,
+                    })
+                  }
+                />
+              ))}
             </View>
           ) : null}
 
           {showManual ? (
             <View style={{ marginTop: 18 }}>
               <Text style={[styles.section, { color: theme.shell.muted, fontFamily: theme.fonts.semibold }]}>
-                {dictionaryHit ? "Ou salvar o que você digitou" : "Salvar termo"}
+                {dictionaryHits.length > 0 ? "Ou salvar o que você digitou" : "Salvar termo"}
               </Text>
               <ResultRow
                 title={debounced}
                 subtitle={
-                  dictionaryHit
+                  dictionaryHits.length > 0
                     ? `Salvar “${debounced}” como está`
                     : "Nenhum resultado no dicionário"
                 }
                 detail={
-                  dictionaryHit
+                  dictionaryHits.length > 0
                     ? "O dicionário sugeriu outro termo — você ainda pode salvar o seu"
                     : "Salvar mesmo assim em um vault"
                 }
@@ -530,7 +614,7 @@ export default function SearchScreen() {
             </View>
           ) : null}
 
-          {!vaultHits.length && !dictionaryHit && !showManual ? (
+          {!vaultHits.length && !dictionaryHits.length && !showManual ? (
             <View style={styles.empty}>
               <Muted>{`Nenhum resultado para “${debounced}”.`}</Muted>
             </View>
@@ -557,7 +641,11 @@ export default function SearchScreen() {
 
       <Modal visible={Boolean(pending)} transparent animationType="fade" onRequestClose={closePicker}>
         <View style={styles.spotifyBackdrop}>
-          <Pressable style={StyleSheet.absoluteFillObject} onPress={closePicker} />
+          <Pressable
+            accessibilityLabel="Fechar"
+            style={styles.spotifyDismiss}
+            onPress={closePicker}
+          />
           <Animated.View
             style={[
               styles.spotifySheet,
@@ -828,6 +916,9 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
   },
+  spotifyDismiss: {
+    flex: 1,
+  },
   spotifySheet: {
     borderTopLeftRadius: 16,
     borderTopRightRadius: 16,
@@ -836,13 +927,18 @@ const styles = StyleSheet.create({
   },
   handleWrap: {
     alignItems: "center",
-    paddingTop: 4,
-    paddingBottom: 10,
-    // Área maior para arrastar e fechar sem conflitar com a lista
+    justifyContent: "center",
+    minHeight: 36,
+    paddingTop: 10,
+    paddingBottom: 12,
     marginHorizontal: -18,
     paddingHorizontal: 18,
   },
-  handle: { width: 40, height: 4, borderRadius: 2 },
+  handle: {
+    width: 44,
+    height: 5,
+    borderRadius: 3,
+  },
   spotifyHeader: {
     flexDirection: "row",
     alignItems: "center",

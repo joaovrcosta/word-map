@@ -12,6 +12,7 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { BookArt, bookAuthor } from "../../../../../src/features/books/cover";
 import {
@@ -40,6 +41,11 @@ import { ErrorText, Field, Heading, Loading, PrimaryButton, Screen } from "../..
 const FONT_SIZES = [18, 22, 26];
 const LEVEL_COLORS = ["#ff4b4b", "#ff9600", "#ffc800", "#24c875"];
 const LEVEL_TEXT = ["#ffffff", "#ffffff", "#3c3c3c", "#ffffff"];
+
+function softTapHaptic() {
+  if (Platform.OS === "web") return;
+  void Haptics.selectionAsync();
+}
 
 export default function ChapterReaderScreen() {
   const theme = useTheme();
@@ -233,14 +239,15 @@ export default function ChapterReaderScreen() {
     setSelection(null);
     setRangeIndexes([tokenIndex]);
     setRangeAnchor(anchor);
+    softTapHaptic();
     speakWord(clean);
   };
 
   const toggleRange = (tokenIndex: number, _clean: string, _occurrence: number, anchor: WordAnchor) => {
-    setRangeIndexes((current) => {
-      const next = nextRangeIndexes(current ?? [], tokenIndex, MAX_RANGE_WORDS);
-      return next;
-    });
+    const prev = rangeIndexes ?? [];
+    const next = nextRangeIndexes(prev, tokenIndex, MAX_RANGE_WORDS);
+    if (next.length > prev.length) softTapHaptic();
+    setRangeIndexes(next);
     setRangeAnchor(anchor);
   };
 

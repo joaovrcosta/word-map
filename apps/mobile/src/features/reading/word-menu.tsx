@@ -702,11 +702,13 @@ export function ReadingWordMenu({
     setSuggestError(null);
     let locked = false;
     try {
+      const sentence = context?.sentence?.trim() || null;
       const data = await request<{ translation?: string }>("/tutor/suggest-translation", {
         method: "POST",
         body: JSON.stringify({
           word: clean,
-          sentence: context?.sentence ?? null,
+          // Hermes muitas vezes não tem Intl.Segmenter → a "frase" vira o parágrafo todo.
+          sentence: sentence ? sentence.slice(0, 400) : null,
           wordId: localSaved?.id,
         }),
       });

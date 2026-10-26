@@ -149,12 +149,26 @@ function shouldAttach(previous: string, next: string): boolean {
   return /[.!?]\s*$/.test(previous) && /^["”’']/.test(nextTrimmed);
 }
 
+function fallbackSentenceRanges(
+  text: string
+): Array<{ start: number; end: number }> {
+  const ranges: Array<{ start: number; end: number }> = [];
+  const pattern = /[^.!?…]+(?:[.!?…]+|$)/g;
+  let match: RegExpExecArray | null;
+  while ((match = pattern.exec(text)) !== null) {
+    const raw = match[0];
+    if (!raw.trim()) continue;
+    ranges.push({ start: match.index, end: match.index + raw.length });
+  }
+  return ranges.length ? ranges : [{ start: 0, end: text.length }];
+}
+
 export function sentenceRanges(
   text: string
 ): Array<{ start: number; end: number }> {
   if (!text.trim()) return [];
   if (typeof Intl === "undefined" || typeof Intl.Segmenter !== "function") {
-    return [{ start: 0, end: text.length }];
+    return fallbackSentenceRanges(text);
   }
 
   const segmenter = new Intl.Segmenter("en", { granularity: "sentence" });
