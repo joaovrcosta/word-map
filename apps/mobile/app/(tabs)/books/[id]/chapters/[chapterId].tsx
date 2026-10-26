@@ -1,9 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   Text,
+  useWindowDimensions,
   View,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
@@ -11,7 +14,12 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { router, useLocalSearchParams } from "expo-router";
 import { BookArt, bookAuthor } from "../../../../../src/features/books/cover";
-import { normalizeReadingPosition, normalizeToken, paginateReading } from "@word-map/shared";
+import {
+  formatChapterContent,
+  normalizeReadingPosition,
+  normalizeToken,
+  paginateReading,
+} from "@word-map/shared";
 import {
   findSavedReadingWord,
   MAX_RANGE_WORDS,
@@ -27,7 +35,7 @@ import { speakPassage, speakWord, stopSpeech } from "../../../../../src/speech";
 import { useSession } from "../../../../../src/session";
 import { shell, useTheme } from "../../../../../src/theme";
 import { type ChapterDetail, type ReadingPosition, type Vault } from "../../../../../src/types";
-import { ErrorText, Loading, Screen } from "../../../../../src/ui";
+import { ErrorText, Field, Heading, Loading, PrimaryButton, Screen } from "../../../../../src/ui";
 
 const FONT_SIZES = [18, 22, 26];
 const LEVEL_COLORS = ["#ff4b4b", "#ff9600", "#ffc800", "#24c875"];
@@ -35,9 +43,12 @@ const LEVEL_TEXT = ["#ffffff", "#ffffff", "#3c3c3c", "#ffffff"];
 
 export default function ChapterReaderScreen() {
   const theme = useTheme();
+  const { height: windowHeight } = useWindowDimensions();
   const { request } = useSession();
   const params = useLocalSearchParams<{ id: string; chapterId: string }>();
   const chapterId = Number(params.chapterId);
+  const sheetMaxHeight = Math.round(windowHeight * 0.86);
+  const contentMaxHeight = Math.max(140, Math.round(windowHeight * 0.34));
   const [chapter, setChapter] = useState<ChapterDetail | null>(null);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -51,6 +62,10 @@ export default function ChapterReaderScreen() {
   const [wordsOpen, setWordsOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const [vaults, setVaults] = useState<Vault[]>([]);
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [savingEdit, setSavingEdit] = useState(false);
   const [selection, setSelection] = useState<{
     clean: string;
     occurrence: number;
@@ -335,6 +350,60 @@ export default function ChapterReaderScreen() {
 
   const saved = selection ? findSavedReadingWord(foundWords, vaults, selection.clean) : null;
 
+  const openEdit = () => {
+    if (!chapter?.canEdit) return;
+    keepListening.current = false;
+    stopSpeech();
+    setListening(false);
+    setSelection(null);
+    setRangeIndexes(null);
+    setRangeAnchor(null);
+    setEditTitle(chapter.title);
+    setEditContent(chapter.content);
+    setEditing(true);
+  };
+
+  const closeEdit = () => {
+    if (savingEdit) return;
+    setEditing(false);
+  };
+
+  const saveEdit = async () => {
+    if (!chapter?.canEdit || savingEdit) return;
+    const title = editTitle.trim();
+    const content = formatChapterContent(editContent);
+    if (!title || !content) return;
+    setEditTitle(title);
+    setEditContent(content);
+    setSavingEdit(true);
+    setError(null);
+    try {
+      const updated = await request<{ title: string; content: string }>(`/chapters/${chapterId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ title, content }),
+      });
+      const nextContent = formatChapterContent(updated.content ?? content);
+      const nextTitle = updated.title ?? title;
+      const nextPages = paginateReading(nextContent);
+      const nextIndex = Math.min(pageIndexRef.current, Math.max(nextPages.length - 1, 0));
+      pageIndexRef.current = nextIndex;
+      setPageIndex(nextIndex);
+      setChapter((current) =>
+        current ? { ...current, title: nextTitle, content: nextContent } : current
+      );
+      setEditing(false);
+      if (width) {
+        requestAnimationFrame(() => {
+          scrollRef.current?.scrollTo({ x: nextIndex * width, animated: false });
+        });
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível salvar o capítulo");
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
   if (!hydrated) return <Loading />;
 
   const progress = pages.length <= 1 ? 1 : pageIndex / (pages.length - 1);
@@ -355,6 +424,11 @@ export default function ChapterReaderScreen() {
             }}
           />
         </View>
+        {chapter?.canEdit ? (
+          <Pressable onPress={openEdit} hitSlop={10} accessibilityRole="button" accessibilityLabel="Editar capítulo">
+            <Ionicons name="create-outline" size={22} color={theme.colors.foreground} />
+          </Pressable>
+        ) : null}
         <Pressable
           onPress={() =>
             setFontSize((current) => FONT_SIZES[(FONT_SIZES.indexOf(current) + 1) % FONT_SIZES.length])
@@ -554,6 +628,60 @@ export default function ChapterReaderScreen() {
           onChanged={reloadWords}
         />
       ) : null}
+
+      <Modal animationType="fade" transparent visible={editing} onRequestClose={closeEdit}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }}
+        >
+          <Pressable style={{ flex: 1, justifyContent: "center", padding: 24 }} onPress={closeEdit}>
+            <Pressable
+              onPress={(event) => event.stopPropagation()}
+              style={{
+                backgroundColor: theme.shell.surface,
+                borderRadius: theme.radii.lg,
+                padding: 20,
+                borderWidth: 1,
+                borderColor: theme.shell.line,
+                maxHeight: sheetMaxHeight,
+                overflow: "hidden",
+              }}
+            >
+              <Heading>Editar capítulo</Heading>
+              <Field
+                autoFocus
+                value={editTitle}
+                onChangeText={setEditTitle}
+                placeholder="Título do capítulo"
+                style={{ marginTop: 12 }}
+              />
+              <Field
+                value={editContent}
+                onChangeText={setEditContent}
+                placeholder="Texto do capítulo"
+                multiline
+                scrollEnabled
+                textAlignVertical="top"
+                style={{
+                  marginTop: 10,
+                  height: contentMaxHeight,
+                  maxHeight: contentMaxHeight,
+                }}
+              />
+              <PrimaryButton
+                label={savingEdit ? "Salvando..." : "Salvar alterações"}
+                disabled={savingEdit || !editTitle.trim() || !editContent.trim()}
+                onPress={() => void saveEdit()}
+              />
+              <Pressable onPress={closeEdit} style={{ alignItems: "center", marginTop: 14 }}>
+                <Text style={{ color: theme.colors.mutedForeground, fontFamily: theme.fonts.semibold }}>
+                  Cancelar
+                </Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </KeyboardAvoidingView>
+      </Modal>
     </Screen>
   );
 }

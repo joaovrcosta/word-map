@@ -8,6 +8,7 @@ import {
 } from "../auth/current-user";
 import { publicErrorMessage } from "../lib/public-error";
 import {
+  formatChapterContent,
   normalizeReadingPosition,
   paginateReading,
 } from "@word-map/shared/reading-pages";
@@ -359,7 +360,7 @@ export async function addChapter(
     }
 
     const trimmedTitle = title.trim();
-    const trimmedContent = content.trim();
+    const trimmedContent = formatChapterContent(content);
     if (!trimmedTitle) {
       throw new Error("Título obrigatório");
     }
@@ -405,7 +406,7 @@ export async function updateChapter(
     }
 
     const trimmedTitle = title.trim();
-    const trimmedContent = content.trim();
+    const trimmedContent = formatChapterContent(content);
     if (!trimmedTitle) {
       throw new Error("Título obrigatório");
     }

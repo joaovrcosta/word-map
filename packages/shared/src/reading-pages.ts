@@ -30,6 +30,105 @@ export function splitParagraphs(content: string): string[] {
     .filter(Boolean);
 }
 
+/** Cabeçalhos/rodapés típicos de PDF: "3", "Letter I", "4 Letter I", "Letter I 5". */
+function isPageDebris(line: string): boolean {
+  const value = line.trim();
+  if (!value) return false;
+  if (/^\d{1,4}$/.test(value)) return true;
+  if (/^(letter|chapter|volume|part|book)\s+[ivxlcdm\d]+$/i.test(value)) return true;
+  if (/^\d{1,4}\s+(letter|chapter|volume|part|book)\s+[ivxlcdm\d]+$/i.test(value)) {
+    return true;
+  }
+  if (/^(letter|chapter|volume|part|book)\s+[ivxlcdm\d]+\s+\d{1,4}$/i.test(value)) {
+    return true;
+  }
+  return false;
+}
+
+function endsSentenceLine(line: string): boolean {
+  return /[.!?]["'”’»]?$/.test(line.trim());
+}
+
+function startsParagraphLine(line: string): boolean {
+  return /^["“‘']?[A-ZÀ-ÖØ-Þ]/.test(line.trim());
+}
+
+/**
+ * Normaliza texto colado de PDF/e-book: remove lixo de página,
+ * desfaz quebras de linha no meio da frase e recompõe parágrafos.
+ */
+export function formatChapterContent(raw: string): string {
+  if (!raw.trim()) return "";
+
+  const lines = raw
+    .replace(/\r\n?/g, "\n")
+    .replace(/\u00a0/g, " ")
+    .split("\n")
+    .map((line) => line.replace(/[ \t]+/g, " ").trim());
+
+  const kept: Array<string | null> = [];
+  for (const line of lines) {
+    if (!line) {
+      if (kept.length > 0 && kept[kept.length - 1] !== null) kept.push(null);
+      continue;
+    }
+    if (isPageDebris(line)) continue;
+    kept.push(line);
+  }
+
+  while (kept.length > 0 && kept[0] === null) kept.shift();
+  while (kept.length > 0 && kept[kept.length - 1] === null) kept.pop();
+
+  const lengths = kept
+    .filter((line): line is string => typeof line === "string")
+    .map((line) => line.length);
+  const sorted = [...lengths].sort((a, b) => a - b);
+  const median = sorted.length ? sorted[Math.floor(sorted.length / 2)]! : 60;
+  const shortLine = Math.max(42, Math.round(median * 0.68));
+
+  const paragraphs: string[] = [];
+  let buffer = "";
+
+  const flush = () => {
+    const text = buffer.replace(/\s+/g, " ").trim();
+    if (text) paragraphs.push(text);
+    buffer = "";
+  };
+
+  for (let index = 0; index < kept.length; index += 1) {
+    const line = kept[index];
+    if (line === null) {
+      flush();
+      continue;
+    }
+
+    if (!buffer) {
+      buffer = line;
+    } else if (/[A-Za-zÀ-ÖØ-öø-ÿ]-$/.test(buffer) && /^[a-zà-öø-ÿ]/.test(line)) {
+      buffer = `${buffer.slice(0, -1)}${line}`;
+    } else {
+      buffer = `${buffer} ${line}`;
+    }
+
+    const next = kept[index + 1];
+    if (next === null || next === undefined) {
+      flush();
+      continue;
+    }
+    if (
+      typeof next === "string" &&
+      endsSentenceLine(line) &&
+      line.length <= shortLine &&
+      startsParagraphLine(next)
+    ) {
+      flush();
+    }
+  }
+
+  flush();
+  return paragraphs.join("\n\n");
+}
+
 function endsWithAbbreviation(value: string): boolean {
   return ABBREVIATIONS.test(value.trim().replace(/["”’']+$/g, ""));
 }

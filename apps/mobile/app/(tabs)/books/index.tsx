@@ -1,12 +1,12 @@
 import { useCallback, useMemo, useState } from "react";
-import { Pressable, Text, TextInput, useWindowDimensions, View } from "react-native";
+import { Modal, Pressable, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, router, useFocusEffect } from "expo-router";
 import { BookArt } from "../../../src/features/books/cover";
 import { useSession } from "../../../src/session";
 import { useTheme } from "../../../src/theme";
 import type { BookListItem } from "../../../src/types";
-import { Chip, ErrorText, Loading, Muted, Screen } from "../../../src/ui";
+import { Chip, ErrorText, Field, Heading, Loading, Muted, PrimaryButton, Screen } from "../../../src/ui";
 
 type Shelf = "all" | "store" | "saved" | "mine";
 
@@ -30,6 +30,10 @@ export default function BooksScreen() {
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [shelf, setShelf] = useState<Shelf>("all");
+  const [creating, setCreating] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftDescription, setDraftDescription] = useState("");
+  const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -84,6 +88,48 @@ export default function BooksScreen() {
     }
   };
 
+  const openCreate = () => {
+    setDraftTitle("");
+    setDraftDescription("");
+    setCreating(true);
+    setError(null);
+  };
+
+  const closeCreate = () => {
+    if (saving) return;
+    setCreating(false);
+    setDraftTitle("");
+    setDraftDescription("");
+  };
+
+  const createBook = async () => {
+    const title = draftTitle.trim();
+    if (!title || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const created = await request<BookListItem>("/books", {
+        method: "POST",
+        body: JSON.stringify({
+          title,
+          description: draftDescription.trim() || undefined,
+        }),
+      });
+      setCreating(false);
+      setDraftTitle("");
+      setDraftDescription("");
+      setShelf("mine");
+      await load();
+      if (created?.id != null) {
+        router.push(`/books/${created.id}` as Href);
+      }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível criar o livro");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const matches = useCallback(
     (book: BookListItem) => book.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
     [query]
@@ -119,6 +165,7 @@ export default function BooksScreen() {
           Biblioteca
         </Text>
         <View style={{ flexDirection: "row", gap: 10 }}>
+          <RoundButton name="add" label="Criar livro" onPress={openCreate} />
           <RoundButton
             name="search"
             label="Buscar"
@@ -166,8 +213,15 @@ export default function BooksScreen() {
       {error ? <ErrorText>{error}</ErrorText> : null}
 
       {sections.length === 0 ? (
-        <View style={{ marginTop: 28 }}>
-          <Muted>{query.trim() ? "Nenhum livro com esse nome." : "Nenhum livro no acervo ainda."}</Muted>
+        <View style={{ marginTop: 28, gap: 14 }}>
+          <Muted>
+            {query.trim()
+              ? "Nenhum livro com esse nome."
+              : shelf === "mine"
+                ? "Você ainda não criou nenhum livro."
+                : "Nenhum livro no acervo ainda."}
+          </Muted>
+          {!query.trim() ? <PrimaryButton label="Criar meu livro" onPress={openCreate} /> : null}
         </View>
       ) : (
         sections.map((section) => (
@@ -183,6 +237,51 @@ export default function BooksScreen() {
           />
         ))
       )}
+
+      <Modal animationType="fade" transparent visible={creating} onRequestClose={closeCreate}>
+        <Pressable
+          style={{ flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.45)" }}
+          onPress={closeCreate}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={{
+              backgroundColor: theme.shell.surface,
+              borderRadius: theme.radii.lg,
+              padding: 20,
+              borderWidth: 1,
+              borderColor: theme.shell.line,
+            }}
+          >
+            <Heading>Novo livro</Heading>
+            <Muted>Crie o seu próprio livro e depois adicione capítulos.</Muted>
+            <Field
+              autoFocus
+              value={draftTitle}
+              onChangeText={setDraftTitle}
+              placeholder="Título do livro"
+              style={{ marginTop: 12 }}
+            />
+            <Field
+              value={draftDescription}
+              onChangeText={setDraftDescription}
+              placeholder="Descrição (opcional)"
+              multiline
+              style={{ marginTop: 10, minHeight: 88, textAlignVertical: "top" }}
+            />
+            <PrimaryButton
+              label={saving ? "Criando..." : "Criar livro"}
+              disabled={saving || !draftTitle.trim()}
+              onPress={() => void createBook()}
+            />
+            <Pressable onPress={closeCreate} style={{ alignItems: "center", marginTop: 14 }}>
+              <Text style={{ color: theme.colors.mutedForeground, fontFamily: theme.fonts.semibold }}>
+                Cancelar
+              </Text>
+            </Pressable>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }

@@ -1,5 +1,6 @@
 import {
   countWords,
+  formatChapterContent,
   normalizeReadingPosition,
   paginateReading,
   paginateReadingToFit,
@@ -151,5 +152,43 @@ describe("resolveReadingPage", () => {
       pageIndex: pages.length - 1,
       paragraphIndex: pages[pages.length - 1].slices[0].paragraphIndex,
     });
+  });
+});
+
+describe("formatChapterContent", () => {
+  it("junta quebras de PDF e remove cabeçalhos de página", () => {
+    const raw = [
+      "YOU will rejoice to hear that no disaster has accompanied the",
+      "commencement of an enterprise which you have regarded",
+      "with such evil forebodings. I arrived here yesterday; and",
+      "my first task is to assure my dear sister of my welfare.",
+      "",
+      "These visions faded when I perused, for the first time,",
+      "those poets whose effusions entranced my soul.",
+      "3",
+      "4 Letter I",
+      "And now, dear Margaret, do I not deserve to accomplish",
+      "Letter I 5",
+      "some great purpose.",
+      "whale-",
+      "fishers sailed north.",
+    ].join("\n");
+
+    const formatted = formatChapterContent(raw);
+
+    expect(formatted).not.toMatch(/\bLetter I\b/);
+    expect(formatted).not.toMatch(/\n3\n/);
+    expect(formatted).toContain("whalefishers sailed north.");
+    expect(formatted).toContain(
+      "YOU will rejoice to hear that no disaster has accompanied the commencement"
+    );
+    expect(formatted).toContain("And now, dear Margaret, do I not deserve to accomplish some great purpose.");
+    expect(formatted.split("\n\n").length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("é idempotente em texto já formatado", () => {
+    const clean =
+      "First paragraph stays together.\n\nSecond paragraph also stays together.";
+    expect(formatChapterContent(clean)).toBe(clean);
   });
 });

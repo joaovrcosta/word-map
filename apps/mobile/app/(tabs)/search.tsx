@@ -1,18 +1,22 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
-  FlatList,
+  Animated,
   Modal,
+  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { type Href, router, useFocusEffect } from "expo-router";
 import { normalizeGrammaticalClass, type DictionaryEntry } from "@word-map/shared";
+import { ReadingWordMenu, type SavedReadingWord } from "../../src/features/reading/word-menu";
 import { useSession } from "../../src/session";
 import { useTheme } from "../../src/theme";
 import { classLabel, type Vault, type Word } from "../../src/types";
@@ -36,10 +40,30 @@ type PendingWord = {
   translate: boolean;
 };
 
+type OpenedWord = {
+  clean: string;
+  saved: SavedReadingWord | null;
+};
+
+function savedFromVaultHit(hit: VaultHit): SavedReadingWord {
+  return {
+    id: hit.word.id,
+    name: hit.word.name,
+    vaultId: hit.word.vaultId || hit.vault.id,
+    vaultName: hit.vault.name,
+    translations: hit.word.translations,
+    grammaticalClass: hit.word.grammaticalClass,
+    confidence: hit.word.confidence,
+    notes: hit.word.notes ?? null,
+  };
+}
+
 const DEBOUNCE_MS = 300;
 
 export default function SearchScreen() {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const { request } = useSession();
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -49,6 +73,7 @@ export default function SearchScreen() {
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState<PendingWord | null>(null);
+  const [opened, setOpened] = useState<OpenedWord | null>(null);
   const [vaultFilter, setVaultFilter] = useState("");
   const [membership, setMembership] = useState<Set<number>>(new Set());
   const [busyVaultId, setBusyVaultId] = useState<number | null>(null);
@@ -56,6 +81,43 @@ export default function SearchScreen() {
   const [actionOk, setActionOk] = useState<string | null>(null);
   const [searchTick, setSearchTick] = useState(0);
   const [savedNames, setSavedNames] = useState<Set<string>>(new Set());
+  const [creatingVault, setCreatingVault] = useState(false);
+  const [newVaultName, setNewVaultName] = useState("");
+  const [creating, setCreating] = useState(false);
+  const sheetDragY = useRef(new Animated.Value(0)).current;
+  const busyVaultIdRef = useRef<number | null>(null);
+
+  useEffect(() => {
+    busyVaultIdRef.current = busyVaultId;
+  }, [busyVaultId]);
+
+  const sheetPan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      onPanResponderMove: (_, gesture) => {
+        if (gesture.dy > 0) sheetDragY.setValue(gesture.dy);
+      },
+      onPanResponderRelease: (_, gesture) => {
+        if (busyVaultIdRef.current != null) {
+          Animated.spring(sheetDragY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+          return;
+        }
+        if (gesture.dy > 110 || gesture.vy > 1.1) {
+          Animated.timing(sheetDragY, { toValue: 480, duration: 180, useNativeDriver: true }).start(() => {
+            sheetDragY.setValue(0);
+            setPending(null);
+            setVaultFilter("");
+            setActionError(null);
+            setActionOk(null);
+            setCreatingVault(false);
+            setNewVaultName("");
+          });
+          return;
+        }
+        Animated.spring(sheetDragY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+      },
+    })
+  ).current;
 
   useEffect(() => {
     const handle = setTimeout(() => setDebounced(query.trim()), DEBOUNCE_MS);
@@ -70,6 +132,11 @@ export default function SearchScreen() {
       setVaults([]);
     }
   }, [request]);
+
+  const refreshAfterWordChange = useCallback(async () => {
+    await loadVaults();
+    setSearchTick((tick) => tick + 1);
+  }, [loadVaults]);
 
   useFocusEffect(
     useCallback(() => {
@@ -161,10 +228,13 @@ export default function SearchScreen() {
   }, [vaults, vaultFilter]);
 
   const openVaultPicker = async (word: PendingWord) => {
+    sheetDragY.setValue(0);
     setPending(word);
     setVaultFilter("");
     setActionError(null);
     setActionOk(null);
+    setCreatingVault(false);
+    setNewVaultName("");
     setMembership(new Set());
     try {
       const checks = await Promise.all(
@@ -186,10 +256,36 @@ export default function SearchScreen() {
   };
 
   const closePicker = () => {
-    if (busyVaultId != null) return;
+    if (busyVaultId != null || creating) return;
+    sheetDragY.setValue(0);
     setPending(null);
     setVaultFilter("");
     setActionError(null);
+    setActionOk(null);
+    setCreatingVault(false);
+    setNewVaultName("");
+  };
+
+  const createVault = async () => {
+    const name = newVaultName.trim();
+    if (!name || creating) return;
+    setCreating(true);
+    setActionError(null);
+    try {
+      await request<Vault>("/vaults", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
+      setNewVaultName("");
+      setCreatingVault(false);
+      await loadVaults();
+      setActionOk(`Vault “${name}” criado.`);
+      setSearchTick((tick) => tick + 1);
+    } catch (cause) {
+      setActionError(cause instanceof Error ? cause.message : "Não foi possível criar o vault.");
+    } finally {
+      setCreating(false);
+    }
   };
 
   const toggleVault = async (vault: Vault) => {
@@ -256,11 +352,14 @@ export default function SearchScreen() {
     }
   };
 
+  const exactVaultHit = vaultHits.some(
+    (hit) => hit.word.name.trim().toLowerCase() === debounced.toLowerCase()
+  );
+  const dictionaryExact =
+    Boolean(dictionaryHit) &&
+    dictionaryHit!.word.trim().toLowerCase() === debounced.toLowerCase();
   const showManual =
-    Boolean(debounced) &&
-    !searching &&
-    !dictionaryHit &&
-    !vaultHits.some((hit) => hit.word.name.toLowerCase() === debounced.toLowerCase());
+    Boolean(debounced) && !searching && !exactVaultHit && !dictionaryExact;
 
   const goBack = () => {
     if (router.canGoBack()) {
@@ -339,6 +438,12 @@ export default function SearchScreen() {
                   detail={hit.word.translations.join(", ")}
                   icon="folder-outline"
                   saved
+                  onPress={() =>
+                    setOpened({
+                      clean: hit.word.name,
+                      saved: savedFromVaultHit(hit),
+                    })
+                  }
                   onAdd={() =>
                     void openVaultPicker({
                       name: hit.word.name,
@@ -363,6 +468,16 @@ export default function SearchScreen() {
                 detail={dictionaryHit.definitions.join(" · ")}
                 icon="globe-outline"
                 saved={isSaved(dictionaryHit.word)}
+                onPress={() => {
+                  const hit = vaultHits.find(
+                    (item) =>
+                      item.word.name.trim().toLowerCase() === dictionaryHit.word.trim().toLowerCase()
+                  );
+                  setOpened({
+                    clean: dictionaryHit.word,
+                    saved: hit ? savedFromVaultHit(hit) : null,
+                  });
+                }}
                 onAdd={() =>
                   void openVaultPicker({
                     name: dictionaryHit.word,
@@ -378,14 +493,31 @@ export default function SearchScreen() {
           {showManual ? (
             <View style={{ marginTop: 18 }}>
               <Text style={[styles.section, { color: theme.shell.muted, fontFamily: theme.fonts.semibold }]}>
-                Salvar termo
+                {dictionaryHit ? "Ou salvar o que você digitou" : "Salvar termo"}
               </Text>
               <ResultRow
                 title={debounced}
-                subtitle="Nenhum resultado no dicionário"
-                detail="Salvar mesmo assim em um vault"
+                subtitle={
+                  dictionaryHit
+                    ? `Salvar “${debounced}” como está`
+                    : "Nenhum resultado no dicionário"
+                }
+                detail={
+                  dictionaryHit
+                    ? "O dicionário sugeriu outro termo — você ainda pode salvar o seu"
+                    : "Salvar mesmo assim em um vault"
+                }
                 icon="create-outline"
                 saved={isSaved(debounced)}
+                onPress={() => {
+                  const hit = vaultHits.find(
+                    (item) => item.word.name.trim().toLowerCase() === debounced.toLowerCase()
+                  );
+                  setOpened({
+                    clean: debounced,
+                    saved: hit ? savedFromVaultHit(hit) : null,
+                  });
+                }}
                 onAdd={() =>
                   void openVaultPicker({
                     name: debounced,
@@ -406,88 +538,186 @@ export default function SearchScreen() {
         </ScrollView>
       )}
 
+      {opened ? (
+        <ReadingWordMenu
+          clean={opened.clean}
+          anchor={{ x: 0, y: 0, width: 0, height: 0 }}
+          sourceText=""
+          chapterContent=""
+          pages={[]}
+          pageIndex={0}
+          bookTitle=""
+          saved={opened.saved}
+          vaults={vaults}
+          full
+          onClose={() => setOpened(null)}
+          onChanged={refreshAfterWordChange}
+        />
+      ) : null}
+
       <Modal visible={Boolean(pending)} transparent animationType="fade" onRequestClose={closePicker}>
-        <Pressable style={styles.backdrop} onPress={closePicker}>
-          <Pressable
-            style={[styles.sheet, { backgroundColor: theme.shell.surface }]}
-            onPress={(event) => event.stopPropagation()}
+        <View style={styles.spotifyBackdrop}>
+          <Pressable style={StyleSheet.absoluteFillObject} onPress={closePicker} />
+          <Animated.View
+            style={[
+              styles.spotifySheet,
+              {
+                backgroundColor: theme.shell.surface,
+                paddingBottom: Math.max(insets.bottom, 16),
+                transform: [{ translateY: sheetDragY }],
+              },
+            ]}
           >
-            <View style={styles.sheetHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.bold, fontSize: 17 }}>
-                  Adicionar a um vault
-                </Text>
-                <Text style={{ color: theme.shell.muted, fontFamily: theme.fonts.regular, fontSize: 13, marginTop: 2 }}>
-                  {pending?.name}
-                </Text>
-              </View>
-              <Pressable accessibilityLabel="Fechar" onPress={closePicker} style={styles.iconChip}>
-                <Ionicons name="close" size={18} color={theme.shell.foreground} />
-              </Pressable>
+            <View style={styles.handleWrap} {...sheetPan.panHandlers}>
+              <View style={[styles.handle, { backgroundColor: theme.shell.line }]} />
             </View>
 
-            <View
-              style={[
-                styles.vaultSearch,
-                { backgroundColor: theme.shell.chip, borderColor: theme.shell.line },
-              ]}
-            >
-              <Ionicons name="search" size={14} color={theme.shell.muted} />
-              <TextInput
-                value={vaultFilter}
-                onChangeText={setVaultFilter}
-                placeholder="Procurar um vault…"
-                placeholderTextColor={theme.shell.muted}
-                autoCapitalize="none"
-                style={[styles.vaultSearchInput, { color: theme.shell.foreground, fontFamily: theme.fonts.regular }]}
-              />
-            </View>
-
-            {actionError ? <ErrorText>{actionError}</ErrorText> : null}
-            {actionOk ? (
-              <Text style={{ color: theme.colors.greenText, fontFamily: theme.fonts.medium, marginTop: 8, fontSize: 13 }}>
-                {actionOk}
-              </Text>
-            ) : null}
-
-            <FlatList
-              data={filteredVaults}
-              keyExtractor={(item) => String(item.id)}
-              style={{ marginTop: 10, maxHeight: 320 }}
+            <ScrollView
+              bounces={false}
               keyboardShouldPersistTaps="handled"
-              ListEmptyComponent={<Muted>Nenhum vault encontrado.</Muted>}
-              renderItem={({ item }) => {
-                const inVault = membership.has(item.id);
-                const busy = busyVaultId === item.id;
-                return (
-                  <Pressable
-                    disabled={busyVaultId != null}
-                    onPress={() => void toggleVault(item)}
-                    style={[styles.vaultRow, { backgroundColor: theme.shell.chip, opacity: busyVaultId != null && !busy ? 0.5 : 1 }]}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+              style={{ maxHeight: windowHeight * 0.92 - 28 - Math.max(insets.bottom, 16) }}
+            >
+              <View style={styles.spotifyHeader}>
+                <View style={{ flex: 1, minWidth: 0, paddingRight: 12 }}>
+                  <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.bold, fontSize: 16 }}>
+                    Adicionar a um vault
+                  </Text>
+                  <Text
+                    numberOfLines={1}
+                    style={{ color: theme.shell.muted, fontFamily: theme.fonts.regular, fontSize: 13, marginTop: 2 }}
                   >
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.semibold, fontSize: 15 }}>
-                        {item.name}
-                      </Text>
-                      <Text style={{ color: theme.shell.muted, fontFamily: theme.fonts.regular, fontSize: 12, marginTop: 2 }}>
-                        {item.words?.length ?? 0} {(item.words?.length ?? 0) === 1 ? "palavra" : "palavras"}
-                      </Text>
-                    </View>
-                    {busy ? (
+                    {pending?.name}
+                  </Text>
+                </View>
+                <Pressable
+                  accessibilityLabel="Criar vault"
+                  disabled={creating || busyVaultId != null}
+                  onPress={() => {
+                    setCreatingVault((current) => !current);
+                    setActionError(null);
+                    setActionOk(null);
+                  }}
+                  hitSlop={8}
+                >
+                  <Text style={{ color: theme.colors.green, fontFamily: theme.fonts.bold, fontSize: 15 }}>
+                    Criar vault
+                  </Text>
+                </Pressable>
+              </View>
+
+              {creatingVault ? (
+                <View
+                  style={[
+                    styles.createRow,
+                    { backgroundColor: theme.shell.chip, borderColor: theme.shell.line },
+                  ]}
+                >
+                  <TextInput
+                    value={newVaultName}
+                    onChangeText={setNewVaultName}
+                    placeholder="Nome do novo vault"
+                    placeholderTextColor={theme.shell.muted}
+                    autoFocus
+                    autoCapitalize="sentences"
+                    style={[styles.vaultSearchInput, { color: theme.shell.foreground, fontFamily: theme.fonts.regular }]}
+                    onSubmitEditing={() => void createVault()}
+                  />
+                  <Pressable
+                    accessibilityLabel="Salvar vault"
+                    disabled={creating || !newVaultName.trim()}
+                    onPress={() => void createVault()}
+                    style={{ opacity: creating || !newVaultName.trim() ? 0.45 : 1 }}
+                  >
+                    {creating ? (
                       <ActivityIndicator color={theme.colors.green} />
                     ) : (
-                      <Ionicons
-                        name={inVault ? "checkmark-circle" : "add-circle-outline"}
-                        size={24}
-                        color={inVault ? theme.colors.green : theme.shell.muted}
-                      />
+                      <Text style={{ color: theme.colors.green, fontFamily: theme.fonts.bold, fontSize: 14 }}>
+                        Criar
+                      </Text>
                     )}
                   </Pressable>
-                );
-              }}
-            />
-          </Pressable>
-        </Pressable>
+                </View>
+              ) : null}
+
+              <View
+                style={[
+                  styles.vaultSearch,
+                  { backgroundColor: theme.shell.chip, borderColor: "transparent" },
+                ]}
+              >
+                <Ionicons name="search" size={14} color={theme.shell.muted} />
+                <TextInput
+                  value={vaultFilter}
+                  onChangeText={setVaultFilter}
+                  placeholder="Procurar um vault…"
+                  placeholderTextColor={theme.shell.muted}
+                  autoCapitalize="none"
+                  style={[styles.vaultSearchInput, { color: theme.shell.foreground, fontFamily: theme.fonts.regular }]}
+                />
+              </View>
+
+              {actionError ? <ErrorText>{actionError}</ErrorText> : null}
+              {actionOk ? (
+                <Text style={{ color: theme.colors.greenText, fontFamily: theme.fonts.medium, marginTop: 8, fontSize: 13 }}>
+                  {actionOk}
+                </Text>
+              ) : null}
+
+              <View style={{ marginTop: 6 }}>
+                {filteredVaults.length === 0 ? (
+                  <Text style={{ color: theme.shell.muted, fontFamily: theme.fonts.regular, marginTop: 16 }}>
+                    Nenhum vault encontrado.
+                  </Text>
+                ) : (
+                  filteredVaults.map((item) => {
+                    const inVault = membership.has(item.id);
+                    const busy = busyVaultId === item.id;
+                    return (
+                      <Pressable
+                        key={item.id}
+                        disabled={busyVaultId != null}
+                        onPress={() => void toggleVault(item)}
+                        style={[
+                          styles.spotifyRow,
+                          {
+                            borderBottomColor: theme.shell.line,
+                            opacity: busyVaultId != null && !busy ? 0.5 : 1,
+                          },
+                        ]}
+                      >
+                        <View style={[styles.vaultThumb, { backgroundColor: theme.shell.chip }]}>
+                          <Ionicons name="folder" size={18} color={theme.shell.foreground} />
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text
+                            numberOfLines={1}
+                            style={{ color: theme.shell.foreground, fontFamily: theme.fonts.semibold, fontSize: 15 }}
+                          >
+                            {item.name}
+                          </Text>
+                          <Text style={{ color: theme.shell.muted, fontFamily: theme.fonts.regular, fontSize: 12, marginTop: 2 }}>
+                            {item.words?.length ?? 0} {(item.words?.length ?? 0) === 1 ? "palavra" : "palavras"}
+                          </Text>
+                        </View>
+                        {busy ? (
+                          <ActivityIndicator color={theme.colors.green} />
+                        ) : (
+                          <Ionicons
+                            name={inVault ? "checkmark-circle" : "add-circle-outline"}
+                            size={26}
+                            color={inVault ? theme.colors.green : theme.shell.muted}
+                          />
+                        )}
+                      </Pressable>
+                    );
+                  })
+                )}
+              </View>
+            </ScrollView>
+          </Animated.View>
+        </View>
       </Modal>
     </Screen>
   );
@@ -499,6 +729,7 @@ function ResultRow({
   detail,
   icon,
   saved = false,
+  onPress,
   onAdd,
 }: {
   title: string;
@@ -506,28 +737,41 @@ function ResultRow({
   detail?: string;
   icon: keyof typeof Ionicons.glyphMap;
   saved?: boolean;
+  onPress?: () => void;
   onAdd: () => void;
 }) {
   const theme = useTheme();
   return (
     <View style={[styles.result, { backgroundColor: theme.shell.surface }]}>
-      <View style={[styles.resultIcon, { backgroundColor: theme.shell.chip }]}>
-        <Ionicons name={icon} size={18} color={theme.shell.foreground} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.bold, fontSize: 16 }}>{title}</Text>
-        <Text style={{ color: theme.shell.muted, fontFamily: theme.fonts.medium, fontSize: 12, marginTop: 2 }}>
-          {subtitle}
-        </Text>
-        {detail ? (
-          <Text
-            numberOfLines={2}
-            style={{ color: theme.shell.muted, fontFamily: theme.fonts.regular, fontSize: 13, marginTop: 4, lineHeight: 18 }}
-          >
-            {detail}
+      <Pressable
+        onPress={onPress}
+        disabled={!onPress}
+        style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 12 }}
+      >
+        <View style={[styles.resultIcon, { backgroundColor: theme.shell.chip }]}>
+          <Ionicons name={icon} size={18} color={theme.shell.foreground} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.bold, fontSize: 16 }}>{title}</Text>
+          <Text style={{ color: theme.shell.muted, fontFamily: theme.fonts.medium, fontSize: 12, marginTop: 2 }}>
+            {subtitle}
           </Text>
-        ) : null}
-      </View>
+          {detail ? (
+            <Text
+              numberOfLines={2}
+              style={{
+                color: theme.shell.muted,
+                fontFamily: theme.fonts.regular,
+                fontSize: 13,
+                marginTop: 4,
+                lineHeight: 18,
+              }}
+            >
+              {detail}
+            </Text>
+          ) : null}
+        </View>
+      </Pressable>
       <Pressable
         accessibilityLabel={saved ? `Gerenciar vaults de ${title}` : `Adicionar ${title}`}
         onPress={onAdd}
@@ -579,20 +823,44 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  backdrop: {
+  spotifyBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.55)",
     justifyContent: "flex-end",
-    padding: 16,
   },
-  sheet: {
-    borderRadius: 24,
-    padding: 18,
-    maxHeight: "80%",
+  spotifySheet: {
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    paddingHorizontal: 18,
+    paddingTop: 6,
   },
-  sheetHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  handleWrap: {
+    alignItems: "center",
+    paddingTop: 4,
+    paddingBottom: 10,
+    // Área maior para arrastar e fechar sem conflitar com a lista
+    marginHorizontal: -18,
+    paddingHorizontal: 18,
+  },
+  handle: { width: 40, height: 4, borderRadius: 2 },
+  spotifyHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 4,
+  },
+  createRow: {
+    marginTop: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
   vaultSearch: {
-    marginTop: 14,
+    marginTop: 12,
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
@@ -602,13 +870,18 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
   },
   vaultSearchInput: { flex: 1, fontSize: 14, padding: 0 },
-  vaultRow: {
+  spotifyRow: {
     flexDirection: "row",
     alignItems: "center",
     gap: 12,
-    borderRadius: 14,
-    paddingHorizontal: 14,
     paddingVertical: 12,
-    marginBottom: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  vaultThumb: {
+    width: 44,
+    height: 44,
+    borderRadius: 8,
+    alignItems: "center",
+    justifyContent: "center",
   },
 });
