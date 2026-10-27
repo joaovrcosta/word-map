@@ -68,6 +68,14 @@ function fail(status: number, error: string): never {
   throw new HttpException({ error }, status);
 }
 
+function failTutorQuota(window: "minute" | "day"): never {
+  const error =
+    window === "day"
+      ? "Limite diário de explicações atingido."
+      : "Muitas explicações em pouco tempo.";
+  throw new HttpException({ error, code: "TUTOR_QUOTA", window }, 429);
+}
+
 @Injectable()
 export class TutorRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -168,8 +176,8 @@ export class TutorService {
       };
     }
 
-    const allowed = await consumeTutorQuota(user.id);
-    if (!allowed) fail(429, "Muitas explicações em pouco tempo.");
+    const quota = await consumeTutorQuota(user.id);
+    if (!quota.allowed) failTutorQuota(quota.window);
 
     try {
       const prompt = buildTutorPrompt({
@@ -245,8 +253,8 @@ export class TutorService {
       fail(400, "Limite de perguntas nesta explicação");
     }
 
-    const allowed = await consumeTutorQuota(user.id);
-    if (!allowed) fail(429, "Muitas explicações em pouco tempo.");
+    const quota = await consumeTutorQuota(user.id);
+    if (!quota.allowed) failTutorQuota(quota.window);
 
     try {
       const result = await createOpenAITutor().completeJson(
@@ -299,8 +307,8 @@ export class TutorService {
       word = owned.name.trim();
     }
 
-    const allowed = await consumeTutorQuota(user.id);
-    if (!allowed) fail(429, "Muitas sugestões em pouco tempo.");
+    const quota = await consumeTutorQuota(user.id);
+    if (!quota.allowed) failTutorQuota(quota.window);
 
     try {
       const result = await createOpenAITutor().completeJson(

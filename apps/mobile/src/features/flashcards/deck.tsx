@@ -78,6 +78,7 @@ export function FlashcardDeck({
   const [starting, setStarting] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadToken, setReloadToken] = useState(0);
   const [challengeStats, setChallengeStats] = useState({ correct: 0, total: 0 });
   const [analysis, setAnalysis] = useState<string | null>(null);
   const [analysisState, setAnalysisState] = useState<"none" | "loading" | "ready" | "unavailable">("none");
@@ -150,7 +151,7 @@ export function FlashcardDeck({
         finishTimerRef.current = null;
       }
     };
-  }, [mode, request, vaultId]);
+  }, [mode, request, vaultId, reloadToken]);
 
   useEffect(() => {
     if (!isSessionActive) return;
@@ -339,7 +340,7 @@ export function FlashcardDeck({
       setShowAnswer(false);
       setShowSummary(false);
     } catch {
-      setLoadError("Não foi possível começar a sessão.");
+      setLoadError("Não foi possível começar a sessão. Tente de novo.");
     } finally {
       setStarting(false);
     }
@@ -458,6 +459,20 @@ export function FlashcardDeck({
           <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 16, textAlign: "center" }}>
             {loadError}
           </Text>
+          <Pressable
+            onPress={() => setReloadToken((token) => token + 1)}
+            style={{
+              marginTop: 20,
+              minWidth: 180,
+              height: 44,
+              borderRadius: 14,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: theme.colors.green,
+            }}
+          >
+            <Text style={{ color: "#ffffff", fontFamily: theme.fonts.bold, fontSize: 13 }}>TENTAR DE NOVO</Text>
+          </Pressable>
         </View>
       </View>
     );
@@ -571,9 +586,16 @@ export function FlashcardDeck({
           </Text>
         </Pressable>
         {loadError ? (
-          <Text style={{ marginTop: 16, color: theme.colors.destructive, fontFamily: theme.fonts.regular, fontSize: 14 }}>
-            {loadError}
-          </Text>
+          <View style={{ marginTop: 16, alignItems: "center", gap: 10 }}>
+            <Text style={{ color: theme.colors.destructive, fontFamily: theme.fonts.regular, fontSize: 14, textAlign: "center" }}>
+              {loadError}
+            </Text>
+            <Pressable onPress={() => void startSession(due.length === 0)} hitSlop={8}>
+              <Text style={{ color: theme.colors.green, fontFamily: theme.fonts.bold, fontSize: 13 }}>
+                Tentar de novo
+              </Text>
+            </Pressable>
+          </View>
         ) : null}
       </View>
       </View>

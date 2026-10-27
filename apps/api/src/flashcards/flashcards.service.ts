@@ -108,8 +108,8 @@ export async function generateClozes(wordIdsInput: unknown) {
 
   if (missing.length === 0) return { clozes: fresh };
 
-  const allowed = await consumeTutorQuota(user.id);
-  if (!allowed) return { clozes: fresh };
+  const quota = await consumeTutorQuota(user.id);
+  if (!quota.allowed) return { clozes: fresh };
 
   let raw = "";
   try {
@@ -176,8 +176,8 @@ export async function reviewSession(itemsInput: unknown) {
   const cached = readReviewCache(key);
   if (cached) return { text: cached };
 
-  const allowed = await consumeTutorQuota(user.id);
-  if (!allowed) return { text: review.text };
+  const quota = await consumeTutorQuota(user.id);
+  if (!quota.allowed) return { text: review.text };
 
   try {
     const result = await createOpenAITutor().completeJson(

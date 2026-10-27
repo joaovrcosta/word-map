@@ -1,8 +1,12 @@
 ﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  AccessibilityInfo,
   ActivityIndicator,
   Animated,
+  Keyboard,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -10,9 +14,14 @@ import {
   TextInput,
   useWindowDimensions,
   View,
+  type NativeSyntheticEvent,
+  type TextInputFocusEventData,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { type Href, useRouter } from "expo-router";
+import * as Haptics from "expo-haptics";
 import * as Speech from "expo-speech";
 import {
   buildReadingContext,
@@ -35,6 +44,7 @@ import {
   type TutorFollowUpResponse,
   type TutorFollowUpTurn,
 } from "@word-map/shared";
+import { userFacingError } from "../../api";
 import { useSession } from "../../session";
 import { speakWord } from "../../speech";
 import { shell, useTheme } from "../../theme";
@@ -43,6 +53,159 @@ import { type WordAnchor } from "./page-text";
 
 const LEVEL_COLORS = ["#ff4b4b", "#ff9600", "#ffc800", "#24c875"];
 const LEVEL_TEXT = [shell.foreground, shell.foreground, shell.onPastel, shell.foreground];
+const GLOW_EDGE = "rgba(201, 242, 196, 0.42)";
+const GLOW_MID = "rgba(155, 232, 184, 0.18)";
+const GLOW_BAND = 32;
+
+function celebrateSave() {
+  if (Platform.OS !== "web") {
+    void (async () => {
+      try {
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        await Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+      } catch {
+        // dispositivo sem haptic
+      }
+    })();
+  }
+  AccessibilityInfo.announceForAccessibility("Palavra salva");
+}
+
+function SaveBorderPulse({ pulseKey, sheet }: { pulseKey: number; sheet: boolean }) {
+  const opacity = useRef(new Animated.Value(0)).current;
+  const radius = sheet ? 0 : 20;
+
+  useEffect(() => {
+    if (pulseKey <= 0) return;
+    let active: Animated.CompositeAnimation | null = null;
+    let cancelled = false;
+    opacity.setValue(0);
+
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
+      if (cancelled) return;
+      if (reduce) {
+        active = Animated.sequence([
+          Animated.timing(opacity, { toValue: 0.5, duration: 140, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0, duration: 320, useNativeDriver: true }),
+        ]);
+      } else {
+        active = Animated.sequence([
+          Animated.timing(opacity, { toValue: 0.85, duration: 110, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.18, duration: 90, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0.65, duration: 110, useNativeDriver: true }),
+          Animated.timing(opacity, { toValue: 0, duration: 380, useNativeDriver: true }),
+        ]);
+      }
+      active.start();
+    });
+
+    return () => {
+      cancelled = true;
+      active?.stop();
+      opacity.stopAnimation();
+    };
+  }, [pulseKey, opacity]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no"
+      style={[
+        StyleSheet.absoluteFill,
+        {
+          opacity,
+          borderRadius: radius,
+          overflow: "hidden",
+          zIndex: 28,
+        },
+      ]}
+    >
+      {/* Fade nas 4 bordas: mint → transparente para o centro */}
+      <LinearGradient
+        colors={[GLOW_EDGE, GLOW_MID, "transparent"]}
+        locations={[0, 0.4, 1]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, height: GLOW_BAND }}
+      />
+      <LinearGradient
+        colors={["transparent", GLOW_MID, GLOW_EDGE]}
+        locations={[0, 0.6, 1]}
+        start={{ x: 0.5, y: 0 }}
+        end={{ x: 0.5, y: 1 }}
+        style={{ position: "absolute", bottom: 0, left: 0, right: 0, height: GLOW_BAND }}
+      />
+      <LinearGradient
+        colors={[GLOW_EDGE, GLOW_MID, "transparent"]}
+        locations={[0, 0.4, 1]}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={{ position: "absolute", top: 0, bottom: 0, left: 0, width: GLOW_BAND }}
+      />
+      <LinearGradient
+        colors={["transparent", GLOW_MID, GLOW_EDGE]}
+        locations={[0, 0.6, 1]}
+        start={{ x: 0, y: 0.5 }}
+        end={{ x: 1, y: 0.5 }}
+        style={{ position: "absolute", top: 0, bottom: 0, right: 0, width: GLOW_BAND }}
+      />
+    </Animated.View>
+  );
+}
+
+function SavedCheckIcon({ pulseKey, size = 18 }: { pulseKey: number; size?: number }) {
+  const theme = useTheme();
+  const opacity = useRef(new Animated.Value(1)).current;
+  const scale = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (pulseKey <= 0) return;
+    let active: Animated.CompositeAnimation | null = null;
+    let cancelled = false;
+    opacity.setValue(0.4);
+    scale.setValue(0.7);
+
+    void AccessibilityInfo.isReduceMotionEnabled().then((reduce) => {
+      if (cancelled) return;
+      if (reduce) {
+        active = Animated.timing(opacity, {
+          toValue: 1,
+          duration: 220,
+          useNativeDriver: true,
+        });
+      } else {
+        active = Animated.parallel([
+          Animated.timing(opacity, { toValue: 1, duration: 220, useNativeDriver: true }),
+          Animated.sequence([
+            Animated.timing(scale, { toValue: 1.12, duration: 180, useNativeDriver: true }),
+            Animated.timing(scale, { toValue: 1, duration: 160, useNativeDriver: true }),
+          ]),
+        ]);
+      }
+      active.start();
+    });
+
+    return () => {
+      cancelled = true;
+      active?.stop();
+      opacity.stopAnimation();
+      scale.stopAnimation();
+    };
+  }, [pulseKey, opacity, scale]);
+
+  return (
+    <Animated.View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no"
+      style={{ opacity, transform: [{ scale }] }}
+    >
+      <Ionicons name="checkmark" size={size} color={theme.colors.green} />
+    </Animated.View>
+  );
+}
 const MONTHS = ["jan", "fev", "mar", "abr", "mai", "jun", "jul", "ago", "set", "out", "nov", "dez"];
 
 type LevelPoint = {
@@ -287,10 +450,10 @@ export function ReadingWordMenu({
   onChanged: () => Promise<void>;
 }) {
   const theme = useTheme();
+  const router = useRouter();
   const { request } = useSession();
   const window = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  const [boxHeight, setBoxHeight] = useState(0);
   const [expanded, setExpanded] = useState(full);
   const [localSaved, setLocalSaved] = useState<SavedReadingWord | null>(saved);
   const [selectedMeanings, setSelectedMeanings] = useState<string[]>(saved?.translations ?? []);
@@ -324,12 +487,54 @@ export function ReadingWordMenu({
   const [followQuestion, setFollowQuestion] = useState("");
   const [followBusy, setFollowBusy] = useState(false);
   const [followError, setFollowError] = useState<string | null>(null);
+  const [savePulseKey, setSavePulseKey] = useState(0);
   const [actionError, setActionError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [levels, setLevels] = useState<LevelPoint[]>([]);
   const [grammarSlug, setGrammarSlug] = useState<string | null>(null);
   const suggestingRef = useRef(false);
   const followBusyRef = useRef(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const placeAboveLockRef = useRef<boolean | null>(null);
+  const [cardBoxHeight, setCardBoxHeight] = useState(0);
+  const [keyboardPad, setKeyboardPad] = useState(0);
+
+  useEffect(() => {
+    const show = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillShow" : "keyboardDidShow",
+      (event) => setKeyboardPad(event.endCoordinates.height)
+    );
+    const hide = Keyboard.addListener(
+      Platform.OS === "ios" ? "keyboardWillHide" : "keyboardDidHide",
+      () => setKeyboardPad(0)
+    );
+    return () => {
+      show.remove();
+      hide.remove();
+    };
+  }, []);
+
+  const scrollInputIntoView = (event: NativeSyntheticEvent<TextInputFocusEventData>) => {
+    const target = event?.nativeEvent?.target;
+    const scroller = scrollRef.current as
+      | (ScrollView & {
+          scrollResponderScrollNativeHandleToKeyboard?: (
+            nodeHandle: number,
+            additionalOffset: number,
+            preventNegativeScrollOffset: boolean
+          ) => void;
+        })
+      | null;
+    if (target != null && typeof scroller?.scrollResponderScrollNativeHandleToKeyboard === "function") {
+      setTimeout(() => {
+        scroller.scrollResponderScrollNativeHandleToKeyboard?.(Number(target), 90, true);
+      }, 80);
+      return;
+    }
+    setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    }, 120);
+  };
 
   const savedKey = saved
     ? `${saved.id}|${saved.translations.join("\n")}|${saved.confidence}|${saved.notes ?? ""}|${saved.vaultId}|${saved.grammaticalClass}`
@@ -337,7 +542,15 @@ export function ReadingWordMenu({
 
   useEffect(() => {
     setLocalSaved(saved);
-  }, [clean, savedKey]);
+    placeAboveLockRef.current = null;
+    setCardBoxHeight(0);
+  }, [clean, savedKey, anchor.x, anchor.y, anchor.width, anchor.height]);
+
+  useEffect(() => {
+    // Expandir/recolher muda a altura alvo — reposiciona uma vez, sem flipar no meio do save
+    placeAboveLockRef.current = null;
+    setCardBoxHeight(0);
+  }, [expanded, full]);
 
   useEffect(() => {
     setSelectedMeanings(localSaved?.translations ?? []);
@@ -363,6 +576,7 @@ export function ReadingWordMenu({
     setFollowBusy(false);
     setFollowError(null);
     followBusyRef.current = false;
+    setSavePulseKey(0);
     setActionError(null);
   }, [clean, full]);
 
@@ -551,13 +765,17 @@ export function ReadingWordMenu({
     }
   };
 
-  const persistMeanings = async (translations: string[], nextConfidence?: number) => {
+  const persistMeanings = async (
+    translations: string[],
+    nextConfidence?: number
+  ): Promise<SavedReadingWord> => {
     setSaving(true);
     setActionError(null);
     try {
       if (!localSaved && !resolvedVaultId) {
         throw new Error("Crie um vault para salvar palavras.");
       }
+      let next: SavedReadingWord;
       if (localSaved) {
         const updated = await request<Word>(`/words/${localSaved.id}`, {
           method: "PATCH",
@@ -567,7 +785,7 @@ export function ReadingWordMenu({
             origin: origin(),
           }),
         });
-        const next = toSaved(updated, localSaved.vaultName);
+        next = toSaved(updated, localSaved.vaultName);
         setLocalSaved(next);
         setSelectedMeanings(next.translations);
         await refreshOrigins(next.id);
@@ -585,7 +803,7 @@ export function ReadingWordMenu({
           }),
         });
         const vaultName = vaults.find((item) => item.id === created.vaultId)?.name ?? "";
-        const next = toSaved(created, vaultName);
+        next = toSaved(created, vaultName);
         setLocalSaved(next);
         setSelectedMeanings(next.translations);
         await refreshOrigins(next.id);
@@ -595,9 +813,11 @@ export function ReadingWordMenu({
       } catch {
         setActionError(null);
       }
+      return next;
     } catch (error) {
-      setActionError(error instanceof Error ? error.message : "Não foi possível salvar");
-      throw error;
+      const message = userFacingError(error, "Não foi possível salvar");
+      setActionError(message);
+      throw error instanceof Error ? error : new Error(message);
     } finally {
       setSaving(false);
     }
@@ -610,6 +830,8 @@ export function ReadingWordMenu({
     const next = [...selectedMeanings, meaning];
     setSelectedMeanings(next);
     setCustomMeaning("");
+    setSavePulseKey((key) => key + 1);
+    celebrateSave();
     try {
       await persistMeanings(next);
     } catch {
@@ -734,8 +956,9 @@ export function ReadingWordMenu({
       setCustomMeaning(translation);
       setSuggestionLocked(true);
       locked = true;
+      setSuggestError(null);
     } catch (error) {
-      setSuggestError(error instanceof Error ? error.message : "Não foi possível sugerir uma tradução.");
+      setSuggestError(userFacingError(error, "Não foi possível sugerir uma tradução."));
     } finally {
       setSuggesting(false);
       if (!locked) suggestingRef.current = false;
@@ -769,8 +992,9 @@ export function ReadingWordMenu({
       });
       setExplanation(result.explanation);
       setSuggestedTranslation(result.translation?.trim() || null);
+      setExplanationError(null);
     } catch (error) {
-      setExplanationError(error instanceof Error ? error.message : "Não foi possível explicar este trecho.");
+      setExplanationError(userFacingError(error, "Não foi possível explicar este trecho."));
     } finally {
       setExplaining(false);
     }
@@ -799,8 +1023,9 @@ export function ReadingWordMenu({
       if (!answer) throw new Error("Não foi possível responder esta dúvida.");
       setFollowUps((current) => [...current, { question, answer }]);
       setFollowQuestion("");
+      setFollowError(null);
     } catch (error) {
-      setFollowError(error instanceof Error ? error.message : "Não foi possível responder esta dúvida.");
+      setFollowError(userFacingError(error, "Não foi possível responder esta dúvida."));
     } finally {
       setFollowBusy(false);
       followBusyRef.current = false;
@@ -824,15 +1049,26 @@ export function ReadingWordMenu({
   const belowTop = safeAnchor.y + safeAnchor.height + gap;
   const spaceBelow = Math.max(160, window.height - belowTop - edgePad);
   const spaceAbove = Math.max(160, safeAnchor.y - gap - edgePad);
-  const placeAbove =
-    boxHeight > 0 && belowTop + boxHeight > window.height - edgePad && spaceAbove >= spaceBelow;
+  // Compacto: altura = conteúdo (sem buraco). LevelTrack só ao expandir → salvar não desloca.
+  const COMPACT_ESTIMATE = 300;
+  const availableGuess = Math.max(spaceBelow, spaceAbove) - arrowH;
+  const maxExpanded = Math.min(window.height * 0.7, availableGuess);
+  const maxCompact = Math.min(window.height * 0.45, availableGuess);
+  const placeAboveNeeded =
+    belowTop + (details ? maxExpanded : Math.min(COMPACT_ESTIMATE, maxCompact)) + arrowH >
+      window.height - edgePad && spaceAbove >= spaceBelow;
+  if (placeAboveLockRef.current === null) {
+    placeAboveLockRef.current = placeAboveNeeded;
+  }
+  const placeAbove = placeAboveLockRef.current;
   const available = (placeAbove ? spaceAbove : spaceBelow) - arrowH;
-  const maxCard = Math.min(details ? window.height * 0.7 : window.height * 0.45, available);
+  const fittedCard = Math.min(details ? window.height * 0.7 : window.height * 0.45, available);
+  const measuredH = cardBoxHeight > 0 ? cardBoxHeight : Math.min(COMPACT_ESTIMATE, fittedCard) + arrowH;
   const top = placeAbove
-    ? Math.max(edgePad, safeAnchor.y - gap - Math.min(boxHeight || maxCard, maxCard + arrowH))
+    ? Math.max(edgePad, safeAnchor.y - gap - Math.min(measuredH, fittedCard + arrowH))
     : belowTop;
   const arrowLeft = Math.max(16, Math.min(safeAnchor.x + safeAnchor.width / 2 - left, cardWidth - 16));
-  const scrollMax = Math.max(140, maxCard - chevronH);
+  const scrollMax = Math.max(140, fittedCard - chevronH);
   const contextPanel = (
     <View>
       {explanation && !explaining ? (
@@ -903,6 +1139,7 @@ export function ReadingWordMenu({
                       placeholderTextColor={shell.muted}
                       editable={!followBusy}
                       autoFocus
+                      onFocus={scrollInputIntoView}
                       style={[
                         styles.followInput,
                         {
@@ -934,7 +1171,11 @@ export function ReadingWordMenu({
                   </Text>
                 )}
                 {followError ? (
-                  <Text style={[styles.error, { fontFamily: theme.fonts.regular }]}>{followError}</Text>
+                  <Pressable onPress={() => void handleFollowUp()} hitSlop={6}>
+                    <Text style={[styles.error, { fontFamily: theme.fonts.regular }]}>
+                      {followError} · Tentar de novo
+                    </Text>
+                  </Pressable>
                 ) : null}
               </>
             )}
@@ -948,12 +1189,16 @@ export function ReadingWordMenu({
         >
           <Ionicons name="sparkles" size={16} color={shell.onPastel} />
           <Text style={{ color: shell.onPastel, fontFamily: theme.fonts.bold, fontSize: 15 }}>
-            {explaining ? "Explicando..." : "Explicar contexto"}
+            {explaining ? "Explicando o trecho…" : "Explicar contexto"}
           </Text>
         </Pressable>
       )}
       {explanationError ? (
-        <Text style={[styles.error, { fontFamily: theme.fonts.regular }]}>{explanationError}</Text>
+        <Pressable onPress={() => void handleContextualize()} hitSlop={6}>
+          <Text style={[styles.error, { fontFamily: theme.fonts.regular }]}>
+            {explanationError} · Tentar de novo
+          </Text>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -1013,18 +1258,22 @@ export function ReadingWordMenu({
   );
   return (
     <Modal transparent={!sheet} visible animationType={sheet ? "slide" : "fade"} onRequestClose={onClose} statusBarTranslucent>
-      <View style={{ flex: 1, backgroundColor: sheet ? shell.background : "transparent" }}>
+      <KeyboardAvoidingView
+        style={{ flex: 1, backgroundColor: sheet ? shell.background : "transparent" }}
+        behavior={Platform.OS === "ios" ? "padding" : "padding"}
+        keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
+      >
         {sheet ? null : <Pressable accessibilityLabel="Fechar" style={StyleSheet.absoluteFill} onPress={onClose} />}
         <View
           onLayout={(event) => {
             if (sheet) return;
             const next = event.nativeEvent.layout.height;
-            setBoxHeight((current) => (Math.abs(current - next) < 1 ? current : next));
+            setCardBoxHeight((current) => (Math.abs(current - next) < 2 ? current : next));
           }}
           style={
             sheet
               ? styles.sheet
-              : { position: "absolute", top, left, width: cardWidth, maxHeight: maxCard + arrowH }
+              : { position: "absolute", top, left, width: cardWidth, maxHeight: fittedCard + arrowH }
           }
         >
           {!sheet && !placeAbove ? <Arrow pointing="up" left={arrowLeft} /> : null}
@@ -1033,15 +1282,21 @@ export function ReadingWordMenu({
               styles.card,
               sheet && styles.cardSheet,
               sheet && { paddingTop: insets.top },
-              !sheet && { maxHeight: maxCard },
+              !sheet && { maxHeight: fittedCard },
             ]}
           >
+            <SaveBorderPulse pulseKey={savePulseKey} sheet={Boolean(sheet)} />
             <ScrollView
+              ref={scrollRef}
               keyboardShouldPersistTaps="handled"
+              keyboardDismissMode="interactive"
               bounces={sheet}
               nestedScrollEnabled
               style={sheet ? { flex: 1 } : { maxHeight: scrollMax }}
-              contentContainerStyle={{ paddingBottom: sheet ? 24 : 12 }}
+              contentContainerStyle={{
+                // No card flutuante o KeyboardAvoidingView já move o bloco — não somar keyboardPad
+                paddingBottom: sheet ? 24 + Math.max(0, keyboardPad - insets.bottom) : 8,
+              }}
             >
               <View style={[styles.header, sheet && { paddingHorizontal: 20, paddingTop: 16 }]}>
                 <View style={styles.headerTitle}>
@@ -1057,7 +1312,9 @@ export function ReadingWordMenu({
                   </Text>
                 </View>
                 <View style={styles.headerActions}>
-                  {localSaved && !sheet ? <Ionicons name="checkmark" size={18} color={theme.colors.green} /> : null}
+                  <View style={styles.checkSlot}>
+                    {localSaved ? <SavedCheckIcon pulseKey={savePulseKey} size={18} /> : null}
+                  </View>
                   {sheet ? null : (
                     <IconButton
                       label="Remover palavra"
@@ -1075,13 +1332,6 @@ export function ReadingWordMenu({
 
               <View style={[styles.body, sheet && { paddingHorizontal: 20 }]}>
                 <View style={styles.badges}>
-                  {confidence > 0 ? (
-                    <View style={[styles.level, { backgroundColor: LEVEL_COLORS[Math.min(confidence, 4) - 1] }]}>
-                      <Text style={{ color: LEVEL_TEXT[Math.min(confidence, 4) - 1], fontFamily: theme.fonts.bold, fontSize: 12 }}>
-                        {confidence}
-                      </Text>
-                    </View>
-                  ) : null}
                   {partOfSpeechBadges.map((badge) => {
                     const slug = resolveGrammarSlug(badge);
                     const active = Boolean(slug && grammarSlug === slug);
@@ -1095,7 +1345,7 @@ export function ReadingWordMenu({
                         <Text
                           style={{
                             color: active ? shell.chipActiveText : shell.chipText,
-                            fontSize: 13,
+                            fontSize: 11,
                             fontFamily: theme.fonts.medium,
                           }}
                         >
@@ -1104,9 +1354,27 @@ export function ReadingWordMenu({
                       </Pressable>
                     );
                   })}
+                  {confidence > 0 ? (
+                    <View
+                      style={[
+                        styles.level,
+                        { backgroundColor: LEVEL_COLORS[Math.min(confidence, 4) - 1] },
+                      ]}
+                    >
+                      <Text
+                        style={{
+                          color: LEVEL_TEXT[Math.min(confidence, 4) - 1],
+                          fontFamily: theme.fonts.bold,
+                          fontSize: 11,
+                        }}
+                      >
+                        {confidence}
+                      </Text>
+                    </View>
+                  ) : null}
                 </View>
 
-                {localSaved ? (
+                {localSaved && details ? (
                   <LevelTrack
                     compact={!sheet}
                     points={
@@ -1143,20 +1411,24 @@ export function ReadingWordMenu({
                   <TextInput
                     value={customMeaning}
                     onChangeText={setCustomMeaning}
+                    onFocus={scrollInputIntoView}
                     onSubmitEditing={() => void handleAddMeaning(customMeaning)}
                     placeholder={sheet ? "Digite um novo significado aqui" : "Novo significado"}
                     placeholderTextColor={shell.muted}
                     style={[styles.input, sheet && styles.inputBox, { fontFamily: theme.fonts.regular }]}
                   />
                   <Pressable
-                    accessibilityLabel="Sugerir tradução"
+                    accessibilityLabel={suggesting ? "Buscando tradução" : "Sugerir tradução"}
                     disabled={!clean || suggesting || suggestionLocked}
                     onPress={() => void handleSuggest()}
                     style={[styles.iconChip, { opacity: !clean || suggesting || suggestionLocked ? 0.35 : 1 }]}
                   >
-                    <Ionicons name="sparkles" size={18} color={shell.tones.lilac} />
+                    {suggesting ? (
+                      <ActivityIndicator size="small" color={shell.tones.lilac} />
+                    ) : (
+                      <Ionicons name="sparkles" size={18} color={shell.tones.lilac} />
+                    )}
                   </Pressable>
-                  {suggesting ? <ActivityIndicator size="small" color={shell.tones.lilac} /> : null}
                   <Pressable
                     accessibilityLabel="Adicionar significado"
                     disabled={!customMeaning.trim() || saving || !resolvedVaultId}
@@ -1177,12 +1449,27 @@ export function ReadingWordMenu({
                   </Pressable>
                 </View>
                 {suggestError ? (
-                  <Text style={[styles.error, { fontFamily: theme.fonts.regular }]}>{suggestError}</Text>
+                  <Pressable onPress={() => void handleSuggest()} hitSlop={6}>
+                    <Text style={[styles.error, { fontFamily: theme.fonts.regular }]}>
+                      {suggestError} · Tentar de novo
+                    </Text>
+                  </Pressable>
                 ) : null}
                 {!resolvedVaultId ? (
-                  <Text style={[styles.hint, { fontFamily: theme.fonts.regular }]}>
-                    Crie um vault para salvar palavras.
-                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      onClose();
+                      router.push("/vaults" as Href);
+                    }}
+                    style={styles.vaultCta}
+                  >
+                    <Text style={[styles.hint, { fontFamily: theme.fonts.regular, marginBottom: 0 }]}>
+                      Crie um vault para salvar palavras.
+                    </Text>
+                    <Text style={{ color: theme.colors.green, fontFamily: theme.fonts.bold, fontSize: 13 }}>
+                      Abrir vaults
+                    </Text>
+                  </Pressable>
                 ) : null}
 
                 {!sheet ? <View style={{ marginTop: 12 }}>{contextPanel}</View> : null}
@@ -1190,27 +1477,40 @@ export function ReadingWordMenu({
                 {details ? (
                   <View style={{ marginTop: 4 }}>
                     {!localSaved && vaults.length > 1 ? (
-                      <View style={styles.vaults}>
-                        {vaults.map((vault) => {
-                          const active = resolvedVaultId === String(vault.id);
-                          return (
-                            <Pressable
-                              key={vault.id}
-                              onPress={() => setVaultId(String(vault.id))}
-                              style={[styles.vaultChip, active && styles.vaultChipActive]}
-                            >
-                              <Text
-                                style={{
-                                  color: active ? shell.chipActiveText : shell.chipText,
-                                  fontFamily: theme.fonts.semibold,
-                                  fontSize: 13,
-                                }}
+                      <View style={{ marginTop: 4, marginBottom: 4 }}>
+                        <Text style={[styles.section, { fontFamily: theme.fonts.bold }]}>
+                          Salvar neste vault
+                        </Text>
+                        <Text style={[styles.hint, { fontFamily: theme.fonts.regular, marginBottom: 8 }]}>
+                          Escolha o cofre onde a palavra vai ser guardada.
+                        </Text>
+                        <View style={styles.vaults}>
+                          {vaults.map((vault) => {
+                            const active = resolvedVaultId === String(vault.id);
+                            return (
+                              <Pressable
+                                key={vault.id}
+                                onPress={() => setVaultId(String(vault.id))}
+                                style={[styles.vaultChip, active && styles.vaultChipActive]}
                               >
-                                {vault.name}
-                              </Text>
-                            </Pressable>
-                          );
-                        })}
+                                <Ionicons
+                                  name="folder-outline"
+                                  size={14}
+                                  color={active ? shell.chipActiveText : shell.chipText}
+                                />
+                                <Text
+                                  style={{
+                                    color: active ? shell.chipActiveText : shell.chipText,
+                                    fontFamily: theme.fonts.semibold,
+                                    fontSize: 13,
+                                  }}
+                                >
+                                  {vault.name}
+                                </Text>
+                              </Pressable>
+                            );
+                          })}
+                        </View>
                       </View>
                     ) : null}
 
@@ -1302,6 +1602,7 @@ export function ReadingWordMenu({
                     <TextInput
                       value={notes}
                       onChangeText={setNotes}
+                      onFocus={scrollInputIntoView}
                       onBlur={() => void handleNotesBlur()}
                       placeholder="Adicionar anotação aqui"
                       placeholderTextColor={shell.muted}
@@ -1322,9 +1623,9 @@ export function ReadingWordMenu({
                 ) : null}
               </View>
             </ScrollView>
-            {sheet ? (
+            {sheet && keyboardPad === 0 ? (
               <View style={[styles.sheetBar, { paddingBottom: Math.max(insets.bottom, 12) }]}>{levelBar}</View>
-            ) : (
+            ) : sheet ? null : (
               <Pressable
                 accessibilityLabel={expanded ? "Recolher painel" : "Expandir painel"}
                 onPress={() => setExpanded((current) => !current)}
@@ -1336,7 +1637,7 @@ export function ReadingWordMenu({
           </View>
           {!sheet && placeAbove ? <Arrow pointing="down" left={arrowLeft} /> : null}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }
@@ -1356,11 +1657,13 @@ function MeaningRow({
   return (
     <View style={styles.meaningRow}>
       <Text style={[styles.meaning, { fontFamily: theme.fonts.regular }]}>{label}</Text>
-      {saved ? (
-        <Ionicons name="checkmark" size={16} color={theme.colors.green} />
-      ) : (
-        <IconButton label={`Salvar ${label}`} name="add" color={shell.muted} disabled={disabled} onPress={onAdd} />
-      )}
+      <View style={styles.meaningAction}>
+        {saved ? (
+          <Ionicons name="checkmark" size={16} color={theme.colors.green} />
+        ) : (
+          <IconButton label={`Salvar ${label}`} name="add" color={shell.muted} disabled={disabled} onPress={onAdd} />
+        )}
+      </View>
     </View>
   );
 }
@@ -1625,22 +1928,33 @@ const styles = StyleSheet.create({
   },
   headerTitle: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, minWidth: 0 },
   headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  checkSlot: { width: 18, height: 18, alignItems: "center", justifyContent: "center" },
+  meaningAction: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
   word: { flex: 1, color: shell.foreground, fontSize: 28 },
   body: { paddingHorizontal: 16, paddingBottom: 4 },
-  badges: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 10, marginTop: 4 },
+  badges: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    justifyContent: "flex-start",
+    alignSelf: "stretch",
+    gap: 6,
+    marginBottom: 8,
+    marginTop: 2,
+  },
   level: {
-    minWidth: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 22,
+    height: 22,
+    borderRadius: 999,
+    overflow: "hidden",
     alignItems: "center",
     justifyContent: "center",
-    paddingHorizontal: 8,
   },
   badge: {
     backgroundColor: shell.chip,
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
   },
   badgeActive: {
     backgroundColor: shell.chipActive,
@@ -1769,6 +2083,9 @@ const styles = StyleSheet.create({
   levelButtonSheet: { width: 46, height: 46, borderRadius: 23 },
   vaults: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   vaultChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
     backgroundColor: shell.chip,
     borderWidth: 0,
     borderColor: "transparent",
@@ -1811,6 +2128,7 @@ const styles = StyleSheet.create({
     paddingVertical: 16,
     marginTop: 4,
   },
+  vaultCta: { marginTop: 8, gap: 4 },
   translationRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
   saveChip: {
     flexDirection: "row",
