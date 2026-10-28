@@ -16,7 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { formatChapterContent } from "@word-map/shared";
 import { BookArt, bookAuthor } from "../../../src/features/books/cover";
 import { useSession } from "../../../src/session";
-import { shell, useTheme } from "../../../src/theme";
+import { shell, tabBarContentInset, useTheme } from "../../../src/theme";
 import { type BookDetail, type ChapterDetail, type ChapterSummary } from "../../../src/types";
 import { ErrorText, Field, Heading, Loading, Muted, PrimaryButton } from "../../../src/ui";
 
@@ -74,6 +74,8 @@ export default function BookDetailScreen() {
   const coverH = Math.round(coverW * 1.45);
   const firstChapter = chapters[0] ?? null;
   const editing = draft?.id != null;
+  const tabInset = tabBarContentInset(insets.bottom);
+  const actionBarHeight = 12 + 54 + 12;
 
   const openCreate = () => {
     setError(null);
@@ -227,7 +229,10 @@ export default function BookDetailScreen() {
 
       <ScrollView
         style={{ flex: 1 }}
-        contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 120 + insets.bottom }}
+        contentContainerStyle={{
+          paddingHorizontal: 20,
+          paddingBottom: actionBarHeight + tabInset + 24,
+        }}
         showsVerticalScrollIndicator={false}
       >
         <View
@@ -251,7 +256,7 @@ export default function BookDetailScreen() {
               backgroundColor: shell.chip,
             }}
           >
-            {book ? <BookArt title={book.title} bookId={book.id} /> : null}
+            {book ? <BookArt title={book.title} bookId={book.id} coverUrl={book.coverUrl} /> : null}
           </View>
         </View>
 
@@ -459,10 +464,10 @@ export default function BookDetailScreen() {
           position: "absolute",
           left: 0,
           right: 0,
-          bottom: 0,
+          bottom: tabInset,
           paddingHorizontal: 20,
           paddingTop: 12,
-          paddingBottom: Math.max(insets.bottom, 14),
+          paddingBottom: 12,
           backgroundColor: shell.background,
           borderTopWidth: 1,
           borderTopColor: shell.line,

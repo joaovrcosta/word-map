@@ -11,6 +11,27 @@ import {
   updateBook,
   updateChapter,
 } from "../domain/books";
+import {
+  addStoryStep as insertStoryStep,
+  createStory as insertStory,
+  deleteStory as removeStoryRecord,
+  deleteStoryStep as removeStoryStepRecord,
+  getHubStory,
+  listHubStories,
+  reorderStorySteps as reorderStoryStepRecords,
+  setStoryPublished,
+  updateStory as saveStory,
+  updateStoryStep as saveStoryStep,
+} from "../domain/stories";
+import {
+  createNews as insertNews,
+  deleteNews as removeNewsRecord,
+  getHubNews,
+  listHubNews,
+  setNewsPublished,
+  updateNews as saveNews,
+  type NewsInput,
+} from "../domain/news";
 import { prisma } from "../prisma/client";
 
 const LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
@@ -37,6 +58,7 @@ export class HubService {
       id: book.id,
       title: book.title,
       description: book.description,
+      coverUrl: book.coverUrl,
       chapterCount: book._count.chapters,
       updatedAt: book.updatedAt,
     }));
@@ -54,13 +76,13 @@ export class HubService {
     return { ...detail, chapters };
   }
 
-  createBook(title: string, description?: string) {
-    return createOfficialBook(title, description);
+  createBook(title: string, description?: string, coverUrl?: string) {
+    return createOfficialBook(title, description, coverUrl);
   }
 
-  updateBook(bookId: number, title: string, description?: string) {
+  updateBook(bookId: number, title: string, description?: string, coverUrl?: string) {
     return this.officialBook(bookId).then(() =>
-      updateBook(bookId, title, description)
+      updateBook(bookId, title, description, coverUrl)
     );
   }
 
@@ -87,6 +109,76 @@ export class HubService {
   async reorder(bookId: number, chapterIds: number[]) {
     await this.officialBook(bookId);
     await reorderChapters(bookId, chapterIds);
+  }
+
+  listStories() {
+    return listHubStories();
+  }
+
+  story(storyId: number) {
+    return getHubStory(storyId);
+  }
+
+  createStory(input: { title: string; theme: string; bookId?: number | null }) {
+    return insertStory(input);
+  }
+
+  updateStory(storyId: number, input: { title: string; theme: string; bookId?: number | null }) {
+    return saveStory(storyId, input);
+  }
+
+  publishStory(storyId: number, published: boolean) {
+    return setStoryPublished(storyId, published);
+  }
+
+  removeStory(storyId: number) {
+    return removeStoryRecord(storyId);
+  }
+
+  addStoryStep(
+    storyId: number,
+    input: { speaker?: string | null; text: string; translation: string; challenge?: unknown }
+  ) {
+    return insertStoryStep(storyId, input);
+  }
+
+  updateStoryStep(
+    stepId: number,
+    input: { speaker?: string | null; text: string; translation: string; challenge?: unknown }
+  ) {
+    return saveStoryStep(stepId, input);
+  }
+
+  removeStoryStep(stepId: number) {
+    return removeStoryStepRecord(stepId);
+  }
+
+  reorderStorySteps(storyId: number, stepIds: number[]) {
+    return reorderStoryStepRecords(storyId, stepIds);
+  }
+
+  listNews() {
+    return listHubNews();
+  }
+
+  news(id: number) {
+    return getHubNews(id);
+  }
+
+  createNews(input: NewsInput) {
+    return insertNews(input);
+  }
+
+  updateNews(id: number, input: NewsInput) {
+    return saveNews(id, input);
+  }
+
+  publishNews(id: number, published: boolean) {
+    return setNewsPublished(id, published);
+  }
+
+  removeNews(id: number) {
+    return removeNewsRecord(id);
   }
 
   async listTexts() {

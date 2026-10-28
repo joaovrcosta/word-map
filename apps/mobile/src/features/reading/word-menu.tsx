@@ -1307,7 +1307,7 @@ export function ReadingWordMenu({
                   >
                     <Ionicons name="volume-high-outline" size={18} color={shell.foreground} />
                   </Pressable>
-                  <Text numberOfLines={1} style={[styles.word, { fontFamily: theme.fonts.bold }]}>
+                  <Text numberOfLines={1} style={[styles.word, { fontFamily: theme.fonts.serifItalic }]}>
                     {clean}
                   </Text>
                 </View>
@@ -1930,7 +1930,7 @@ const styles = StyleSheet.create({
   headerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
   checkSlot: { width: 18, height: 18, alignItems: "center", justifyContent: "center" },
   meaningAction: { width: 32, height: 32, alignItems: "center", justifyContent: "center" },
-  word: { flex: 1, color: shell.foreground, fontSize: 28 },
+  word: { flex: 1, color: shell.foreground, fontSize: 28, lineHeight: 34 },
   body: { paddingHorizontal: 16, paddingBottom: 4 },
   badges: {
     flexDirection: "row",

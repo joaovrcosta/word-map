@@ -20,7 +20,18 @@ export function bookAuthor(title: string) {
   return null;
 }
 
-export function BookArt({ title, bookId = 0 }: { title: string; bookId?: number }) {
+export function BookArt({
+  title,
+  bookId = 0,
+  coverUrl,
+}: {
+  title: string;
+  bookId?: number;
+  coverUrl?: string | null;
+}) {
+  if (coverUrl?.trim()) {
+    return <Image source={{ uri: coverUrl.trim() }} style={{ width: "100%", height: "100%" }} resizeMode="cover" />;
+  }
   if (isSherlockBook(title)) {
     return <Image source={houndCover} style={{ width: "100%", height: "100%" }} resizeMode="cover" />;
   }

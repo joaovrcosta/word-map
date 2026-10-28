@@ -33,16 +33,16 @@ export class BooksRepository {
 export class BooksService {
   constructor(private readonly books: BooksRepository) {}
 
-  create(title: string, description?: string) {
-    return createBook(title, description);
+  create(title: string, description?: string, coverUrl?: string) {
+    return createBook(title, description, coverUrl);
   }
 
-  createOfficial(title: string, description?: string) {
-    return createOfficialBook(title, description);
+  createOfficial(title: string, description?: string, coverUrl?: string) {
+    return createOfficialBook(title, description, coverUrl);
   }
 
-  update(bookId: number, title: string, description?: string) {
-    return updateBook(bookId, title, description);
+  update(bookId: number, title: string, description?: string, coverUrl?: string) {
+    return updateBook(bookId, title, description, coverUrl);
   }
 
   remove(bookId: number) {

@@ -9,6 +9,8 @@ import { SessionProvider } from "@/lib/session";
 const links = [
   { href: "/", label: "Início" },
   { href: "/books", label: "Livros" },
+  { href: "/stories", label: "Histórias" },
+  { href: "/news", label: "Notícias" },
   { href: "/texts", label: "Textos" },
 ];
 

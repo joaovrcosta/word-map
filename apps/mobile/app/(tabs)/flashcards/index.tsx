@@ -34,7 +34,7 @@ export default function TrainingScreen() {
   if (wordCount === null) return <Loading />;
 
   return (
-    <Screen>
+    <Screen scroll>
       <Heading>Treino</Heading>
       <Muted>Escolha o tipo de prática.</Muted>
 
@@ -140,6 +140,51 @@ export default function TrainingScreen() {
           </View>
         </View>
       )}
+
+      <Text
+        style={{
+          marginTop: 28,
+          color: theme.colors.mutedForeground,
+          fontFamily: theme.fonts.bold,
+          fontSize: 13,
+          letterSpacing: 0.6,
+        }}
+      >
+        HISTÓRIAS
+      </Text>
+      <Card tone="cream" onPress={() => router.push("/stories" as Href)}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+          <View
+            style={{
+              width: 44,
+              height: 44,
+              borderRadius: 14,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "rgba(0,0,0,0.12)",
+            }}
+          >
+            <Ionicons name="book" size={22} color={theme.shell.onPastel} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ color: theme.shell.onPastel, fontFamily: theme.fonts.bold, fontSize: 18 }}>
+              Histórias
+            </Text>
+            <Text
+              style={{
+                marginTop: 4,
+                color: theme.shell.onPastel,
+                fontFamily: theme.fonts.regular,
+                fontSize: 14,
+                opacity: 0.85,
+              }}
+            >
+              Enredos curtos com desafios pelo caminho
+            </Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={theme.shell.onPastel} />
+        </View>
+      </Card>
     </Screen>
   );
 }

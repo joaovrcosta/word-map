@@ -17,11 +17,14 @@ import {
 import {
   getUserStats,
   getUserSettings,
+  getStudyToday,
   upsertUserSettings,
 } from "@/actions/user-settings";
 import { getCurrentUser } from "@/actions/auth";
 import useUserSettingsStore from "@/store/userSettingsStore";
 import useThemeStore from "@/store/themeStore";
+import { STUDY_GOAL_PRESETS } from "@word-map/shared";
+import type { StudyToday } from "@/lib/study";
 
 interface UserStats {
   totalWords: number;
@@ -40,10 +43,10 @@ interface GamificationStats {
   streak: number;
   bestStreak: number;
   achievements: string[];
-  weeklyGoal: number;
-  weeklyProgress: number;
-  monthlyGoal: number;
-  monthlyProgress: number;
+  studyMinutes: number;
+  goalMinutes: number;
+  completedToday: boolean;
+  atRisk: boolean;
 }
 
 const confidenceLabels: Record<number, string> = {
@@ -103,6 +106,7 @@ export default function ProfilePage() {
   const [username, setUsername] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [goalMinutes, setGoalMinutes] = useState(5);
   const { settings, updateSettings } = useUserSettingsStore();
   const theme = useThemeStore((state) => state.theme);
   const setTheme = useThemeStore((state) => state.setTheme);
@@ -110,10 +114,11 @@ export default function ProfilePage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [statsData, userSettings, user] = await Promise.all([
+        const [statsData, userSettings, user, study] = await Promise.all([
           getUserStats(),
           getUserSettings(),
           getCurrentUser(),
+          getStudyToday().catch(() => null) as Promise<StudyToday | null>,
         ]);
 
         setStats(statsData);
@@ -123,6 +128,7 @@ export default function ProfilePage() {
         setUsername(user?.username ?? null);
 
         if (userSettings) {
+          setGoalMinutes(userSettings.dailyGoalMinutes ?? 5);
           updateSettings({
             useAllVaultsForLinks: userSettings.useAllVaultsForLinks,
             autoTranslateWordPreview: userSettings.autoTranslateWordPreview,
@@ -135,7 +141,7 @@ export default function ProfilePage() {
         }
 
         if (statsData) {
-          setGamificationStats(calculateGamificationStats(statsData));
+          setGamificationStats(calculateGamificationStats(statsData, study));
         }
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
@@ -157,14 +163,12 @@ export default function ProfilePage() {
   }, [updateSettings]);
 
   const calculateGamificationStats = (
-    userStats: UserStats
+    userStats: UserStats,
+    study: StudyToday | null
   ): GamificationStats => {
     const level = Math.floor(userStats.totalWords / 10) + 1;
     const experience = userStats.totalWords * 10;
     const experienceToNextLevel = level * 10 * 10 - experience;
-
-    const streak = Math.min(userStats.recentActivity, 7);
-    const bestStreak = Math.max(streak, 14);
 
     const achievements: string[] = [];
     if (userStats.totalWords >= 10) achievements.push("Iniciante");
@@ -173,25 +177,38 @@ export default function ProfilePage() {
     if (userStats.totalWords >= 100) achievements.push("Mestre");
     if (userStats.totalVaults >= 3) achievements.push("Organizador");
     if (userStats.totalConnections >= 10) achievements.push("Conectador");
-    if (userStats.recentActivity >= 5) achievements.push("Consistente");
-
-    const weeklyGoal = Math.max(10, Math.floor(userStats.totalWords * 0.1));
-    const weeklyProgress = Math.min(userStats.recentActivity, weeklyGoal);
-    const monthlyGoal = Math.max(50, Math.floor(userStats.totalWords * 0.3));
-    const monthlyProgress = Math.min(userStats.recentActivity * 4, monthlyGoal);
+    if ((study?.currentStreak ?? 0) >= 5) achievements.push("Consistente");
 
     return {
       level,
       experience,
       experienceToNextLevel,
-      streak,
-      bestStreak,
+      streak: study?.currentStreak ?? 0,
+      bestStreak: study?.bestStreak ?? 0,
       achievements,
-      weeklyGoal,
-      weeklyProgress,
-      monthlyGoal,
-      monthlyProgress,
+      studyMinutes: Math.floor((study?.seconds ?? 0) / 60),
+      goalMinutes: study?.goalMinutes ?? 5,
+      completedToday: study?.completed ?? false,
+      atRisk: study?.atRisk ?? false,
     };
+  };
+
+  const handleGoalChange = async (minutes: number) => {
+    setSaving(true);
+    try {
+      await upsertUserSettings({ dailyGoalMinutes: minutes });
+      setGoalMinutes(minutes);
+      const study = (await getStudyToday()) as StudyToday;
+      if (stats) setGamificationStats(calculateGamificationStats(stats, study));
+    } catch (error) {
+      if (error instanceof Error) {
+        alert(`Erro ao salvar meta: ${error.message}`);
+      } else {
+        alert("Erro desconhecido ao salvar meta");
+      }
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleUseAllVaultsChange = async (useAllVaults: boolean) => {
@@ -363,13 +380,29 @@ export default function ProfilePage() {
                 nível
               </p>
             </div>
+            <div className="mt-5">
+              <div className="mb-2 flex items-center justify-between text-xs font-extrabold uppercase tracking-wide text-[#afafaf]">
+                <span>
+                  Hoje · {gamificationStats.studyMinutes}/{gamificationStats.goalMinutes} min
+                  {gamificationStats.atRisk ? " · em risco" : ""}
+                </span>
+                <span>{gamificationStats.completedToday ? "Meta ok" : ""}</span>
+              </div>
+              <ProgressBar
+                percent={
+                  (gamificationStats.studyMinutes / Math.max(1, gamificationStats.goalMinutes)) *
+                  100
+                }
+                color={gamificationStats.completedToday ? "bg-[#24c875]" : "bg-[#ff9600]"}
+              />
+            </div>
             <div className="mt-5 grid grid-cols-2 gap-3">
               <div className="rounded-2xl bg-[#fff5d6] px-4 py-3 text-center">
                 <p className="text-2xl font-extrabold text-[#ff9600]">
                   {gamificationStats.streak}
                 </p>
                 <p className="mt-1 text-[11px] font-extrabold uppercase tracking-wide text-[#afafaf]">
-                  Sequência
+                  Ofensiva
                 </p>
               </div>
               <div className="rounded-2xl bg-[#e7f8ee] px-4 py-3 text-center">
@@ -515,6 +548,34 @@ export default function ProfilePage() {
               </p>
 
               <div className="mt-5 space-y-5">
+                <div>
+                  <Label className="text-sm font-extrabold text-[#3c3c3c]">
+                    Meta diária de estudo
+                  </Label>
+                  <p className="mt-1 text-sm font-bold text-[#777]">
+                    Minutos de leitura ou prática para manter a ofensiva
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {STUDY_GOAL_PRESETS.map((minutes) => (
+                      <button
+                        key={minutes}
+                        type="button"
+                        disabled={saving}
+                        onClick={() => handleGoalChange(minutes)}
+                        className={`rounded-full px-3 py-1.5 text-xs font-extrabold ${
+                          goalMinutes === minutes
+                            ? "bg-[#24c875] text-white"
+                            : "bg-[#e8eaed] text-[#3c3c3c] hover:bg-[#dce0e5] dark:bg-[#373e47] dark:text-[#e6edf3]"
+                        }`}
+                      >
+                        {minutes} min
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="border-t-2 border-[#e5e5e5] dark:border-gray-800" />
+
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <Label

@@ -1,5 +1,6 @@
 import { Body, Controller, Get, Put } from "@nestjs/common";
-import { IsBoolean, IsOptional } from "class-validator";
+import { Transform } from "class-transformer";
+import { IsBoolean, IsIn, IsInt, IsOptional } from "class-validator";
 import { UsersService } from "./users.service";
 
 class SettingsDto {
@@ -10,6 +11,12 @@ class SettingsDto {
   @IsOptional()
   @IsBoolean()
   autoTranslateWordPreview?: boolean;
+
+  @IsOptional()
+  @Transform(({ value }) => (value === undefined || value === null ? value : Number(value)))
+  @IsInt()
+  @IsIn([5, 10, 15, 20])
+  dailyGoalMinutes?: number;
 }
 
 @Controller("users")

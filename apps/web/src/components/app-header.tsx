@@ -11,6 +11,7 @@ import { readingBackHref } from "@/lib/reading-route";
 import { CountUp } from "@/components/count-up";
 import { BookOpen, ChevronLeft, Crown, ChevronDown, Trophy } from "lucide-react";
 import LogoutButton from "@/components/logout-button";
+import { StudyOffenseChip } from "@/components/study-offense-chip";
 import type { VaultNavItem } from "@/types/vault-nav";
 
 function UkFlag() {
@@ -80,6 +81,8 @@ export function AppHeader({
         <Crown className="h-3.5 w-3.5" strokeWidth={2.5} />
         Seja Premium
       </Link>
+
+      <StudyOffenseChip />
 
       <Link
         href="/home/ranking"

@@ -46,16 +46,40 @@ model User {
   tutorQuota       TutorQuota?
   passageExplanations WordPassageExplanation[]
   pointAwards      PointAward[]
+  storyAttempts    StoryAttempt[]
+  storyCompletions StoryCompletion[]
+  studyDays        StudyDay[]
 }
 
 model UserSettings {
-  id                    Int      @id @default(autoincrement())
-  userId                Int      @unique
-  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  useAllVaultsForLinks  Boolean  @default(false)
-  autoTranslateWordPreview Boolean @default(false)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                       Int       @id @default(autoincrement())
+  userId                   Int       @unique
+  user                     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  useAllVaultsForLinks     Boolean   @default(false)
+  autoTranslateWordPreview Boolean   @default(false)
+  dailyGoalMinutes         Int       @default(5)
+  currentStreak            Int       @default(0)
+  bestStreak               Int       @default(0)
+  lastGoalDate             String?
+  creditedUntil            DateTime?
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+}
+
+model StudyDay {
+  id              Int       @id @default(autoincrement())
+  userId          Int
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  day             String
+  seconds         Int       @default(0)
+  readingSeconds  Int       @default(0)
+  practiceSeconds Int       @default(0)
+  goalMinutes     Int
+  completedAt     DateTime?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([userId, day])
 }
 
 model Vault {
@@ -187,6 +211,7 @@ model Book {
   id          Int      @id @default(autoincrement())
   title       String
   description String?  @db.Text
+  coverUrl    String?
   isOfficial  Boolean  @default(false)
   ownerId     Int
   owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
@@ -194,6 +219,7 @@ model Book {
   updatedAt   DateTime @updatedAt
   chapters    Chapter[]
   library     UserLibrary[]
+  stories     Story[]
 }
 
 model Chapter {
@@ -305,6 +331,101 @@ model Sentence {
   userId    Int
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   words     SentenceWord[]
+}
+
+enum StoryChallengeKind {
+  TRUE_FALSE
+  CHOICE
+}
+
+model Story {
+  id          Int               @id @default(autoincrement())
+  title       String
+  theme       String
+  bookId      Int?
+  publishedAt DateTime?
+  createdAt   DateTime          @default(now())
+  updatedAt   DateTime          @updatedAt
+  book        Book?             @relation(fields: [bookId], references: [id], onDelete: SetNull)
+  steps       StoryStep[]
+  completions StoryCompletion[]
+
+  @@index([publishedAt])
+}
+
+model StoryStep {
+  id          Int             @id @default(autoincrement())
+  storyId     Int
+  order       Int
+  speaker     String?
+  text        String          @db.Text
+  translation String          @db.Text
+  story       Story           @relation(fields: [storyId], references: [id], onDelete: Cascade)
+  challenge   StoryChallenge?
+
+  @@index([storyId, order])
+}
+
+model StoryChallenge {
+  id        Int                @id @default(autoincrement())
+  stepId    Int                @unique
+  kind      StoryChallengeKind
+  prompt    String             @db.Text
+  correct   Boolean?
+  step      StoryStep          @relation(fields: [stepId], references: [id], onDelete: Cascade)
+  options   StoryOption[]
+  attempts  StoryAttempt[]
+}
+
+model StoryOption {
+  id          Int            @id @default(autoincrement())
+  challengeId Int
+  text        String
+  correct     Boolean        @default(false)
+  order       Int            @default(0)
+  challenge   StoryChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+}
+
+model StoryAttempt {
+  id          Int            @id @default(autoincrement())
+  userId      Int
+  challengeId Int
+  correct     Boolean
+  createdAt   DateTime       @default(now())
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  challenge   StoryChallenge @relation(fields: [challengeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, challengeId])
+}
+
+model StoryCompletion {
+  id             Int      @id @default(autoincrement())
+  userId         Int
+  storyId        Int
+  correctCount   Int
+  challengeCount Int
+  points         Int
+  createdAt      DateTime @default(now())
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  story          Story    @relation(fields: [storyId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, storyId])
+}
+
+model NewsArticle {
+  id           Int       @id @default(autoincrement())
+  section      String
+  title        String
+  summary      String    @db.Text
+  body         String    @db.Text
+  imageUrl     String?
+  imageCaption String?
+  tags         String[]  @default([])
+  publishedAt  DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  @@index([publishedAt])
 }
 
 model SentenceWord {

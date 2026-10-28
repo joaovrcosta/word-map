@@ -19,6 +19,7 @@ export type BookListItem = {
   id: number;
   title: string;
   description: string | null;
+  coverUrl?: string | null;
   isOfficial: boolean;
   ownerId: number;
   chapterCount: number;

@@ -28,6 +28,7 @@ import { translateDefinitions, translateWordInfoPreview } from "@/lib/translate"
 import { lookupWordInfo } from "@/lib/dictionary-client";
 import { normalizeGrammaticalClass } from "@/lib/dictionary";
 import { useLoadUserSettings } from "@/hooks/use-user-settings";
+import { useStudyHeartbeat } from "@/hooks/use-study-heartbeat";
 import useUserSettingsStore from "@/store/userSettingsStore";
 import { normalizeToken } from "@/lib/word-matching";
 import { useTextSelection } from "@/hooks/use-text-selection";
@@ -125,6 +126,13 @@ export function TextViewer({
   const [frame, setFrame] = useState({ width: 0, height: 0 });
   const [showPhrase, setShowPhrase] = useState(false);
   const [showSavedWords, setShowSavedWords] = useState(false);
+  const { markInteraction } = useStudyHeartbeat({
+    kind: "reading",
+    enabled: !isEditing,
+  });
+  useEffect(() => {
+    markInteraction();
+  }, [pageIndex, markInteraction]);
   const [wordAnchor, setWordAnchor] = useState<{
     top: number;
     left: number;
@@ -817,6 +825,8 @@ export function TextViewer({
 
   return (
     <div
+      onPointerDown={markInteraction}
+      onKeyDown={markInteraction}
       className={
         reader
           ? cn(

@@ -10,6 +10,7 @@ export default function BooksPage() {
   const [books, setBooks] = useState<HubBook[]>([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [coverUrl, setCoverUrl] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
 
@@ -29,6 +30,7 @@ export default function BooksPage() {
       const book = await api<{ id: number }>("POST", "/hub/books", {
         title,
         description,
+        coverUrl,
       });
       router.push(`/books/${book.id}`);
     } catch (cause) {
@@ -65,6 +67,24 @@ export default function BooksPage() {
           onChange={(event) => setDescription(event.target.value)}
           className="mt-1 min-h-24 w-full rounded-xl border border-[#d7dde5] px-3 py-2"
         />
+        <label className="mt-4 block text-sm font-bold" htmlFor="book-cover">
+          URL da capa
+        </label>
+        <input
+          id="book-cover"
+          type="url"
+          value={coverUrl}
+          onChange={(event) => setCoverUrl(event.target.value)}
+          placeholder="https://..."
+          className="mt-1 w-full rounded-xl border border-[#d7dde5] px-3 py-2"
+        />
+        {coverUrl.trim() ? (
+          <img
+            src={coverUrl.trim()}
+            alt="Prévia da capa"
+            className="mt-3 h-40 w-28 rounded-xl object-cover"
+          />
+        ) : null}
         {error && <p className="mt-3 text-sm text-[#b42318]">{error}</p>}
         <button
           type="submit"

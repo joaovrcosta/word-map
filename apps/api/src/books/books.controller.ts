@@ -19,6 +19,10 @@ class BookDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  coverUrl?: string;
 }
 
 class ChapterDto {
@@ -63,12 +67,12 @@ export class BooksController {
 
   @Post("official")
   createOfficial(@Body() body: BookDto) {
-    return this.books.createOfficial(body.title, body.description);
+    return this.books.createOfficial(body.title, body.description, body.coverUrl);
   }
 
   @Post()
   create(@Body() body: BookDto) {
-    return this.books.create(body.title, body.description);
+    return this.books.create(body.title, body.description, body.coverUrl);
   }
 
   @Get(":id")
@@ -78,7 +82,7 @@ export class BooksController {
 
   @Patch(":id")
   update(@Param("id", ParseIntPipe) id: number, @Body() body: BookDto) {
-    return this.books.update(id, body.title, body.description);
+    return this.books.update(id, body.title, body.description, body.coverUrl);
   }
 
   @Delete(":id")

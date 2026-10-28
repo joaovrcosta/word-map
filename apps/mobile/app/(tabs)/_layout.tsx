@@ -101,8 +101,16 @@ export default function TabsLayout() {
           tabBarIcon: ({ color, size }) => <Ionicons name="flash" size={size} color={color} />,
         }}
       />
+      <Tabs.Screen
+        name="profile"
+        options={{
+          title: "Perfil",
+          tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
+        }}
+      />
+      <Tabs.Screen name="stories" options={{ href: null }} />
+      <Tabs.Screen name="news" options={{ href: null }} />
       <Tabs.Screen name="books" options={{ href: null }} />
-      <Tabs.Screen name="profile" options={{ href: null }} />
       <Tabs.Screen name="ranking" options={{ href: null }} />
     </Tabs>
   );

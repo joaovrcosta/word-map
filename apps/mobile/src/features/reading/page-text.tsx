@@ -1,7 +1,22 @@
-import { useRef, type ComponentRef, type ReactNode, type RefObject } from "react";
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  type ComponentRef,
+  type ReactNode,
+  type RefObject,
+} from "react";
 import { Text, type GestureResponderEvent } from "react-native";
 import { normalizePhrase, normalizeToken, splitTokenEdges } from "@word-map/shared";
 import { useTheme } from "../../theme";
+
+/** Subset mínimo para highlights (evita import circular com word-menu). */
+export type PageFoundWord = { word: string };
+
+const EMPTY_FOUND: PageFoundWord[] = [];
+const EMPTY_SET = new Set<string>();
+const EMPTY_PHRASES: string[] = [];
 
 export const MAX_RANGE_WORDS = 6;
 export const RANGE_LONG_PRESS_MS = 480;
@@ -101,19 +116,7 @@ export function spanFromIndexes(tokens: PageWordToken[], indexes: number[]) {
   return parts.join(" ");
 }
 
-export function ReadingPageText({
-  text,
-  width,
-  fontSize,
-  vaultWords,
-  vaultPhrases = [],
-  selectedClean,
-  selectedOccurrence,
-  rangeIndexes,
-  onSelectWord,
-  onLongPressWord,
-  onToggleRangeWord,
-}: {
+export type ReadingPageTextProps = {
   text: string;
   width: number;
   fontSize: number;
@@ -125,7 +128,31 @@ export function ReadingPageText({
   onSelectWord: (clean: string, occurrence: number, anchor: WordAnchor) => void;
   onLongPressWord: (clean: string, occurrence: number, anchor: WordAnchor, tokenIndex: number) => void;
   onToggleRangeWord: (tokenIndex: number, clean: string, occurrence: number, anchor: WordAnchor) => void;
-}) {
+};
+
+let readingPageTextMounted = 0;
+
+export const ReadingPageText = memo(function ReadingPageText({
+  text,
+  width,
+  fontSize,
+  vaultWords,
+  vaultPhrases = [],
+  selectedClean,
+  selectedOccurrence,
+  rangeIndexes,
+  onSelectWord,
+  onLongPressWord,
+  onToggleRangeWord,
+}: ReadingPageTextProps) {
+  useEffect(() => {
+    if (!__DEV__) return;
+    readingPageTextMounted += 1;
+    console.log(`[ReadingPageText] mounted=${readingPageTextMounted}`);
+    return () => {
+      readingPageTextMounted -= 1;
+    };
+  }, []);
   const theme = useTheme();
   const lineHeight = Math.round(fontSize * 1.45);
   const baseStyle = {
@@ -267,7 +294,104 @@ export function ReadingPageText({
       {nodes}
     </Text>
   );
-}
+});
+
+export type PageSlotProps = {
+  text: string;
+  active: boolean;
+  width: number;
+  fontSize: number;
+  foundWords: ReadonlyArray<PageFoundWord>;
+  selectedClean: string | null;
+  selectedOccurrence: number | null;
+  rangeIndexes: number[] | null;
+  onSelectWord: ReadingPageTextProps["onSelectWord"];
+  onLongPressWord: ReadingPageTextProps["onLongPressWord"];
+  onToggleRangeWord: ReadingPageTextProps["onToggleRangeWord"];
+  header?: ReactNode;
+};
+
+/** Página do pager: texto plain fora da janela; ReadingPageText interativo dentro. */
+export const PageSlot = memo(function PageSlot({
+  text,
+  active,
+  width,
+  fontSize,
+  foundWords,
+  selectedClean,
+  selectedOccurrence,
+  rangeIndexes,
+  onSelectWord,
+  onLongPressWord,
+  onToggleRangeWord,
+  header = null,
+}: PageSlotProps) {
+  const theme = useTheme();
+  const lineHeight = Math.round(fontSize * 1.45);
+  const textStyle = {
+    width,
+    color: theme.colors.foreground,
+    fontFamily: theme.fonts.regular,
+    fontSize,
+    lineHeight,
+  };
+
+  const vaultWords = useMemo(() => {
+    if (!active || foundWords.length === 0) return EMPTY_SET;
+    const pageTokens = new Set(
+      tokenizePageText(text, EMPTY_SET)
+        .map((token) => token.clean)
+        .filter(Boolean)
+    );
+    const next = new Set<string>();
+    for (const item of foundWords) {
+      const clean = normalizeToken(item.word);
+      if (clean && !clean.includes(" ") && pageTokens.has(clean)) next.add(clean);
+    }
+    return next.size > 0 ? next : EMPTY_SET;
+  }, [active, foundWords, text]);
+
+  const vaultPhrases = useMemo(() => {
+    if (!active || foundWords.length === 0) return EMPTY_PHRASES;
+    const page = normalizePhrase(text);
+    const next = foundWords
+      .map((item) => item.word.trim())
+      .filter((phrase) => {
+        const parts = normalizePhrase(phrase).split(" ").filter(Boolean);
+        return parts.length >= 2 && page.includes(parts.join(" "));
+      });
+    return next.length > 0 ? next : EMPTY_PHRASES;
+  }, [active, foundWords, text]);
+
+  return (
+    <>
+      {header}
+      {active ? (
+        <ReadingPageText
+          text={text}
+          width={width}
+          fontSize={fontSize}
+          vaultWords={vaultWords}
+          vaultPhrases={vaultPhrases}
+          selectedClean={selectedClean}
+          selectedOccurrence={selectedOccurrence}
+          rangeIndexes={rangeIndexes}
+          onSelectWord={onSelectWord}
+          onLongPressWord={onLongPressWord}
+          onToggleRangeWord={onToggleRangeWord}
+        />
+      ) : text.trim() ? (
+        <Text selectable={false} style={textStyle}>
+          {text}
+        </Text>
+      ) : (
+        <Text style={textStyle}>Este capítulo está vazio.</Text>
+      )}
+    </>
+  );
+});
+
+export { EMPTY_FOUND };
 
 type SelectRole = "solo" | "start" | "middle" | "end" | null;
 

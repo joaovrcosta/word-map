@@ -1,10 +1,13 @@
 export {
+  EMPTY_FOUND,
   MAX_RANGE_WORDS,
   nextRangeIndexes,
+  PageSlot,
   phraseCoverage,
   ReadingPageText,
   spanFromIndexes,
   tokenizePageText,
+  type PageFoundWord,
   type PageWordToken,
   type WordAnchor,
 } from "./page-text";

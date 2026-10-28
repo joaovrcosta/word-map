@@ -114,6 +114,9 @@ export function createResources(request: Request) {
     upsertUserSettings: (updates: unknown) =>
       request("PUT", "/users/settings", updates),
     getUserStats: () => request("GET", "/users/stats"),
+    getStudyToday: () => request("GET", "/study/today"),
+    studyHeartbeat: (input: { kind: "reading" | "practice"; seconds: number }) =>
+      request("POST", "/study/heartbeat", input),
 
     createBook: (title: string, description?: string) =>
       request("POST", "/books", { title, description }),

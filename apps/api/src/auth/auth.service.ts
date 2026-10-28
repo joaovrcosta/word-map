@@ -61,6 +61,11 @@ async function ensureDefaultVault(userId: number) {
       data: { name: DEFAULT_PHRASES_VAULT_NAME, userId },
     });
   }
+  await prisma.$executeRaw`
+    INSERT INTO "UserSettings" ("userId", "useAllVaultsForLinks", "autoTranslateWordPreview", "dailyGoalMinutes", "currentStreak", "bestStreak", "createdAt", "updatedAt")
+    VALUES (${userId}, false, false, 5, 0, 0, NOW(), NOW())
+    ON CONFLICT ("userId") DO NOTHING
+  `;
 }
 
 const JWT_SECRET = process.env.JWT_SECRET || "fallback-secret-key";

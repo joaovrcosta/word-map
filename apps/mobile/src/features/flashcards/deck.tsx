@@ -39,6 +39,7 @@ import {
 } from "./types";
 import { toWord } from "./words";
 import { flushSaves, writeFocus } from "./saves";
+import { useStudyHeartbeat } from "../study/use-study-heartbeat";
 import { useSession } from "../../session";
 import { isSpeechRecognitionAvailable } from "../../speech-recognition";
 import { useTheme } from "../../theme";
@@ -161,6 +162,12 @@ export function FlashcardDeck({
     });
     return () => subscription.remove();
   }, [isSessionActive]);
+
+  useStudyHeartbeat({
+    kind: "practice",
+    enabled: isSessionActive && !showSummary,
+    assumeInteractive: true,
+  });
 
   const syncQueue = (nextSteps: FlashcardStep[], nextIndex: number) => {
     stepsRef.current = nextSteps;

@@ -12,6 +12,7 @@ export default function BookEditorPage() {
   const [book, setBook] = useState<HubBookDetail | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [coverUrl, setCoverUrl] = useState("");
   const [chapterTitle, setChapterTitle] = useState("");
   const [chapterContent, setChapterContent] = useState("");
   const [error, setError] = useState("");
@@ -21,6 +22,7 @@ export default function BookEditorPage() {
     setBook(next);
     setTitle(next.title);
     setDescription(next.description ?? "");
+    setCoverUrl(next.coverUrl ?? "");
   }
 
   function load() {
@@ -37,7 +39,7 @@ export default function BookEditorPage() {
     event.preventDefault();
     setError("");
     try {
-      await api("PATCH", `/hub/books/${bookId}`, { title, description });
+      await api("PATCH", `/hub/books/${bookId}`, { title, description, coverUrl });
       load();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível salvar.");
@@ -122,6 +124,24 @@ export default function BookEditorPage() {
           onChange={(event) => setDescription(event.target.value)}
           className="mt-1 min-h-24 w-full rounded-xl border border-[#d7dde5] px-3 py-2"
         />
+        <label className="mt-4 block text-sm font-bold" htmlFor="coverUrl">
+          URL da capa
+        </label>
+        <input
+          id="coverUrl"
+          type="url"
+          value={coverUrl}
+          onChange={(event) => setCoverUrl(event.target.value)}
+          placeholder="https://..."
+          className="mt-1 w-full rounded-xl border border-[#d7dde5] px-3 py-2"
+        />
+        {coverUrl.trim() ? (
+          <img
+            src={coverUrl.trim()}
+            alt="Prévia da capa"
+            className="mt-3 h-40 w-28 rounded-xl object-cover"
+          />
+        ) : null}
         <div className="mt-4 flex flex-wrap gap-3">
           <button type="submit" className="rounded-xl bg-[#24c875] px-4 py-2 font-extrabold text-white">
             Salvar livro

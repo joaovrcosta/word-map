@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Trash2, Save } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { useStudyHeartbeat } from "@/hooks/use-study-heartbeat";
 
 // Componentes internos
 import { WordSearch } from "./WordSearch";
@@ -35,6 +36,7 @@ export function SentenceBuilder({
 }: {
   embedded?: boolean;
 } = {}) {
+  const { markInteraction } = useStudyHeartbeat({ kind: "practice" });
   const {
     // Estados principais
     searchTerm,
@@ -96,6 +98,10 @@ export function SentenceBuilder({
     loadSentence,
     deleteSavedSentence,
   } = useSentenceBuilder();
+
+  useEffect(() => {
+    markInteraction();
+  }, [sentenceWords, searchTerm, markInteraction]);
 
   // Filtrar palavras baseado na pesquisa
   useEffect(() => {

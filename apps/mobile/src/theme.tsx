@@ -6,6 +6,10 @@ const fonts = {
   medium: "SpaceGrotesk_500Medium",
   semibold: "SpaceGrotesk_600SemiBold",
   bold: "SpaceGrotesk_700Bold",
+  display: "Ephesis_400Regular",
+  serif: "LibreBaskerville_400Regular",
+  serifItalic: "LibreBaskerville_400Regular_Italic",
+  serifBold: "LibreBaskerville_700Bold",
 };
 
 export const shell = {
@@ -69,7 +73,12 @@ export function tabBarContentInset(insetBottom: number) {
 }
 
 export function tabBarHidden(pathname: string) {
-  return /^\/books\/[^/]+\/chapters\/[^/]+/.test(pathname) || /^\/flashcards\/[^/]+/.test(pathname);
+  return (
+    /^\/books\/[^/]+\/chapters\/[^/]+/.test(pathname) ||
+    /^\/flashcards\/[^/]+/.test(pathname) ||
+    /^\/stories\/[^/]+$/.test(pathname) ||
+    /^\/news\/[^/]+$/.test(pathname)
+  );
 }
 
 export function toneFor(id: number): ToneName {

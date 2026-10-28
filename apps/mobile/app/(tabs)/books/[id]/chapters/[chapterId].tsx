@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  InteractionManager,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -22,16 +23,18 @@ import {
   paginateReading,
 } from "@word-map/shared";
 import {
+  EMPTY_FOUND,
   findSavedReadingWord,
   MAX_RANGE_WORDS,
   nextRangeIndexes,
-  ReadingPageText,
+  PageSlot,
   ReadingWordMenu,
   spanFromIndexes,
   tokenizePageText,
   type FoundTextWord,
   type WordAnchor,
 } from "../../../../../src/features/reading";
+import { useStudyHeartbeat } from "../../../../../src/features/study/use-study-heartbeat";
 import { speakPassage, speakWord, stopSpeech } from "../../../../../src/speech";
 import { useSession } from "../../../../../src/session";
 import { shell, useTheme } from "../../../../../src/theme";
@@ -41,6 +44,8 @@ import { ErrorText, Field, Heading, Loading, PrimaryButton, Screen } from "../..
 const FONT_SIZES = [18, 22, 26];
 const LEVEL_COLORS = ["#ff4b4b", "#ff9600", "#ffc800", "#24c875"];
 const LEVEL_TEXT = ["#ffffff", "#ffffff", "#3c3c3c", "#ffffff"];
+const WINDOW_RADIUS = 1;
+const WORDS_DEFER_MS = 300;
 
 function softTapHaptic() {
   if (Platform.OS === "web") return;
@@ -59,6 +64,7 @@ export default function ChapterReaderScreen() {
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
+  const [windowIndex, setWindowIndex] = useState(0);
   const [hydrated, setHydrated] = useState(false);
   const [fontSize, setFontSize] = useState(FONT_SIZES[0]);
   const [width, setWidth] = useState(0);
@@ -69,6 +75,13 @@ export default function ChapterReaderScreen() {
   const [listening, setListening] = useState(false);
   const [vaults, setVaults] = useState<Vault[]>([]);
   const [editing, setEditing] = useState(false);
+  const { markInteraction } = useStudyHeartbeat({
+    kind: "reading",
+    enabled: hydrated && settled && !editing,
+  });
+  useEffect(() => {
+    markInteraction();
+  }, [pageIndex, markInteraction]);
   const [editTitle, setEditTitle] = useState("");
   const [editContent, setEditContent] = useState("");
   const [savingEdit, setSavingEdit] = useState(false);
@@ -82,21 +95,35 @@ export default function ChapterReaderScreen() {
   const [rangeAnchor, setRangeAnchor] = useState<WordAnchor | null>(null);
   const scrollRef = useRef<ScrollView>(null);
   const pageIndexRef = useRef(0);
+  const windowIndexRef = useRef(0);
   const pagesRef = useRef<ReturnType<typeof paginateReading>>([]);
   const widthRef = useRef(0);
   const keepListening = useRef(false);
   const advancing = useRef(false);
   const openedAt = useRef(0);
-
-  const pages = useMemo(
-    () => (chapter ? paginateReading(chapter.content) : []),
-    [chapter]
-  );
+  const wordsRequestId = useRef(0);
+  const [pages, setPages] = useState<ReturnType<typeof paginateReading>>([]);
   pagesRef.current = pages;
   widthRef.current = width;
 
+  const syncPage = useCallback((next: number, clearSelection = true) => {
+    const clamped = Math.min(Math.max(next, 0), Math.max(pagesRef.current.length - 1, 0));
+    if (clearSelection && clamped !== pageIndexRef.current) {
+      setSelection(null);
+      setRangeIndexes(null);
+      setRangeAnchor(null);
+    }
+    pageIndexRef.current = clamped;
+    setPageIndex(clamped);
+    if (windowIndexRef.current !== clamped) {
+      windowIndexRef.current = clamped;
+      setWindowIndex(clamped);
+    }
+  }, []);
+
   useEffect(() => {
     let cancelled = false;
+    if (__DEV__) console.time("chapter-first-paint");
     (async () => {
       try {
         const [detail, progress] = await Promise.all([
@@ -114,17 +141,23 @@ export default function ChapterReaderScreen() {
           ? normalizeReadingPosition(nextPages, progress.paragraphIndex, progress.pageIndex)
           : { pageIndex: 0, paragraphIndex: 0 };
         pageIndexRef.current = position.pageIndex;
+        windowIndexRef.current = position.pageIndex;
         setPageIndex(position.pageIndex);
+        setWindowIndex(position.pageIndex);
+        setPages(nextPages);
         setChapter(detail);
         setHydrated(true);
+        if (__DEV__) console.timeEnd("chapter-first-paint");
       } catch (cause) {
         if (cancelled) return;
         setError(cause instanceof Error ? cause.message : "Não foi possível abrir o capítulo");
         setHydrated(true);
+        if (__DEV__) console.timeEnd("chapter-first-paint");
       }
     })();
     return () => {
       cancelled = true;
+      wordsRequestId.current += 1;
     };
   }, [chapterId, request]);
 
@@ -134,41 +167,60 @@ export default function ChapterReaderScreen() {
     setSettled(true);
   }, [hydrated, width]);
 
-  const reloadWords = useCallback(async () => {
-    if (!chapter) return;
-    const [found, nextVaults] = await Promise.all([
-      request<FoundTextWord[]>("/words/check-text", {
-        method: "POST",
-        body: JSON.stringify({ content: chapter.content }),
-      }),
-      request<Vault[]>("/vaults"),
-    ]);
-    setFoundWords(found);
-    setVaults(nextVaults);
-    try {
-      const savedInBook = await request<BookWord[]>(
-        `/words/by-book?title=${encodeURIComponent(chapter.bookTitle)}`
-      );
-      setBookWords(Array.isArray(savedInBook) ? savedInBook : []);
-    } catch {
-      setBookWords([]);
-    }
-  }, [chapter, request]);
-
-  useEffect(() => {
-    if (!chapter) return;
-    let cancelled = false;
-    reloadWords().catch(() => {
-      if (!cancelled) {
+  const reloadWords = useCallback(
+    async (requestId?: number) => {
+      if (!chapter) return;
+      const id = requestId ?? ++wordsRequestId.current;
+      try {
+        const [found, nextVaults] = await Promise.all([
+          request<FoundTextWord[]>("/words/check-text", {
+            method: "POST",
+            body: JSON.stringify({ content: chapter.content }),
+          }),
+          request<Vault[]>("/vaults"),
+        ]);
+        if (id !== wordsRequestId.current) return;
+        setFoundWords(found);
+        setVaults(nextVaults);
+        try {
+          const savedInBook = await request<BookWord[]>(
+            `/words/by-book?title=${encodeURIComponent(chapter.bookTitle)}`
+          );
+          if (id !== wordsRequestId.current) return;
+          setBookWords(Array.isArray(savedInBook) ? savedInBook : []);
+        } catch {
+          if (id !== wordsRequestId.current) return;
+          setBookWords([]);
+        }
+      } catch {
+        if (id !== wordsRequestId.current) return;
         setFoundWords([]);
         setVaults([]);
         setBookWords([]);
       }
-    });
+    },
+    [chapter, request]
+  );
+
+  useEffect(() => {
+    if (!settled || !chapter) return;
+    let cancelled = false;
+    let ran = false;
+    const run = () => {
+      if (cancelled || ran) return;
+      ran = true;
+      const id = ++wordsRequestId.current;
+      void reloadWords(id);
+    };
+    const interaction = InteractionManager.runAfterInteractions(run);
+    const timeout = setTimeout(run, WORDS_DEFER_MS);
     return () => {
       cancelled = true;
+      wordsRequestId.current += 1;
+      clearTimeout(timeout);
+      interaction.cancel?.();
     };
-  }, [chapter, reloadWords]);
+  }, [settled, chapter, reloadWords]);
 
   useEffect(() => {
     setSelection(null);
@@ -189,24 +241,6 @@ export default function ChapterReaderScreen() {
     return () => clearTimeout(handle);
   }, [chapter, chapterId, pageIndex, pages, request, settled]);
 
-  const vaultWords = useMemo(
-    () =>
-      new Set(
-        foundWords
-          .map((item) => normalizeToken(item.word))
-          .filter((word) => word && !word.includes(" "))
-      ),
-    [foundWords]
-  );
-
-  const vaultPhrases = useMemo(
-    () =>
-      foundWords
-        .map((item) => item.word.trim())
-        .filter((word) => word.split(/\s+/).filter(Boolean).length >= 2),
-    [foundWords]
-  );
-
   const listedWords = useMemo(() => {
     const merged = new Map<number, BookWord>();
     for (const word of wordsSavedInChapter(foundWords)) merged.set(word.id, word);
@@ -222,7 +256,7 @@ export default function ChapterReaderScreen() {
     return [...merged.values()];
   }, [bookWords, foundWords]);
 
-  const selectWord = (clean: string, occurrence: number, anchor: WordAnchor, full = false) => {
+  const selectWord = useCallback((clean: string, occurrence: number, anchor: WordAnchor, full = false) => {
     openedAt.current = Date.now();
     keepListening.current = false;
     setListening(false);
@@ -230,31 +264,51 @@ export default function ChapterReaderScreen() {
     setRangeAnchor(null);
     setSelection({ clean, occurrence, anchor, full });
     speakWord(clean);
-  };
+  }, []);
 
-  const beginRange = (clean: string, occurrence: number, anchor: WordAnchor, tokenIndex: number) => {
-    openedAt.current = Date.now();
-    keepListening.current = false;
-    setListening(false);
-    setSelection(null);
-    setRangeIndexes([tokenIndex]);
-    setRangeAnchor(anchor);
-    softTapHaptic();
-    speakWord(clean);
-  };
+  const beginRange = useCallback(
+    (clean: string, occurrence: number, anchor: WordAnchor, tokenIndex: number) => {
+      openedAt.current = Date.now();
+      keepListening.current = false;
+      setListening(false);
+      setSelection(null);
+      setRangeIndexes([tokenIndex]);
+      setRangeAnchor(anchor);
+      softTapHaptic();
+      speakWord(clean);
+    },
+    []
+  );
 
-  const toggleRange = (tokenIndex: number, _clean: string, _occurrence: number, anchor: WordAnchor) => {
-    const prev = rangeIndexes ?? [];
-    const next = nextRangeIndexes(prev, tokenIndex, MAX_RANGE_WORDS);
-    if (next.length > prev.length) softTapHaptic();
-    setRangeIndexes(next);
+  const toggleRange = useCallback((tokenIndex: number, _clean: string, _occurrence: number, anchor: WordAnchor) => {
+    setRangeIndexes((prev) => {
+      const current = prev ?? [];
+      const next = nextRangeIndexes(current, tokenIndex, MAX_RANGE_WORDS);
+      if (next.length > current.length) softTapHaptic();
+      return next;
+    });
     setRangeAnchor(anchor);
-  };
+  }, []);
 
   const cancelRange = () => {
     setRangeIndexes(null);
     setRangeAnchor(null);
   };
+
+  const pageTokens = useMemo(() => {
+    const text = pages[pageIndex]?.text ?? "";
+    const vaultWords = new Set(
+      foundWords
+        .map((item) => normalizeToken(item.word))
+        .filter((word) => word && !word.includes(" "))
+    );
+    return tokenizePageText(text, vaultWords);
+  }, [foundWords, pageIndex, pages]);
+
+  const rangeSpan = useMemo(() => {
+    if (!rangeIndexes?.length) return "";
+    return spanFromIndexes(pageTokens, rangeIndexes);
+  }, [pageTokens, rangeIndexes]);
 
   const confirmRange = () => {
     if (!rangeIndexes?.length || !rangeSpan) return;
@@ -288,11 +342,10 @@ export default function ChapterReaderScreen() {
         return;
       }
       advancing.current = true;
-      pageIndexRef.current = next;
-      setPageIndex(next);
+      syncPage(next, false);
       scrollRef.current?.scrollTo({ x: next * frame, animated: true });
     });
-  }, []);
+  }, [syncPage]);
 
   const toggleListen = () => {
     if (keepListening.current) {
@@ -332,27 +385,20 @@ export default function ChapterReaderScreen() {
     setRangeAnchor(null);
   };
 
-  const pageTokens = useMemo(() => {
-    const text = pages[pageIndex]?.text ?? "";
-    return tokenizePageText(text, vaultWords);
-  }, [pageIndex, pages, vaultWords]);
-
-  const rangeSpan = useMemo(() => {
-    if (!rangeIndexes?.length) return "";
-    return spanFromIndexes(pageTokens, rangeIndexes);
-  }, [pageTokens, rangeIndexes]);
+  const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    if (!settled || !width) return;
+    const next = Math.round(event.nativeEvent.contentOffset.x / width);
+    const clamped = Math.min(Math.max(next, 0), Math.max(pagesRef.current.length - 1, 0));
+    if (windowIndexRef.current !== clamped) {
+      windowIndexRef.current = clamped;
+      setWindowIndex(clamped);
+    }
+  };
 
   const onScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
     if (!settled || !width) return;
     const next = Math.round(event.nativeEvent.contentOffset.x / width);
-    const clamped = Math.min(Math.max(next, 0), Math.max(pages.length - 1, 0));
-    if (clamped !== pageIndexRef.current) {
-      setSelection(null);
-      setRangeIndexes(null);
-      setRangeAnchor(null);
-    }
-    pageIndexRef.current = clamped;
-    setPageIndex(clamped);
+    syncPage(next);
   };
 
   const saved = selection ? findSavedReadingWord(foundWords, vaults, selection.clean) : null;
@@ -393,11 +439,11 @@ export default function ChapterReaderScreen() {
       const nextTitle = updated.title ?? title;
       const nextPages = paginateReading(nextContent);
       const nextIndex = Math.min(pageIndexRef.current, Math.max(nextPages.length - 1, 0));
-      pageIndexRef.current = nextIndex;
-      setPageIndex(nextIndex);
+      setPages(nextPages);
       setChapter((current) =>
         current ? { ...current, title: nextTitle, content: nextContent } : current
       );
+      syncPage(nextIndex, false);
       setEditing(false);
       if (width) {
         requestAnimationFrame(() => {
@@ -466,6 +512,7 @@ export default function ChapterReaderScreen() {
               pagingEnabled
               nestedScrollEnabled
               showsHorizontalScrollIndicator={false}
+              onScroll={onScroll}
               onMomentumScrollEnd={onScrollEnd}
               onScrollBeginDrag={() => {
                 if (!keepListening.current) return;
@@ -479,32 +526,39 @@ export default function ChapterReaderScreen() {
               snapToAlignment="start"
               disableIntervalMomentum
             >
-              {pages.map((page, index) => (
-                <View key={index} style={{ width, height: "100%" }}>
-                  <ScrollView
-                    nestedScrollEnabled
-                    onScrollBeginDrag={dismissFromScroll}
-                    contentContainerStyle={{ paddingBottom: 24 }}
-                  >
-                    {index === 0 && chapter ? (
-                      <ReadingIntro bookTitle={chapter.bookTitle} chapterTitle={chapter.title} bookId={chapter.bookId} />
-                    ) : null}
-                    <ReadingPageText
-                      text={page.text}
-                      width={width}
-                      fontSize={fontSize}
-                      vaultWords={vaultWords}
-                      vaultPhrases={vaultPhrases}
-                      selectedClean={index === pageIndex ? (selection?.clean ?? null) : null}
-                      selectedOccurrence={index === pageIndex ? (selection?.occurrence ?? null) : null}
-                      rangeIndexes={index === pageIndex ? rangeIndexes : null}
-                      onSelectWord={selectWord}
-                      onLongPressWord={beginRange}
-                      onToggleRangeWord={toggleRange}
-                    />
-                  </ScrollView>
-                </View>
-              ))}
+              {pages.map((page, index) => {
+                const active = Math.abs(index - windowIndex) <= WINDOW_RADIUS;
+                return (
+                  <View key={index} style={{ width, height: "100%" }}>
+                    <ScrollView
+                      nestedScrollEnabled
+                      onScrollBeginDrag={dismissFromScroll}
+                      contentContainerStyle={{ paddingBottom: 24 }}
+                    >
+                      {index === 0 && chapter ? (
+                        <ReadingIntro
+                          bookTitle={chapter.bookTitle}
+                          chapterTitle={chapter.title}
+                          bookId={chapter.bookId}
+                        />
+                      ) : null}
+                      <PageSlot
+                        text={page.text}
+                        active={active}
+                        width={width}
+                        fontSize={fontSize}
+                        foundWords={active ? foundWords : EMPTY_FOUND}
+                        selectedClean={index === pageIndex ? (selection?.clean ?? null) : null}
+                        selectedOccurrence={index === pageIndex ? (selection?.occurrence ?? null) : null}
+                        rangeIndexes={index === pageIndex ? rangeIndexes : null}
+                        onSelectWord={selectWord}
+                        onLongPressWord={beginRange}
+                        onToggleRangeWord={toggleRange}
+                      />
+                    </ScrollView>
+                  </View>
+                );
+              })}
             </ScrollView>
           ) : null}
         </View>
@@ -632,7 +686,9 @@ export default function ChapterReaderScreen() {
           vaults={vaults}
           full={selection.full}
           onClose={() => setSelection(null)}
-          onChanged={reloadWords}
+          onChanged={async () => {
+            await reloadWords(++wordsRequestId.current);
+          }}
         />
       ) : null}
 

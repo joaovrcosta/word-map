@@ -1,11 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { type Href, router, useFocusEffect } from "expo-router";
+import { formatNewsDate } from "../news/format";
+import type { NewsListItem } from "../news/types";
 import { useSession } from "../../session";
 import { useTheme } from "../../theme";
 import { countLabel, type BookListItem } from "../../types";
 import { ErrorText, Field, Heading, Loading, Muted, PrimaryButton, Screen } from "../../ui";
+import { StudyOffenseChip } from "../study/offense-chip";
+import { OffenseSheet } from "../study/offense-sheet";
 import { BookArt, bookAuthor } from "./cover";
 
 type Shelf = "foryou" | "store" | "saved" | "mine";
@@ -33,26 +37,30 @@ export function LibraryFeed() {
   const [official, setOfficial] = useState<BookListItem[] | null>(null);
   const [mine, setMine] = useState<BookListItem[]>([]);
   const [library, setLibrary] = useState<BookListItem[]>([]);
+  const [news, setNews] = useState<NewsListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [shelf, setShelf] = useState<Shelf>("foryou");
   const [creating, setCreating] = useState(false);
+  const [offenseOpen, setOffenseOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDescription, setDraftDescription] = useState("");
   const [saving, setSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [officialBooks, myBooks, libraryBooks] = await Promise.all([
+      const [officialBooks, myBooks, libraryBooks, newsArticles] = await Promise.all([
         request<BookListItem[]>("/books/official"),
         request<BookListItem[]>("/books/mine"),
         request<BookListItem[]>("/books/library"),
+        request<NewsListItem[]>("/news").catch(() => [] as NewsListItem[]),
       ]);
       setOfficial(officialBooks);
       setMine(myBooks);
       setLibrary(libraryBooks);
+      setNews(newsArticles);
       setError(null);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível carregar os livros");
@@ -176,18 +184,60 @@ export function LibraryFeed() {
 
   return (
     <Screen scroll>
-      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-        <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 28 }}>Início</Text>
-        <View style={{ flexDirection: "row", gap: 10 }}>
-          <RoundButton name="add" label="Criar livro" onPress={openCreate} />
-          <RoundButton
-            name="search"
-            label="Buscar"
-            onPress={() => {
-              setSearchOpen((open) => !open);
-              if (searchOpen) setQuery("");
+      <View style={{ height: 48, justifyContent: "center" }}>
+        <View
+          pointerEvents="none"
+          style={{
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: 0,
+            bottom: 0,
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+        >
+          <Text
+            style={{
+              color: theme.shell.foreground,
+              fontFamily: theme.fonts.bold,
+              fontSize: 22,
+              letterSpacing: -0.4,
             }}
-          />
+          >
+            Word Map
+          </Text>
+        </View>
+
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Pressable
+            onPress={() => router.push("/premium" as Href)}
+            accessibilityRole="button"
+            accessibilityLabel="Premium"
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: 20,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: "#F5C518",
+            }}
+          >
+            <FontAwesome5 name="crown" size={16} color="#FFFFFF" solid />
+          </Pressable>
+
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+            <StudyOffenseChip compact onPress={() => setOffenseOpen(true)} />
+            <HeaderIconButton
+              name="search-outline"
+              label="Buscar"
+              onPress={() => {
+                setSearchOpen((open) => !open);
+                if (searchOpen) setQuery("");
+              }}
+            />
+            <HeaderIconButton name="add" label="Adicionar conteúdo" onPress={openCreate} />
+          </View>
         </View>
       </View>
 
@@ -199,7 +249,7 @@ export function LibraryFeed() {
           placeholder="Buscar no acervo"
           placeholderTextColor={theme.colors.mutedForeground}
           style={{
-            marginTop: 16,
+            marginTop: 14,
             borderWidth: 1,
             borderColor: theme.colors.border,
             borderRadius: 14,
@@ -264,6 +314,14 @@ export function LibraryFeed() {
         </View>
       ) : null}
 
+      {shelf === "foryou" && !query.trim() && news.length > 0 ? (
+        <NewsRail
+          articles={news.slice(0, 5)}
+          onSeeAll={() => router.push("/news" as Href)}
+          onOpen={(article) => router.push(`/news/${article.id}` as Href)}
+        />
+      ) : null}
+
       {rails.length === 0 ? (
         <View style={{ marginTop: 28, gap: 14 }}>
           <Muted>{emptyMessage}</Muted>
@@ -289,6 +347,12 @@ export function LibraryFeed() {
           />
         ))
       )}
+
+      <OffenseSheet
+        visible={offenseOpen}
+        onClose={() => setOffenseOpen(false)}
+        onSeeStats={() => router.push("/profile" as Href)}
+      />
 
       <Modal animationType="fade" transparent visible={creating} onRequestClose={closeCreate}>
         <Pressable
@@ -369,7 +433,7 @@ function ContinueCard({ book, busy, onOpen }: { book: BookListItem; busy: boolea
           backgroundColor: "#f6f1e6",
         }}
       >
-        <BookArt title={book.title} bookId={book.id} />
+        <BookArt title={book.title} bookId={book.id} coverUrl={book.coverUrl} />
       </View>
       <View style={{ flex: 1, gap: 4 }}>
         <Text
@@ -395,6 +459,94 @@ function ContinueCard({ book, busy, onOpen }: { book: BookListItem; busy: boolea
         <Ionicons name="play" size={18} color={theme.shell.onPastel} style={{ marginLeft: 2 }} />
       </View>
     </Pressable>
+  );
+}
+
+function NewsRail({
+  articles,
+  onSeeAll,
+  onOpen,
+}: {
+  articles: NewsListItem[];
+  onSeeAll: () => void;
+  onOpen: (article: NewsListItem) => void;
+}) {
+  const theme = useTheme();
+  return (
+    <View style={{ marginTop: 26 }}>
+      <Pressable
+        onPress={onSeeAll}
+        accessibilityRole="button"
+        accessibilityLabel="Ver notícias"
+        style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 12 }}
+      >
+        <Text style={{ flex: 1, color: theme.shell.foreground, fontFamily: theme.fonts.bold, fontSize: 22 }}>
+          Notícias
+        </Text>
+        <Ionicons name="chevron-forward" size={20} color={theme.shell.muted} />
+      </Pressable>
+      <View style={{ marginTop: 14, gap: 16 }}>
+        {articles.map((article) => (
+          <Pressable
+            key={article.id}
+            onPress={() => onOpen(article)}
+            accessibilityRole="button"
+            accessibilityLabel={article.title}
+            style={{ flexDirection: "row", gap: 14, alignItems: "flex-start" }}
+          >
+            {article.imageUrl ? (
+              <Image
+                source={{ uri: article.imageUrl }}
+                style={{ width: 88, height: 88, borderRadius: 4 }}
+                resizeMode="cover"
+              />
+            ) : (
+              <View
+                style={{
+                  width: 88,
+                  height: 88,
+                  borderRadius: 4,
+                  backgroundColor: theme.shell.surface,
+                  borderWidth: 1,
+                  borderColor: theme.shell.line,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Ionicons name="newspaper-outline" size={28} color={theme.shell.muted} />
+              </View>
+            )}
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                style={{
+                  color: theme.shell.muted,
+                  fontFamily: theme.fonts.semibold,
+                  fontSize: 12,
+                }}
+                numberOfLines={1}
+              >
+                {article.section}
+                {formatNewsDate(article.publishedAt)
+                  ? ` · ${formatNewsDate(article.publishedAt)}`
+                  : ""}
+              </Text>
+              <Text
+                style={{
+                  marginTop: 4,
+                  color: theme.shell.foreground,
+                  fontFamily: theme.fonts.serifItalic,
+                  fontSize: 18,
+                  lineHeight: 24,
+                }}
+                numberOfLines={3}
+              >
+                {article.title}
+              </Text>
+            </View>
+          </Pressable>
+        ))}
+      </View>
+    </View>
   );
 }
 
@@ -480,7 +632,7 @@ function CoverCard({
           backgroundColor: "#f6f1e6",
         }}
       >
-        <BookArt title={book.title} bookId={book.id} />
+        <BookArt title={book.title} bookId={book.id} coverUrl={book.coverUrl} />
       </Pressable>
       <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 4, marginTop: 8 }}>
         <Pressable onPress={onOpen} disabled={busy} style={{ flex: 1 }}>
@@ -517,7 +669,7 @@ function CoverCard({
   );
 }
 
-function RoundButton({
+function HeaderIconButton({
   name,
   label,
   onPress,
@@ -530,19 +682,17 @@ function RoundButton({
   return (
     <Pressable
       onPress={onPress}
+      hitSlop={8}
       accessibilityRole="button"
       accessibilityLabel={label}
       style={{
-        width: 42,
-        height: 42,
-        borderRadius: 21,
-        borderWidth: 1.5,
-        borderColor: theme.colors.foreground,
+        width: 36,
+        height: 36,
         alignItems: "center",
         justifyContent: "center",
       }}
     >
-      <Ionicons name={name} size={20} color={theme.colors.foreground} />
+      <Ionicons name={name} size={24} color={theme.shell.foreground} />
     </Pressable>
   );
 }

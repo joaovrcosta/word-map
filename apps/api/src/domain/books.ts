@@ -29,6 +29,7 @@ export type BookListItem = {
   id: number;
   title: string;
   description: string | null;
+  coverUrl: string | null;
   isOfficial: boolean;
   ownerId: number;
   createdAt: Date;
@@ -129,11 +130,17 @@ async function getAccessibleBook(user: User, bookId: number) {
   throw new Error("Livro não encontrado");
 }
 
+function normalizeCoverUrl(value?: string | null) {
+  const trimmed = value?.trim() || null;
+  return trimmed || null;
+}
+
 function toListItem(
   book: {
     id: number;
     title: string;
     description: string | null;
+    coverUrl: string | null;
     isOfficial: boolean;
     ownerId: number;
     createdAt: Date;
@@ -146,6 +153,7 @@ function toListItem(
     id: book.id,
     title: book.title,
     description: book.description,
+    coverUrl: book.coverUrl,
     isOfficial: book.isOfficial,
     ownerId: book.ownerId,
     createdAt: book.createdAt,
@@ -162,7 +170,7 @@ function revalidateBookPaths(bookId?: number) {
   }
 }
 
-export async function createBook(title: string, description?: string) {
+export async function createBook(title: string, description?: string, coverUrl?: string | null) {
   try {
     const user = await requireUser();
     const trimmed = title.trim();
@@ -174,6 +182,7 @@ export async function createBook(title: string, description?: string) {
       data: {
         title: trimmed,
         description: description?.trim() || null,
+        coverUrl: normalizeCoverUrl(coverUrl),
         isOfficial: false,
         ownerId: user.id,
       },
@@ -186,7 +195,11 @@ export async function createBook(title: string, description?: string) {
   }
 }
 
-export async function createOfficialBook(title: string, description?: string) {
+export async function createOfficialBook(
+  title: string,
+  description?: string,
+  coverUrl?: string | null
+) {
   try {
     const user = await requireUser();
     if (!isContentStaff(user.role)) {
@@ -204,6 +217,7 @@ export async function createOfficialBook(title: string, description?: string) {
       data: {
         title: trimmed,
         description: description?.trim() || null,
+        coverUrl: normalizeCoverUrl(coverUrl),
         isOfficial: true,
         ownerId: user.id,
       },
@@ -219,7 +233,8 @@ export async function createOfficialBook(title: string, description?: string) {
 export async function updateBook(
   bookId: number,
   title: string,
-  description?: string
+  description?: string,
+  coverUrl?: string | null
 ) {
   try {
     const user = await requireUser();
@@ -238,6 +253,7 @@ export async function updateBook(
       data: {
         title: trimmed,
         description: description?.trim() || null,
+        coverUrl: normalizeCoverUrl(coverUrl),
       },
     });
 

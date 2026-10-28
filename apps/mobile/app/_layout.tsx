@@ -3,6 +3,12 @@ import { Stack } from "expo-router";
 import { useFonts } from "expo-font";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
+import { Ephesis_400Regular } from "@expo-google-fonts/ephesis";
+import {
+  LibreBaskerville_400Regular,
+  LibreBaskerville_400Regular_Italic,
+  LibreBaskerville_700Bold,
+} from "@expo-google-fonts/libre-baskerville";
 import {
   SpaceGrotesk_400Regular,
   SpaceGrotesk_500Medium,
@@ -31,6 +37,10 @@ function RootStack() {
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
+    Ephesis_400Regular,
+    LibreBaskerville_400Regular,
+    LibreBaskerville_400Regular_Italic,
+    LibreBaskerville_700Bold,
     SpaceGrotesk_400Regular,
     SpaceGrotesk_500Medium,
     SpaceGrotesk_600SemiBold,

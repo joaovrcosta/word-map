@@ -11,3 +11,4 @@ export * from "./translate-config";
 export * from "./dictionary";
 export * from "./speak-align";
 export * from "./tutor-follow-up";
+export * from "./study-goal";

@@ -8,7 +8,7 @@ import {
   Patch,
   Post,
 } from "@nestjs/common";
-import { IsArray, IsOptional, IsString } from "class-validator";
+import { IsArray, IsBoolean, IsInt, IsOptional, IsString } from "class-validator";
 import { Roles } from "../common/roles.decorator";
 import { HubService } from "./hub.service";
 
@@ -19,6 +19,10 @@ class BookDto {
   @IsOptional()
   @IsString()
   description?: string;
+
+  @IsOptional()
+  @IsString()
+  coverUrl?: string;
 }
 
 class ChapterDto {
@@ -55,6 +59,74 @@ class RoleDto {
   role!: string;
 }
 
+class StoryDto {
+  @IsString()
+  title!: string;
+
+  @IsString()
+  theme!: string;
+
+  @IsOptional()
+  @IsInt()
+  bookId?: number | null;
+}
+
+class PublishStoryDto {
+  @IsBoolean()
+  published!: boolean;
+}
+
+class StoryStepDto {
+  @IsOptional()
+  @IsString()
+  speaker?: string;
+
+  @IsString()
+  text!: string;
+
+  @IsString()
+  translation!: string;
+
+  @IsOptional()
+  challenge?: unknown;
+}
+
+class StoryReorderDto {
+  @IsArray()
+  @IsInt({ each: true })
+  stepIds!: number[];
+}
+
+class NewsDto {
+  @IsString()
+  section!: string;
+
+  @IsString()
+  title!: string;
+
+  @IsString()
+  summary!: string;
+
+  @IsString()
+  body!: string;
+
+  @IsOptional()
+  @IsString()
+  imageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  imageCaption?: string;
+
+  @IsOptional()
+  tags?: string[] | string;
+}
+
+class PublishNewsDto {
+  @IsBoolean()
+  published!: boolean;
+}
+
 @Roles("ADMIN", "MODERATOR")
 @Controller("hub")
 export class HubController {
@@ -67,7 +139,7 @@ export class HubController {
 
   @Post("books")
   createBook(@Body() body: BookDto) {
-    return this.hub.createBook(body.title, body.description);
+    return this.hub.createBook(body.title, body.description, body.coverUrl);
   }
 
   @Get("books/:id")
@@ -77,7 +149,7 @@ export class HubController {
 
   @Patch("books/:id")
   updateBook(@Param("id", ParseIntPipe) id: number, @Body() body: BookDto) {
-    return this.hub.updateBook(id, body.title, body.description);
+    return this.hub.updateBook(id, body.title, body.description, body.coverUrl);
   }
 
   @Delete("books/:id")
@@ -106,6 +178,86 @@ export class HubController {
   @Delete("chapters/:id")
   removeChapter(@Param("id", ParseIntPipe) id: number) {
     return this.hub.removeChapter(id);
+  }
+
+  @Get("stories")
+  stories() {
+    return this.hub.listStories();
+  }
+
+  @Post("stories")
+  createStory(@Body() body: StoryDto) {
+    return this.hub.createStory(body);
+  }
+
+  @Get("stories/:id")
+  story(@Param("id", ParseIntPipe) id: number) {
+    return this.hub.story(id);
+  }
+
+  @Patch("stories/:id")
+  updateStory(@Param("id", ParseIntPipe) id: number, @Body() body: StoryDto) {
+    return this.hub.updateStory(id, body);
+  }
+
+  @Post("stories/:id/publish")
+  publishStory(@Param("id", ParseIntPipe) id: number, @Body() body: PublishStoryDto) {
+    return this.hub.publishStory(id, body.published);
+  }
+
+  @Delete("stories/:id")
+  removeStory(@Param("id", ParseIntPipe) id: number) {
+    return this.hub.removeStory(id);
+  }
+
+  @Post("stories/:id/steps/reorder")
+  reorderStorySteps(@Param("id", ParseIntPipe) id: number, @Body() body: StoryReorderDto) {
+    return this.hub.reorderStorySteps(id, body.stepIds);
+  }
+
+  @Post("stories/:id/steps")
+  addStoryStep(@Param("id", ParseIntPipe) id: number, @Body() body: StoryStepDto) {
+    return this.hub.addStoryStep(id, body);
+  }
+
+  @Patch("steps/:id")
+  updateStoryStep(@Param("id", ParseIntPipe) id: number, @Body() body: StoryStepDto) {
+    return this.hub.updateStoryStep(id, body);
+  }
+
+  @Delete("steps/:id")
+  removeStoryStep(@Param("id", ParseIntPipe) id: number) {
+    return this.hub.removeStoryStep(id);
+  }
+
+  @Get("news")
+  newsList() {
+    return this.hub.listNews();
+  }
+
+  @Post("news")
+  createNews(@Body() body: NewsDto) {
+    return this.hub.createNews(body);
+  }
+
+  @Get("news/:id")
+  news(@Param("id", ParseIntPipe) id: number) {
+    return this.hub.news(id);
+  }
+
+  @Patch("news/:id")
+  updateNews(@Param("id", ParseIntPipe) id: number, @Body() body: NewsDto) {
+    return this.hub.updateNews(id, body);
+  }
+
+  @Post("news/:id/publish")
+  publishNews(@Param("id", ParseIntPipe) id: number, @Body() body: PublishNewsDto) {
+    return this.hub.publishNews(id, body.published);
+  }
+
+  @Delete("news/:id")
+  removeNews(@Param("id", ParseIntPipe) id: number) {
+    return this.hub.removeNews(id);
   }
 
   @Get("texts")

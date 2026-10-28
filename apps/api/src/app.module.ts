@@ -20,6 +20,9 @@ import { DictionaryModule } from "./dictionary/dictionary.module";
 import { TranslateModule } from "./translate/translate.module";
 import { HealthController } from "./health.controller";
 import { RankingModule } from "./ranking/ranking.module";
+import { StoriesModule } from "./stories/stories.module";
+import { NewsModule } from "./news/news.module";
+import { StudyModule } from "./study/study.module";
 
 @Module({
   imports: [
@@ -37,6 +40,9 @@ import { RankingModule } from "./ranking/ranking.module";
     DictionaryModule,
     TranslateModule,
     RankingModule,
+    StoriesModule,
+    NewsModule,
+    StudyModule,
     HubModule,
   ],
   controllers: [HealthController],

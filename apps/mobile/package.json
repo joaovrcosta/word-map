@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "expo-router/entry",
   "dependencies": {
+    "@expo-google-fonts/ephesis": "^0.4.2",
+    "@expo-google-fonts/libre-baskerville": "^0.4.3",
     "@expo-google-fonts/space-grotesk": "^0.4.1",
     "@expo/dom-webview": "~57.0.1",
     "@expo/log-box": "~57.0.4",

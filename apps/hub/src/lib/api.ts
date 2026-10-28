@@ -11,6 +11,7 @@ export type HubBook = {
   id: number;
   title: string;
   description: string | null;
+  coverUrl: string | null;
   chapterCount: number;
   updatedAt: string;
 };
@@ -26,7 +27,51 @@ export type HubBookDetail = {
   id: number;
   title: string;
   description: string | null;
+  coverUrl: string | null;
   chapters: HubChapter[];
+};
+
+export type HubStory = {
+  id: number;
+  title: string;
+  theme: string;
+  bookTitle: string | null;
+  stepCount: number;
+  publishedAt: string | null;
+  updatedAt: string;
+};
+
+export type HubStoryOption = {
+  id: number;
+  text: string;
+  correct: boolean;
+};
+
+export type HubStoryChallenge = {
+  id: number;
+  kind: "TRUE_FALSE" | "CHOICE";
+  prompt: string;
+  correct: boolean | null;
+  options: HubStoryOption[];
+};
+
+export type HubStoryStep = {
+  id: number;
+  order: number;
+  speaker: string | null;
+  text: string;
+  translation: string;
+  challenge: HubStoryChallenge | null;
+};
+
+export type HubStoryDetail = {
+  id: number;
+  title: string;
+  theme: string;
+  bookId: number | null;
+  bookTitle: string | null;
+  publishedAt: string | null;
+  steps: HubStoryStep[];
 };
 
 export type HubText = {
@@ -36,6 +81,30 @@ export type HubText = {
   summary: string | null;
   level: string | null;
   updatedAt: string;
+};
+
+export type HubNews = {
+  id: number;
+  section: string;
+  title: string;
+  summary: string;
+  publishedAt: string | null;
+  updatedAt: string;
+  tagCount: number;
+};
+
+export type HubNewsDetail = {
+  id: number;
+  section: string;
+  title: string;
+  summary: string;
+  body: string;
+  imageUrl: string | null;
+  imageCaption: string | null;
+  tags: string[];
+  publishedAt: string | null;
+  updatedAt: string;
+  listenSeconds: number;
 };
 
 export type StaffMember = {

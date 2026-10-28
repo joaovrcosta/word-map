@@ -1,92 +1,94 @@
-
+import { isStudyGoalMinutes } from "@word-map/shared";
 import { prisma } from "../prisma/client";
 import { revalidatePath } from "../common/revalidate";
 import { getCurrentUser } from "../auth/current-user";
+import { ensureUserSettings, updateDailyGoalMinutes } from "./study";
 
 export interface UserSettings {
   id: number;
   userId: number;
   useAllVaultsForLinks: boolean;
   autoTranslateWordPreview: boolean;
+  dailyGoalMinutes: number;
+  currentStreak: number;
+  bestStreak: number;
+  lastGoalDate: string | null;
+  creditedUntil: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
 
 export type UserSettingsUpdate = Partial<
-  Pick<UserSettings, "useAllVaultsForLinks" | "autoTranslateWordPreview">
+  Pick<
+    UserSettings,
+    "useAllVaultsForLinks" | "autoTranslateWordPreview" | "dailyGoalMinutes"
+  >
 >;
 
-// Buscar configurações do usuário
 export async function getUserSettings(): Promise<UserSettings | null> {
   try {
-    // Verificar se o usuário está autenticado
     const user = await getCurrentUser();
-    if (!user) {
-      console.log("Usuário não autenticado ao buscar configurações");
-      return null;
-    }
+    if (!user) return null;
 
-    console.log("Buscando configurações para usuário:", user.id);
-    const settings = await prisma.userSettings.findUnique({
-      where: { userId: user.id },
-    });
-
-    console.log("Configurações encontradas:", settings);
-    return settings;
+    await ensureUserSettings(user.id);
+    const rows = await prisma.$queryRaw<UserSettings[]>`
+      SELECT
+        id,
+        "userId",
+        "useAllVaultsForLinks",
+        "autoTranslateWordPreview",
+        "dailyGoalMinutes",
+        "currentStreak",
+        "bestStreak",
+        "lastGoalDate",
+        "creditedUntil",
+        "createdAt",
+        "updatedAt"
+      FROM "UserSettings"
+      WHERE "userId" = ${user.id}
+      LIMIT 1
+    `;
+    return rows[0] ?? null;
   } catch (error) {
     console.error("Erro ao buscar configurações do usuário:", error);
     return null;
   }
 }
 
-// Criar ou atualizar configurações do usuário
 export async function upsertUserSettings(
   updates: UserSettingsUpdate
 ): Promise<UserSettings> {
   try {
-    console.log("Iniciando upsert de configurações do usuário...");
-
-    // Verificar se o usuário está autenticado
     const user = await getCurrentUser();
-    if (!user) {
-      console.log("Usuário não autenticado ao salvar configurações");
-      throw new Error("Usuário não autenticado");
+    if (!user) throw new Error("Usuário não autenticado");
+
+    await ensureUserSettings(user.id);
+
+    if (updates.dailyGoalMinutes !== undefined) {
+      const goal = Number(updates.dailyGoalMinutes);
+      if (!isStudyGoalMinutes(goal)) {
+        throw new Error("Meta diária inválida");
+      }
+      await updateDailyGoalMinutes(goal);
     }
 
-    console.log("Usuário autenticado:", { id: user.id, name: user.name });
+    const { dailyGoalMinutes: _goal, ...rest } = updates;
+    const hasFlags =
+      rest.useAllVaultsForLinks !== undefined ||
+      rest.autoTranslateWordPreview !== undefined;
 
-    // Verificar se já existem configurações
-    const existingSettings = await prisma.userSettings.findUnique({
-      where: { userId: user.id },
-    });
-
-    console.log("Configurações existentes:", existingSettings);
-
-    let settings: UserSettings;
-
-    if (existingSettings) {
-      console.log("Atualizando configurações existentes...");
-      settings = await prisma.userSettings.update({
+    if (hasFlags) {
+      await prisma.userSettings.update({
         where: { userId: user.id },
-        data: updates,
-      });
-    } else {
-      console.log("Criando novas configurações...");
-      settings = await prisma.userSettings.create({
-        data: {
-          userId: user.id,
-          useAllVaultsForLinks: updates.useAllVaultsForLinks ?? false,
-          autoTranslateWordPreview: updates.autoTranslateWordPreview ?? false,
-        },
+        data: rest,
       });
     }
 
-    console.log("Configurações salvas com sucesso:", settings);
+    const settings = await getUserSettings();
+    if (!settings) throw new Error("Configurações do usuário não encontradas");
 
-    // Revalidar cache da página de perfil
     try {
       revalidatePath("/home/profile");
-      console.log("Cache da página de perfil revalidado");
     } catch (revalidateError) {
       console.warn("Erro ao revalidar cache (não crítico):", revalidateError);
     }
@@ -95,8 +97,9 @@ export async function upsertUserSettings(
   } catch (error) {
     console.error("Erro detalhado ao salvar configurações do usuário:", error);
 
-    // Verificar se é um erro específico do Prisma
     if (error instanceof Error) {
+      if (error.message === "Meta diária inválida") throw error;
+      if (error.message === "Usuário não autenticado") throw error;
       if (error.message.includes("Unique constraint")) {
         throw new Error("Configurações já existem para este usuário");
       }

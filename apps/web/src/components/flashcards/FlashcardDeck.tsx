@@ -30,6 +30,7 @@ import {
   rollbackPoints,
   settlePoints,
 } from "@/lib/points-optimistic";
+import { useStudyHeartbeat } from "@/hooks/use-study-heartbeat";
 import { Flashcard } from "./Flashcard";
 import { ListenChallenge } from "./ListenChallenge";
 import { MatchChallenge } from "./MatchChallenge";
@@ -71,6 +72,12 @@ export function FlashcardDeck({ vaultId, vaultName = "Treino", autostart = false
   useEffect(() => {
     loadWords();
   }, [vaultId]);
+
+  useStudyHeartbeat({
+    kind: "practice",
+    enabled: isSessionActive && !showSummary,
+    assumeInteractive: true,
+  });
 
   const loadWords = async () => {
     try {

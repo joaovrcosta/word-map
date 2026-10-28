@@ -137,6 +137,12 @@ importers:
 
   apps/mobile:
     dependencies:
+      '@expo-google-fonts/ephesis':
+        specifier: ^0.4.2
+        version: 0.4.2
+      '@expo-google-fonts/libre-baskerville':
+        specifier: ^0.4.3
+        version: 0.4.3
       '@expo-google-fonts/space-grotesk':
         specifier: ^0.4.1
         version: 0.4.1
@@ -969,6 +975,12 @@ packages:
 
   '@emnapi/wasi-threads@1.2.1':
     resolution: {integrity: sha512-uTII7OYF+/Mes/MrcIOYp5yOtSMLBWSIoLPpcgwipoiKbli6k322tcoFsxoIIxPDqW01SQGAgko4EzZi2BNv2w==}
+
+  '@expo-google-fonts/ephesis@0.4.2':
+    resolution: {integrity: sha512-YMMDSSgUe9kV5k/R/LWdMdaJqWoDTegBeF1tm3JuPxxG967d6bWYIi5ZdvMl+/w7/9qTjTtrT93XubdUVFgqBA==}
+
+  '@expo-google-fonts/libre-baskerville@0.4.3':
+    resolution: {integrity: sha512-EUd0gcmJ2C9ZzobNFe5ohFEOyfZFAy5rA8qluzl32VJCqdysRO1RjU2uxmK4g5EUxwCq4UHVHVzp3sPS7+Ubrw==}
 
   '@expo-google-fonts/material-symbols@0.4.50':
     resolution: {integrity: sha512-XNSgSfd+1p6wqRAzzhrckGngHJQ1/z+oCMdI5FN+x/VnDeMMFGkXsuRNPYcZTYYff1GwVwx4u6Gqnb30aALysw==}
@@ -7308,6 +7320,10 @@ snapshots:
     dependencies:
       tslib: 2.8.1
     optional: true
+
+  '@expo-google-fonts/ephesis@0.4.2': {}
+
+  '@expo-google-fonts/libre-baskerville@0.4.3': {}
 
   '@expo-google-fonts/material-symbols@0.4.50': {}
 

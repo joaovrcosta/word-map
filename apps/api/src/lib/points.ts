@@ -4,6 +4,7 @@ import { prisma } from "../prisma/client";
 
 export const POINTS_PER_SAVED_WORD = 10;
 export const POINTS_PER_CHALLENGE = CHALLENGE_XP_BASE;
+export const STORY_COMPLETION_POINTS = 20;
 
 export const RANKING_PERIODS = ["week", "month", "lifetime"] as const;
 export type RankingPeriod = (typeof RANKING_PERIODS)[number];
