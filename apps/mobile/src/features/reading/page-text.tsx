@@ -10,6 +10,7 @@ import {
 import { Text, type GestureResponderEvent } from "react-native";
 import { normalizePhrase, normalizeToken, splitTokenEdges } from "@word-map/shared";
 import { useTheme } from "../../theme";
+import { useReaderTheme } from "./reader-theme";
 
 /** Subset mínimo para highlights (evita import circular com word-menu). */
 export type PageFoundWord = { word: string };
@@ -154,10 +155,11 @@ export const ReadingPageText = memo(function ReadingPageText({
     };
   }, []);
   const theme = useTheme();
+  const reader = useReaderTheme();
   const lineHeight = Math.round(fontSize * 1.45);
   const baseStyle = {
     width,
-    color: theme.colors.foreground,
+    color: reader.foreground,
     fontFamily: theme.fonts.regular,
     fontSize,
     lineHeight,
@@ -327,10 +329,11 @@ export const PageSlot = memo(function PageSlot({
   header = null,
 }: PageSlotProps) {
   const theme = useTheme();
+  const reader = useReaderTheme();
   const lineHeight = Math.round(fontSize * 1.45);
   const textStyle = {
     width,
-    color: theme.colors.foreground,
+    color: reader.foreground,
     fontFamily: theme.fonts.regular,
     fontSize,
     lineHeight,
@@ -473,7 +476,7 @@ function WordToken({
   onPress: (anchor: WordAnchor) => void;
   onLongPress: (anchor: WordAnchor) => void;
 }) {
-  const theme = useTheme();
+  const reader = useReaderTheme();
   const coreRef = useRef<ComponentRef<typeof Text>>(null);
   const longTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const longFired = useRef(false);
@@ -540,13 +543,17 @@ function WordToken({
       <Text
         ref={coreRef}
         style={{
-          color: selected ? "#0b1f14" : inVault ? "#7ddea8" : theme.colors.foreground,
+          color: selected
+            ? reader.highlight.selectedFg
+            : inVault
+              ? reader.highlight.vaultFg
+              : reader.foreground,
           backgroundColor: selected
-            ? "#3dd68c"
+            ? reader.highlight.selectedBg
             : similar
-              ? "rgba(61,214,140,0.18)"
+              ? reader.highlight.similarBg
               : inVault
-                ? "rgba(36,200,117,0.28)"
+                ? reader.highlight.vaultBg
                 : "transparent",
           overflow: "hidden",
           paddingLeft: padLeft,

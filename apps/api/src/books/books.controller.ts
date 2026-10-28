@@ -9,7 +9,14 @@ import {
   Post,
   Put,
 } from "@nestjs/common";
-import { IsArray, IsInt, IsOptional, IsString } from "class-validator";
+import { Type } from "class-transformer";
+import {
+  IsArray,
+  IsInt,
+  IsOptional,
+  IsString,
+  ValidateNested,
+} from "class-validator";
 import { BooksService } from "./books.service";
 
 class BookDto {
@@ -38,12 +45,36 @@ class ReorderDto {
   chapterIds!: number[];
 }
 
+class ContentRevisionDto {
+  @IsInt()
+  contentLength!: number;
+
+  @IsString()
+  contentHash!: string;
+
+  @IsInt()
+  normalizationVersion!: number;
+}
+
 class ProgressDto {
+  @Type(() => Number)
   @IsInt()
   pageIndex!: number;
 
+  @Type(() => Number)
   @IsInt()
   paragraphIndex!: number;
+
+  /** Ausente = app antigo → API zera contentOffset. */
+  @IsOptional()
+  @Type(() => Number)
+  @IsInt()
+  contentOffset?: number | null;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => ContentRevisionDto)
+  contentRevision?: ContentRevisionDto;
 }
 
 @Controller("books")
@@ -140,6 +171,21 @@ export class ChaptersController {
     @Param("id", ParseIntPipe) id: number,
     @Body() body: ProgressDto
   ) {
-    return this.books.saveProgress(id, body.pageIndex, body.paragraphIndex);
+    const input: {
+      pageIndex: number;
+      paragraphIndex: number;
+      contentOffset?: number | null;
+      contentRevision?: ContentRevisionDto | null;
+    } = {
+      pageIndex: body.pageIndex,
+      paragraphIndex: body.paragraphIndex,
+    };
+    if (Object.prototype.hasOwnProperty.call(body, "contentOffset")) {
+      input.contentOffset = body.contentOffset ?? null;
+    }
+    if (body.contentRevision) {
+      input.contentRevision = body.contentRevision;
+    }
+    return this.books.saveProgress(id, input);
   }
 }

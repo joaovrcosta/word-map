@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
+  Alert,
   InteractionManager,
   KeyboardAvoidingView,
   Modal,
+  PixelRatio,
   Platform,
   Pressable,
   ScrollView,
@@ -13,26 +15,38 @@ import {
   type NativeSyntheticEvent,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { StatusBar } from "expo-status-bar";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { BookArt, bookAuthor } from "../../../../../src/features/books/cover";
 import {
+  buildReadingFitKey,
+  chapterContentRevision,
+  contentOffsetForPageAnchor,
+  contentOffsetFromSlice,
   estimateWrappedTextHeight,
   formatChapterContent,
-  normalizeReadingPosition,
+  isPhraseName,
   normalizeToken,
   paginateReadingToFit,
+  resolvePageByContentOffset,
   type ReadingPage,
 } from "@word-map/shared";
 import {
   EMPTY_FOUND,
   findSavedReadingWord,
+  makeReaderStyles,
   MAX_RANGE_WORDS,
   nextRangeIndexes,
   PageSlot,
+  ReaderThemeProvider,
   ReadingWordMenu,
   spanFromIndexes,
+  TextSettingsSheet,
   tokenizePageText,
+  useReaderTheme,
+  useReadingPreferences,
+  useResolvedReaderTheme,
   type FoundTextWord,
   type WordAnchor,
 } from "../../../../../src/features/reading";
@@ -40,18 +54,54 @@ import { useStudyHeartbeat } from "../../../../../src/features/study/use-study-h
 import { speakPassage, speakWord, stopSpeech } from "../../../../../src/speech";
 import { useSession } from "../../../../../src/session";
 import { shell, useTheme } from "../../../../../src/theme";
-import { type ChapterDetail, type ReadingPosition, type Vault } from "../../../../../src/types";
+import {
+  type ChapterDetail,
+  type ContentRevision,
+  type ReadingPosition,
+  type Vault,
+} from "../../../../../src/types";
 import { ErrorText, Field, Heading, Loading, PrimaryButton, Screen } from "../../../../../src/ui";
 
-const FONT_SIZES = [18, 22, 26];
 const LEVEL_COLORS = ["#ff4b4b", "#ff9600", "#ffc800", "#24c875"];
 const LEVEL_TEXT = ["#ffffff", "#ffffff", "#3c3c3c", "#ffffff"];
 const WINDOW_RADIUS = 1;
 const WORDS_DEFER_MS = 300;
-/** Reserva inicial do ReadingIntro (capa + título) até o onLayout real. */
-const INTRO_HEIGHT_GUESS = 148;
 /** Folga contra padding de highlights / arredondamento da estimativa. */
 const FIT_HEIGHT_MARGIN = 28;
+const FIT_LAYOUT_DEBOUNCE_MS = 100;
+/** Reserva fixa da intro só na 1ª página (sem onLayout — evita jitter de fit). */
+const INTRO_RESERVE_PX = 148;
+
+type BootstrapPhase =
+  | "loadingPrefs"
+  | "loadingChapter"
+  | "measuring"
+  | "fitting"
+  | "restoring"
+  | "settled";
+
+function pendingFoundWord(clean: string): FoundTextWord {
+  return {
+    word: clean,
+    vaultInfo: [
+      {
+        id: 0,
+        name: "",
+        words: [
+          {
+            id: -1,
+            name: clean,
+            translations: [],
+            grammaticalClass: "noun",
+            confidence: 1,
+            notes: null,
+            vaultId: 0,
+          },
+        ],
+      },
+    ],
+  };
+}
 
 function softTapHaptic() {
   if (Platform.OS === "web") return;
@@ -60,8 +110,13 @@ function softTapHaptic() {
 
 export default function ChapterReaderScreen() {
   const theme = useTheme();
+  const { ready: prefsReady, prefs, patchPrefs } = useReadingPreferences();
+  const readerTheme = useResolvedReaderTheme(prefs?.theme ?? "dark");
+  const readerStyles = useMemo(() => makeReaderStyles(readerTheme), [readerTheme]);
   const { height: windowHeight } = useWindowDimensions();
   const { request } = useSession();
+  const requestRef = useRef(request);
+  requestRef.current = request;
   const params = useLocalSearchParams<{ id: string; chapterId: string }>();
   const chapterId = Number(params.chapterId);
   const sheetMaxHeight = Math.round(windowHeight * 0.86);
@@ -72,21 +127,23 @@ export default function ChapterReaderScreen() {
   const [pageIndex, setPageIndex] = useState(0);
   const [windowIndex, setWindowIndex] = useState(0);
   const [pages, setPages] = useState<ReadingPage[]>([]);
-  const [hydrated, setHydrated] = useState(false);
-  const [fontSize, setFontSize] = useState(FONT_SIZES[0]);
+  const [bootstrapPhase, setBootstrapPhase] = useState<BootstrapPhase>("loadingPrefs");
+  const fontSize = prefs?.fontSize ?? 18;
   const [width, setWidth] = useState(0);
   const [frameHeight, setFrameHeight] = useState(0);
-  const [introHeight, setIntroHeight] = useState(INTRO_HEIGHT_GUESS);
-  const [settled, setSettled] = useState(false);
   const [foundWords, setFoundWords] = useState<FoundTextWord[]>([]);
   const [bookWords, setBookWords] = useState<BookWord[]>([]);
   const [wordsOpen, setWordsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [listening, setListening] = useState(false);
   const [vaults, setVaults] = useState<Vault[]>([]);
   const [editing, setEditing] = useState(false);
+  const [pendingAutoSave, setPendingAutoSave] = useState<string | null>(null);
+  const autoSaveInFlight = useRef(new Set<string>());
+  const settled = bootstrapPhase === "settled";
   const { markInteraction } = useStudyHeartbeat({
     kind: "reading",
-    enabled: hydrated && settled && !editing,
+    enabled: settled && !editing,
   });
   useEffect(() => {
     markInteraction();
@@ -111,20 +168,38 @@ export default function ChapterReaderScreen() {
   const advancing = useRef(false);
   const openedAt = useRef(0);
   const wordsRequestId = useRef(0);
-  const progressAnchor = useRef({ paragraphIndex: 0, pageIndex: 0 });
+  /** Âncora estável: só muda em restore inicial ou virada do usuário. */
+  const anchorRef = useRef({ contentOffset: 0 });
+  const contentRevisionRef = useRef<ContentRevision | null>(null);
+  const movedRef = useRef(false);
+  const settledRef = useRef(false);
   const fitKeyRef = useRef("");
+  const fitCacheRef = useRef(new Map<string, ReadingPage[]>());
+  const layoutDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingLayoutRef = useRef<{ width: number; height: number } | null>(null);
+  const lastLayoutKeyRef = useRef("");
+  const stableLayoutCountRef = useRef(0);
+  const saveInFlightRef = useRef(false);
+  const saveQueuedRef = useRef<{
+    pageIndex: number;
+    paragraphIndex: number;
+    contentOffset: number;
+  } | null>(null);
+  const chapterContentRef = useRef("");
   pagesRef.current = pages;
   widthRef.current = width;
+  settledRef.current = settled;
 
   const lineHeight = Math.round(fontSize * 1.5);
 
   const buildFittedPages = useCallback(
-    (content: string, pageWidth: number, pageHeight: number, intro: number): ReadingPage[] => {
+    (content: string, pageWidth: number, pageHeight: number): ReadingPage[] => {
       if (!content.trim() || pageWidth < 40 || pageHeight < 80) {
         return [{ text: content.trim() ? content : "", wordCount: 0, slices: [] }];
       }
+      // Intro só na 1ª página, com reserva fixa (sem medir de novo a cada layout).
       return paginateReadingToFit(content, (sample, pageOrdinal) => {
-        const reserve = pageOrdinal === 0 ? intro : 0;
+        const reserve = pageOrdinal === 0 ? INTRO_RESERVE_PX : 0;
         const budget = pageHeight - reserve - FIT_HEIGHT_MARGIN;
         if (budget < lineHeight * 2) return false;
         return estimateWrappedTextHeight(sample, pageWidth, fontSize, lineHeight) <= budget;
@@ -133,115 +208,229 @@ export default function ChapterReaderScreen() {
     [fontSize, lineHeight]
   );
 
-  const applyPages = useCallback(
-    (nextPages: ReadingPage[], preferAnchor = true) => {
-      const anchor = preferAnchor
-        ? progressAnchor.current
-        : {
-            paragraphIndex: pagesRef.current[pageIndexRef.current]?.slices[0]?.paragraphIndex ?? 0,
-            pageIndex: pageIndexRef.current,
-          };
-      const position = normalizeReadingPosition(
-        nextPages,
-        anchor.paragraphIndex,
-        anchor.pageIndex
-      );
-      progressAnchor.current = {
-        paragraphIndex: position.paragraphIndex,
-        pageIndex: position.pageIndex,
-      };
-      pageIndexRef.current = position.pageIndex;
-      windowIndexRef.current = position.pageIndex;
-      setPageIndex(position.pageIndex);
-      setWindowIndex(position.pageIndex);
+  const jumpToOffset = useCallback(
+    (nextPages: ReadingPage[], content: string, offset: number) => {
+      const nextIndex = resolvePageByContentOffset(nextPages, content, offset);
+      pageIndexRef.current = nextIndex;
+      windowIndexRef.current = nextIndex;
+      setPageIndex(nextIndex);
+      setWindowIndex(nextIndex);
       setPages(nextPages);
+      requestAnimationFrame(() => {
+        const w = widthRef.current;
+        if (w > 0) scrollRef.current?.scrollTo({ x: nextIndex * w, animated: false });
+      });
     },
     []
   );
 
-  const syncPage = useCallback((next: number, clearSelection = true) => {
-    const clamped = Math.min(Math.max(next, 0), Math.max(pagesRef.current.length - 1, 0));
-    if (clearSelection && clamped !== pageIndexRef.current) {
-      setSelection(null);
-      setRangeIndexes(null);
-      setRangeAnchor(null);
-    }
-    pageIndexRef.current = clamped;
-    setPageIndex(clamped);
-    const page = pagesRef.current[clamped];
-    progressAnchor.current = {
-      paragraphIndex: page?.slices[0]?.paragraphIndex ?? progressAnchor.current.paragraphIndex,
-      pageIndex: clamped,
-    };
-    if (windowIndexRef.current !== clamped) {
-      windowIndexRef.current = clamped;
-      setWindowIndex(clamped);
-    }
-  }, []);
+  const saveProgress = useCallback(
+    async (force = false) => {
+      if (!force && !settledRef.current) return;
+      if (!force && !movedRef.current) return;
+      const content = chapterContentRef.current;
+      if (!content && !contentRevisionRef.current) return;
+      const revision = contentRevisionRef.current ?? chapterContentRevision(content);
+      const idx = pageIndexRef.current;
+      const page = pagesRef.current[idx];
+      const paragraphIndex = page?.slices[0]?.paragraphIndex ?? 0;
+      const contentOffset = contentOffsetForPageAnchor(content, pagesRef.current, idx);
+      anchorRef.current = { contentOffset };
+      const payload = { pageIndex: idx, paragraphIndex, contentOffset };
+
+      if (saveInFlightRef.current) {
+        saveQueuedRef.current = payload;
+        return;
+      }
+      saveInFlightRef.current = true;
+      try {
+        let next: typeof payload | null = payload;
+        while (next) {
+          const body = next;
+          next = null;
+          saveQueuedRef.current = null;
+          try {
+            await request(`/chapters/${chapterId}/progress`, {
+              method: "PUT",
+              body: JSON.stringify({
+                ...body,
+                contentRevision: revision,
+              }),
+            });
+          } catch {
+            // ignore network errors; next turn retries
+          }
+          next = saveQueuedRef.current;
+        }
+      } finally {
+        saveInFlightRef.current = false;
+      }
+    },
+    [chapterId, request]
+  );
+
+  const syncPage = useCallback(
+    (next: number, clearSelection = true, fromUser = false) => {
+      const clamped = Math.min(Math.max(next, 0), Math.max(pagesRef.current.length - 1, 0));
+      const changed = clamped !== pageIndexRef.current;
+      if (clearSelection && changed) {
+        setSelection(null);
+        setRangeIndexes(null);
+        setRangeAnchor(null);
+      }
+      pageIndexRef.current = clamped;
+      setPageIndex(clamped);
+      if (windowIndexRef.current !== clamped) {
+        windowIndexRef.current = clamped;
+        setWindowIndex(clamped);
+      }
+      if (fromUser && changed) {
+        const content = chapterContentRef.current;
+        const offset = contentOffsetForPageAnchor(content, pagesRef.current, clamped);
+        anchorRef.current = { contentOffset: offset };
+        movedRef.current = true;
+        void saveProgress();
+      }
+    },
+    [saveProgress]
+  );
+
+  const runFit = useCallback(
+    (pageWidth: number, pageHeight: number) => {
+      const content = chapterContentRef.current;
+      if (!content || pageWidth < 40 || pageHeight < 80) return;
+      const fontScale = PixelRatio.getFontScale();
+      const key = buildReadingFitKey(pageWidth, pageHeight, fontSize, fontScale);
+      if (fitKeyRef.current === key && pagesRef.current.length > 0) {
+        setBootstrapPhase("settled");
+        return;
+      }
+
+      setBootstrapPhase("fitting");
+      let nextPages = fitCacheRef.current.get(key);
+      if (!nextPages) {
+        nextPages = buildFittedPages(content, pageWidth, pageHeight);
+        fitCacheRef.current.set(key, nextPages);
+      }
+      fitKeyRef.current = key;
+      setBootstrapPhase("restoring");
+      // Sempre por contentOffset — nunca pageIndex absoluto (8 num fit vira 3 noutro).
+      jumpToOffset(nextPages, content, anchorRef.current.contentOffset);
+      setBootstrapPhase("settled");
+    },
+    [buildFittedPages, fontSize, jumpToOffset]
+  );
 
   useEffect(() => {
+    if (!prefsReady) {
+      setBootstrapPhase("loadingPrefs");
+      return;
+    }
     let cancelled = false;
-    setSettled(false);
-    setHydrated(false);
+    setBootstrapPhase("loadingChapter");
     setMissing(false);
     setError(null);
     setFoundWords([]);
     setBookWords([]);
     setPages([]);
-    setIntroHeight(INTRO_HEIGHT_GUESS);
+    setPageIndex(0);
+    pageIndexRef.current = 0;
     fitKeyRef.current = "";
+    fitCacheRef.current.clear();
+    lastLayoutKeyRef.current = "";
+    stableLayoutCountRef.current = 0;
+    movedRef.current = false;
     setSelection(null);
     setRangeIndexes(null);
     setRangeAnchor(null);
+    setPendingAutoSave(null);
+    autoSaveInFlight.current.clear();
     if (__DEV__) console.time("chapter-first-paint");
     (async () => {
       try {
         const [detail, progress] = await Promise.all([
-          request<ChapterDetail | null>(`/chapters/${chapterId}`),
-          request<ReadingPosition | null>(`/chapters/${chapterId}/progress`),
+          requestRef.current<ChapterDetail | null>(`/chapters/${chapterId}`),
+          requestRef.current<ReadingPosition | null>(`/chapters/${chapterId}/progress`),
         ]);
         if (cancelled) return;
         if (!detail) {
           setMissing(true);
           setPages([]);
           setChapter(null);
-          setHydrated(true);
+          setBootstrapPhase("settled");
           return;
         }
-        progressAnchor.current = {
-          paragraphIndex: progress?.paragraphIndex ?? 0,
-          pageIndex: progress?.pageIndex ?? 0,
-        };
+        const revision = detail.contentRevision ?? chapterContentRevision(detail.content);
+        contentRevisionRef.current = revision;
+        chapterContentRef.current = detail.content;
+        const rawOffset = progress?.contentOffset;
+        let offset = 0;
+        if (rawOffset != null && rawOffset > 0 && revision.contentLength > 0) {
+          offset = Math.min(rawOffset, revision.contentLength);
+        } else if ((progress?.paragraphIndex ?? 0) > 0 || (progress?.pageIndex ?? 0) > 0) {
+          // Legado sem offset: âncora no início do parágrafo salvo (estável entre fits).
+          // Nunca usar pageIndex cru — 8/135 vira 3 noutro layout.
+          offset = contentOffsetFromSlice(
+            detail.content,
+            progress?.paragraphIndex ?? 0,
+            0
+          );
+        }
+        anchorRef.current = { contentOffset: offset };
+        pageIndexRef.current = 0;
+        setPageIndex(0);
         setChapter(detail);
-        setHydrated(true);
+        setBootstrapPhase("measuring");
         if (__DEV__) console.timeEnd("chapter-first-paint");
       } catch (cause) {
         if (cancelled) return;
         setError(cause instanceof Error ? cause.message : "Não foi possível abrir o capítulo");
-        setHydrated(true);
+        setBootstrapPhase("settled");
         if (__DEV__) console.timeEnd("chapter-first-paint");
       }
     })();
     return () => {
       cancelled = true;
       wordsRequestId.current += 1;
+      if (layoutDebounceRef.current) clearTimeout(layoutDebounceRef.current);
     };
-  }, [chapterId, request]);
+    // Só chapterId/prefs — `request` estável via token; evitar reload mid-leitura.
+  }, [chapterId, prefsReady]);
+
+  // Só a flag "já pode medir" — não re-disparar fit só porque settled mudou.
+  const canMeasure =
+    bootstrapPhase === "measuring" || bootstrapPhase === "settled";
 
   useEffect(() => {
-    if (!hydrated || !chapter || width < 40 || frameHeight < 80) return;
-    const key = `${chapter.id}:${width}x${frameHeight}:${fontSize}:${introHeight}`;
-    if (fitKeyRef.current === key) return;
-    fitKeyRef.current = key;
-    const nextPages = buildFittedPages(chapter.content, width, frameHeight, introHeight);
-    applyPages(nextPages, true);
-  }, [hydrated, chapter, width, frameHeight, fontSize, introHeight, buildFittedPages, applyPages]);
-
-  useEffect(() => {
-    if (!hydrated || !width || pages.length === 0) return;
-    scrollRef.current?.scrollTo({ x: pageIndexRef.current * width, animated: false });
-    setSettled(true);
-  }, [hydrated, width, pages]);
+    if (!canMeasure || !chapter || width < 40 || frameHeight < 80) return;
+    pendingLayoutRef.current = { width, height: frameHeight };
+    if (layoutDebounceRef.current) clearTimeout(layoutDebounceRef.current);
+    layoutDebounceRef.current = setTimeout(() => {
+      const pending = pendingLayoutRef.current;
+      if (!pending) return;
+      const fontScale = PixelRatio.getFontScale();
+      const key = buildReadingFitKey(pending.width, pending.height, fontSize, fontScale);
+      // Exige 2 leituras iguais do layout antes do 1º fit.
+      if (key === lastLayoutKeyRef.current) {
+        stableLayoutCountRef.current += 1;
+      } else {
+        lastLayoutKeyRef.current = key;
+        stableLayoutCountRef.current = 1;
+      }
+      if (pagesRef.current.length === 0 && stableLayoutCountRef.current < 2) {
+        layoutDebounceRef.current = setTimeout(() => {
+          const again = pendingLayoutRef.current;
+          if (!again) return;
+          runFit(again.width, again.height);
+        }, FIT_LAYOUT_DEBOUNCE_MS);
+        return;
+      }
+      runFit(pending.width, pending.height);
+    }, FIT_LAYOUT_DEBOUNCE_MS);
+    return () => {
+      if (layoutDebounceRef.current) clearTimeout(layoutDebounceRef.current);
+    };
+  }, [canMeasure, chapter, width, frameHeight, fontSize, runFit]);
 
   const reloadWords = useCallback(
     async (requestId?: number) => {
@@ -305,17 +494,26 @@ export default function ChapterReaderScreen() {
   }, [pageIndex, fontSize]);
 
   useEffect(() => {
-    if (!settled || !chapter) return;
-    const handle = setTimeout(() => {
-      const page = pages[pageIndex];
-      const paragraphIndex = page?.slices[0]?.paragraphIndex ?? 0;
-      void request(`/chapters/${chapterId}/progress`, {
-        method: "PUT",
-        body: JSON.stringify({ pageIndex, paragraphIndex }),
-      }).catch(() => undefined);
-    }, 400);
-    return () => clearTimeout(handle);
-  }, [chapter, chapterId, pageIndex, pages, request, settled]);
+    return () => {
+      if (!movedRef.current) return;
+      // Garante página a partir do scroll visual, não só do último syncPage.
+      const w = widthRef.current;
+      if (w > 0 && scrollRef.current) {
+        // pageIndexRef já deve estar certo; reforça âncora antes do flush.
+        const content = chapterContentRef.current;
+        if (content && pagesRef.current.length > 0) {
+          anchorRef.current = {
+            contentOffset: contentOffsetForPageAnchor(
+              content,
+              pagesRef.current,
+              pageIndexRef.current
+            ),
+          };
+        }
+      }
+      void saveProgress(true);
+    };
+  }, [saveProgress]);
 
   const listedWords = useMemo(() => {
     const merged = new Map<number, BookWord>();
@@ -332,15 +530,36 @@ export default function ChapterReaderScreen() {
     return [...merged.values()];
   }, [bookWords, foundWords]);
 
-  const selectWord = useCallback((clean: string, occurrence: number, anchor: WordAnchor, full = false) => {
-    openedAt.current = Date.now();
-    keepListening.current = false;
-    setListening(false);
-    setRangeIndexes(null);
-    setRangeAnchor(null);
-    setSelection({ clean, occurrence, anchor, full });
-    speakWord(clean);
-  }, []);
+  const selectWord = useCallback(
+    (clean: string, occurrence: number, anchor: WordAnchor, full = false) => {
+      openedAt.current = Date.now();
+      keepListening.current = false;
+      setListening(false);
+      setRangeIndexes(null);
+      setRangeAnchor(null);
+
+      const normalized = normalizeToken(clean) || clean;
+      const phrase = isPhraseName(clean) || normalized.includes(" ");
+      const already = findSavedReadingWord(foundWords, vaults, clean);
+      if (
+        prefs.autoSaveWords &&
+        !phrase &&
+        !already &&
+        !autoSaveInFlight.current.has(normalized)
+      ) {
+        autoSaveInFlight.current.add(normalized);
+        setPendingAutoSave(normalized);
+        setFoundWords((current) => {
+          if (current.some((item) => normalizeToken(item.word) === normalized)) return current;
+          return [...current, pendingFoundWord(clean)];
+        });
+      }
+
+      setSelection({ clean, occurrence, anchor, full });
+      speakWord(clean, { voiceId: prefs.voiceId });
+    },
+    [foundWords, prefs.autoSaveWords, prefs.voiceId, vaults]
+  );
 
   const beginRange = useCallback(
     (clean: string, occurrence: number, anchor: WordAnchor, tokenIndex: number) => {
@@ -351,9 +570,30 @@ export default function ChapterReaderScreen() {
       setRangeIndexes([tokenIndex]);
       setRangeAnchor(anchor);
       softTapHaptic();
-      speakWord(clean);
+      speakWord(clean, { voiceId: prefs.voiceId });
     },
-    []
+    [prefs.voiceId]
+  );
+
+  const closeWordMenu = useCallback(
+    (info?: { dirty: boolean; materialized: boolean }) => {
+      if (pendingAutoSave && !info?.materialized) {
+        const pending = pendingAutoSave;
+        setFoundWords((current) =>
+          current.filter((item) => {
+            if (normalizeToken(item.word) !== pending) return true;
+            const id = item.vaultInfo[0]?.words[0]?.id ?? 0;
+            return id > 0;
+          })
+        );
+        autoSaveInFlight.current.delete(pending);
+      } else if (pendingAutoSave && info?.materialized) {
+        autoSaveInFlight.current.delete(pendingAutoSave);
+      }
+      setPendingAutoSave(null);
+      setSelection(null);
+    },
+    [pendingAutoSave]
   );
 
   const toggleRange = useCallback((tokenIndex: number, _clean: string, _occurrence: number, anchor: WordAnchor) => {
@@ -405,23 +645,33 @@ export default function ChapterReaderScreen() {
       return;
     }
     setListening(true);
-    speakPassage(text, () => {
-      if (!keepListening.current) {
-        setListening(false);
-        return;
-      }
-      const next = pageIndexRef.current + 1;
-      const frame = widthRef.current;
-      if (next >= pagesRef.current.length || !frame) {
-        keepListening.current = false;
-        setListening(false);
-        return;
-      }
-      advancing.current = true;
-      syncPage(next, false);
-      scrollRef.current?.scrollTo({ x: next * frame, animated: true });
-    });
-  }, [syncPage]);
+    speakPassage(
+      text,
+      () => {
+        if (!keepListening.current) {
+          setListening(false);
+          return;
+        }
+        const next = pageIndexRef.current + 1;
+        const frame = widthRef.current;
+        if (next >= pagesRef.current.length || !frame) {
+          keepListening.current = false;
+          setListening(false);
+          return;
+        }
+        advancing.current = true;
+        syncPage(next, false, true);
+        scrollRef.current?.scrollTo({ x: next * frame, animated: true });
+      },
+      { rate: prefs.speechRate, voiceId: prefs.voiceId }
+    );
+  }, [prefs.speechRate, prefs.voiceId, syncPage]);
+
+  const restartListeningIfNeeded = useCallback(() => {
+    if (!keepListening.current && !listening) return;
+    keepListening.current = true;
+    playCurrentPage();
+  }, [listening, playCurrentPage]);
 
   const toggleListen = () => {
     if (keepListening.current) {
@@ -462,19 +712,23 @@ export default function ChapterReaderScreen() {
   };
 
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!settled || !width) return;
+    if (!settledRef.current || !width) return;
     const next = Math.round(event.nativeEvent.contentOffset.x / width);
     const clamped = Math.min(Math.max(next, 0), Math.max(pagesRef.current.length - 1, 0));
     if (windowIndexRef.current !== clamped) {
       windowIndexRef.current = clamped;
       setWindowIndex(clamped);
     }
+    // Atualiza âncora durante o gesto — não esperar só o momentumEnd (Android falha).
+    if (clamped !== pageIndexRef.current) {
+      syncPage(clamped, true, true);
+    }
   };
 
   const onScrollEnd = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!settled || !width) return;
+    if (!width) return;
     const next = Math.round(event.nativeEvent.contentOffset.x / width);
-    syncPage(next);
+    syncPage(next, true, true);
   };
 
   const saved = selection ? findSavedReadingWord(foundWords, vaults, selection.clean) : null;
@@ -513,16 +767,27 @@ export default function ChapterReaderScreen() {
       });
       const nextContent = formatChapterContent(updated.content ?? content);
       const nextTitle = updated.title ?? title;
+      const revision = chapterContentRevision(nextContent);
+      contentRevisionRef.current = revision;
+      chapterContentRef.current = nextContent;
+      anchorRef.current = { contentOffset: 0 };
       fitKeyRef.current = "";
+      fitCacheRef.current.clear();
+      lastLayoutKeyRef.current = "";
+      stableLayoutCountRef.current = 0;
+      movedRef.current = true;
       setChapter((current) =>
-        current ? { ...current, title: nextTitle, content: nextContent } : current
+        current
+          ? {
+              ...current,
+              title: nextTitle,
+              content: nextContent,
+              contentRevision: revision,
+            }
+          : current
       );
       if (width >= 40 && frameHeight >= 80) {
-        const nextPages = buildFittedPages(nextContent, width, frameHeight, introHeight);
-        applyPages(nextPages, false);
-        requestAnimationFrame(() => {
-          scrollRef.current?.scrollTo({ x: pageIndexRef.current * width, animated: false });
-        });
+        runFit(width, frameHeight);
       }
       setEditing(false);
     } catch (cause) {
@@ -532,47 +797,62 @@ export default function ChapterReaderScreen() {
     }
   };
 
-  if (!hydrated) return <Loading />;
+  if (!prefsReady || bootstrapPhase === "loadingPrefs" || bootstrapPhase === "loadingChapter") {
+    return <Loading />;
+  }
 
-  const progress = pages.length <= 1 ? 1 : pageIndex / (pages.length - 1);
+  const contentLength =
+    chapter?.contentRevision?.contentLength ?? chapter?.content.length ?? 0;
+  const progressOffset =
+    chapter && pages.length > 0
+      ? contentOffsetForPageAnchor(chapter.content, pages, pageIndex)
+      : 0;
+  const progress =
+    contentLength > 0
+      ? Math.min(1, Math.max(0, progressOffset / contentLength))
+      : pages.length <= 1
+        ? 1
+        : pageIndex / Math.max(pages.length - 1, 1);
 
   return (
-    <Screen safeBottom>
+    <ReaderThemeProvider mode={prefs.theme}>
+    <Screen safeBottom backgroundColor={readerTheme.background}>
+      <StatusBar style={readerTheme.statusBarStyle === "light" ? "light" : "dark"} />
       <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
         <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button" accessibilityLabel="Fechar">
-          <Ionicons name="close" size={26} color={theme.colors.foreground} />
+          <Ionicons name="close" size={26} color={readerTheme.icon} />
         </Pressable>
-        <View style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: theme.colors.border }}>
+        <View style={[{ flex: 1, height: 4, borderRadius: 2 }, readerStyles.progressTrack]}>
           <View
-            style={{
-              height: 4,
-              borderRadius: 2,
-              width: `${Math.round(progress * 100)}%`,
-              backgroundColor: theme.colors.green,
-            }}
+            style={[
+              {
+                height: 4,
+                borderRadius: 2,
+                width: `${Math.round(progress * 100)}%`,
+              },
+              readerStyles.progressFill,
+            ]}
           />
         </View>
         {chapter?.canEdit ? (
           <Pressable onPress={openEdit} hitSlop={10} accessibilityRole="button" accessibilityLabel="Editar capítulo">
-            <Ionicons name="create-outline" size={22} color={theme.colors.foreground} />
+            <Ionicons name="create-outline" size={22} color={readerTheme.icon} />
           </Pressable>
         ) : null}
         <Pressable
-          onPress={() =>
-            setFontSize((current) => FONT_SIZES[(FONT_SIZES.indexOf(current) + 1) % FONT_SIZES.length])
-          }
+          onPress={() => setSettingsOpen(true)}
           hitSlop={10}
           accessibilityRole="button"
-          accessibilityLabel="Tamanho do texto"
+          accessibilityLabel="Configurações do texto"
         >
-          <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 18, letterSpacing: -1 }}>
+          <Text style={{ color: readerTheme.foreground, fontFamily: theme.fonts.bold, fontSize: 18, letterSpacing: -1 }}>
             TT
           </Text>
         </Pressable>
       </View>
       {error ? <ErrorText>{error}</ErrorText> : null}
       {missing ? (
-        <Text style={{ marginTop: 24, color: theme.colors.mutedForeground, fontFamily: theme.fonts.regular }}>
+        <Text style={{ marginTop: 24, color: readerTheme.muted, fontFamily: theme.fonts.regular }}>
           Capítulo não encontrado.
         </Text>
       ) : (
@@ -596,6 +876,7 @@ export default function ChapterReaderScreen() {
               showsHorizontalScrollIndicator={false}
               onScroll={onScroll}
               onMomentumScrollEnd={onScrollEnd}
+              onScrollEndDrag={onScrollEnd}
               onScrollBeginDrag={() => {
                 dismissFromScroll();
                 if (!keepListening.current) return;
@@ -614,20 +895,11 @@ export default function ChapterReaderScreen() {
                 return (
                   <View key={index} style={{ width, height: frameHeight, overflow: "hidden" }}>
                     {index === 0 && chapter ? (
-                      <View
-                        onLayout={(event) => {
-                          const next = Math.ceil(event.nativeEvent.layout.height);
-                          setIntroHeight((current) =>
-                            Math.abs(current - next) <= 2 ? current : next
-                          );
-                        }}
-                      >
-                        <ReadingIntro
-                          bookTitle={chapter.bookTitle}
-                          chapterTitle={chapter.title}
-                          bookId={chapter.bookId}
-                        />
-                      </View>
+                      <ReadingIntro
+                        bookTitle={chapter.bookTitle}
+                        chapterTitle={chapter.title}
+                        bookId={chapter.bookId}
+                      />
                     ) : null}
                     <PageSlot
                       text={page.text}
@@ -646,7 +918,7 @@ export default function ChapterReaderScreen() {
                 );
               })}
             </ScrollView>
-          ) : hydrated && chapter ? (
+          ) : chapter ? (
             <Loading />
           ) : null}
         </View>
@@ -657,22 +929,24 @@ export default function ChapterReaderScreen() {
             style={{
               marginTop: 8,
               borderRadius: 20,
-              backgroundColor: shell.tabBar,
+              backgroundColor: readerTheme.surface,
               paddingHorizontal: 14,
               paddingVertical: 12,
               flexDirection: "row",
               alignItems: "center",
               gap: 10,
+              borderWidth: 1,
+              borderColor: readerTheme.border,
             }}
           >
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
                 numberOfLines={1}
-                style={{ color: shell.foreground, fontFamily: theme.fonts.bold, fontSize: 15 }}
+                style={{ color: readerTheme.foreground, fontFamily: theme.fonts.bold, fontSize: 15 }}
               >
                 {rangeSpan || "…"}
               </Text>
-              <Text style={{ marginTop: 2, color: shell.muted, fontFamily: theme.fonts.medium, fontSize: 12 }}>
+              <Text style={{ marginTop: 2, color: readerTheme.muted, fontFamily: theme.fonts.medium, fontSize: 12 }}>
                 {rangeIndexes.length}/{MAX_RANGE_WORDS} · toque nas vizinhas
               </Text>
             </View>
@@ -683,10 +957,12 @@ export default function ChapterReaderScreen() {
                 paddingHorizontal: 12,
                 paddingVertical: 10,
                 borderRadius: 999,
-                backgroundColor: shell.chip,
+                backgroundColor: readerTheme.menu.chip,
               }}
             >
-              <Text style={{ color: shell.chipText, fontFamily: theme.fonts.semibold, fontSize: 13 }}>Cancelar</Text>
+              <Text style={{ color: readerTheme.menu.chipText, fontFamily: theme.fonts.semibold, fontSize: 13 }}>
+                Cancelar
+              </Text>
             </Pressable>
             <Pressable
               onPress={confirmRange}
@@ -714,10 +990,10 @@ export default function ChapterReaderScreen() {
               <Ionicons
                 name={listening ? "pause" : "headset-outline"}
                 size={26}
-                color={listening ? theme.colors.green : theme.colors.foreground}
+                color={listening ? readerTheme.accent : readerTheme.icon}
               />
             </Pressable>
-            <Text style={{ color: theme.colors.mutedForeground, fontFamily: theme.fonts.semibold }}>
+            <Text style={{ color: readerTheme.muted, fontFamily: theme.fonts.semibold }}>
               {pageIndex + 1} / {pages.length}
             </Text>
             <Pressable
@@ -728,7 +1004,7 @@ export default function ChapterReaderScreen() {
               style={{ flex: 1, alignItems: "flex-end", minWidth: 56 }}
             >
               <View>
-                <Ionicons name="list-outline" size={26} color={theme.colors.foreground} />
+                <Ionicons name="list-outline" size={26} color={readerTheme.icon} />
                 <View
                   style={{
                     position: "absolute",
@@ -740,7 +1016,7 @@ export default function ChapterReaderScreen() {
                     paddingHorizontal: 4,
                     alignItems: "center",
                     justifyContent: "center",
-                    backgroundColor: theme.colors.green,
+                    backgroundColor: readerTheme.accent,
                   }}
                 >
                   <Text style={{ color: "#ffffff", fontFamily: theme.fonts.bold, fontSize: 10 }}>
@@ -761,6 +1037,13 @@ export default function ChapterReaderScreen() {
           selectWord(normalizeToken(word.name) || word.name, 0, { x: 0, y: 0, width: 0, height: 0 }, true);
         }}
       />
+      <TextSettingsSheet
+        visible={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        prefs={prefs}
+        onChange={patchPrefs}
+        onSpeechSettingsCommit={restartListeningIfNeeded}
+      />
       {chapter && selection ? (
         <ReadingWordMenu
           clean={selection.clean}
@@ -770,12 +1053,22 @@ export default function ChapterReaderScreen() {
           pages={pages}
           pageIndex={pageIndex}
           bookTitle={chapter.bookTitle}
-          saved={saved}
+          saved={saved?.id && saved.id > 0 ? saved : null}
           vaults={vaults}
           full={selection.full}
-          onClose={() => setSelection(null)}
+          voiceId={prefs.voiceId}
+          onClose={() => closeWordMenu()}
+          onCloseSession={closeWordMenu}
           onChanged={async () => {
-            await reloadWords(++wordsRequestId.current);
+            if (pendingAutoSave) {
+              autoSaveInFlight.current.delete(pendingAutoSave);
+              setPendingAutoSave(null);
+            }
+            try {
+              await reloadWords(++wordsRequestId.current);
+            } catch {
+              Alert.alert("Erro", "Não foi possível atualizar as palavras salvas.");
+            }
           }}
         />
       ) : null}
@@ -834,6 +1127,7 @@ export default function ChapterReaderScreen() {
         </KeyboardAvoidingView>
       </Modal>
     </Screen>
+    </ReaderThemeProvider>
   );
 }
 
@@ -846,7 +1140,7 @@ function wordsSavedInChapter(found: FoundTextWord[]): BookWord[] {
     const vault = item.vaultInfo[0];
     const saved =
       vault?.words.find((entry) => normalizeToken(entry.name) === clean) ?? vault?.words[0];
-    if (!saved) continue;
+    if (!saved || saved.id <= 0) continue;
     seen.add(clean);
     rows.push({
       id: saved.id,
@@ -883,6 +1177,7 @@ function BookWordsSheet({
   onPick: (word: BookWord) => void;
 }) {
   const theme = useTheme();
+  const reader = useReaderTheme();
   const ordered = [...words].sort((a, b) => a.name.localeCompare(b.name, "en"));
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
@@ -891,19 +1186,21 @@ function BookWordsSheet({
           onPress={() => undefined}
           style={{
             maxHeight: "72%",
-            backgroundColor: theme.colors.card,
+            backgroundColor: reader.menu.card,
             borderTopLeftRadius: 20,
             borderTopRightRadius: 20,
             paddingTop: 12,
             paddingBottom: 28,
+            borderWidth: 1,
+            borderColor: reader.menu.cardBorder,
           }}
         >
           <View style={{ alignItems: "center", marginBottom: 12 }}>
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: theme.colors.border }} />
+            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: reader.menu.cardBorder }} />
           </View>
           <Text
             style={{
-              color: theme.colors.foreground,
+              color: reader.foreground,
               fontFamily: theme.fonts.bold,
               fontSize: 20,
               paddingHorizontal: 20,
@@ -916,7 +1213,7 @@ function BookWordsSheet({
               <Text
                 style={{
                   marginTop: 16,
-                  color: theme.colors.mutedForeground,
+                  color: reader.muted,
                   fontFamily: theme.fonts.regular,
                   fontSize: 15,
                   lineHeight: 22,
@@ -937,7 +1234,7 @@ function BookWordsSheet({
                       gap: 12,
                       paddingVertical: 14,
                       borderBottomWidth: 1,
-                      borderBottomColor: theme.colors.border,
+                      borderBottomColor: reader.border,
                     }}
                   >
                     <View
@@ -955,13 +1252,13 @@ function BookWordsSheet({
                       </Text>
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 17 }}>
+                      <Text style={{ color: reader.foreground, fontFamily: theme.fonts.bold, fontSize: 17 }}>
                         {word.name}
                       </Text>
                       <Text
                         style={{
                           marginTop: 2,
-                          color: theme.colors.mutedForeground,
+                          color: reader.muted,
                           fontFamily: theme.fonts.regular,
                           fontSize: 14,
                         }}
@@ -990,6 +1287,7 @@ function ReadingIntro({
   bookId: number;
 }) {
   const theme = useTheme();
+  const readerTheme = useReaderTheme();
   const author = bookAuthor(bookTitle);
   const showChapter = chapterTitle.trim().length > 0 && chapterTitle.trim() !== bookTitle.trim();
 
@@ -1010,7 +1308,7 @@ function ReadingIntro({
         <View style={{ flex: 1 }}>
           <Text
             numberOfLines={2}
-            style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 16, lineHeight: 20 }}
+            style={{ color: readerTheme.foreground, fontFamily: theme.fonts.bold, fontSize: 16, lineHeight: 20 }}
           >
             {bookTitle}
           </Text>
@@ -1019,7 +1317,7 @@ function ReadingIntro({
               numberOfLines={1}
               style={{
                 marginTop: 2,
-                color: theme.colors.mutedForeground,
+                color: readerTheme.muted,
                 fontFamily: theme.fonts.regular,
                 fontSize: 13,
               }}
@@ -1033,7 +1331,7 @@ function ReadingIntro({
         <Text
           style={{
             marginTop: 20,
-            color: theme.colors.foreground,
+            color: readerTheme.foreground,
             fontFamily: theme.fonts.bold,
             fontSize: 22,
             lineHeight: 28,

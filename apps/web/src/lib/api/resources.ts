@@ -148,12 +148,19 @@ export function createResources(request: Request) {
     saveReadingProgress: (
       chapterId: number,
       pageIndex: number,
-      paragraphIndex: number
-    ) =>
-      request("PUT", `/chapters/${chapterId}/progress`, {
-        pageIndex,
-        paragraphIndex,
-      }),
+      paragraphIndex: number,
+      contentOffset?: number | null,
+      contentRevision?: {
+        contentLength: number;
+        contentHash: string;
+        normalizationVersion: number;
+      } | null
+    ) => {
+      const body: Record<string, unknown> = { pageIndex, paragraphIndex };
+      if (contentOffset !== undefined) body.contentOffset = contentOffset;
+      if (contentRevision) body.contentRevision = contentRevision;
+      return request("PUT", `/chapters/${chapterId}/progress`, body);
+    },
 
     createSentence: (data: unknown) => request("POST", "/sentences", data),
     getUserSentences: () => request("GET", "/sentences"),

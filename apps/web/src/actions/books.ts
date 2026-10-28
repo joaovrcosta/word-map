@@ -15,18 +15,31 @@ export type ChapterSummary = {
   bookId: number;
   title: string;
   order: number;
-  createdAt: Date;
-  updatedAt: Date;
+  contentLength?: number;
+  contentOffset?: number | null;
+  reachedEndAt?: Date | string | null;
+  createdAt?: Date;
+  updatedAt?: Date;
 };
 
 export type BookDetail = BookListItem & {
   chapters: ChapterSummary[];
   canEdit: boolean;
+  readingFraction?: number;
+};
+
+export type ContentRevision = {
+  contentLength: number;
+  contentHash: string;
+  normalizationVersion: number;
 };
 
 export type ReadingPosition = {
   pageIndex: number;
   paragraphIndex: number;
+  contentOffset?: number | null;
+  reachedEndAt?: Date | string | null;
+  contentRevision?: ContentRevision;
 };
 
 export type ChapterDetail = {
@@ -39,6 +52,7 @@ export type ChapterDetail = {
   updatedAt: Date;
   canEdit: boolean;
   bookTitle: string;
+  contentRevision?: ContentRevision;
 };
 
 import { browserApi } from "@/lib/api/resources";

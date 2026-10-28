@@ -1,12 +1,20 @@
 import {
+  buildReadingFitKey,
+  bucketFitHeight,
+  contentOffsetForPageAnchor,
+  contentOffsetFromSlice,
   countWords,
   estimateWrappedTextHeight,
   formatChapterContent,
+  hashNormalizedContent,
   normalizeReadingPosition,
+  pageContentRange,
   paginateReading,
   paginateReadingToFit,
   recoverParagraphs,
+  resolvePageByContentOffset,
   resolveReadingPage,
+  safeUtf16Offset,
   splitSentences,
 } from "../reading-pages";
 
@@ -160,11 +168,103 @@ describe("resolveReadingPage", () => {
     expect(resolveReadingPage(pages, 2, 0)).toBe(target);
   });
 
-  it("cai na última página quando o parágrafo não existe", () => {
+  it("entre várias páginas do mesmo parágrafo, escolhe a mais próxima do pageIndex", () => {
+    const long = paragraph("long", 20, 50);
+    const multi = paginateReading(long, 60);
+    expect(multi.length).toBeGreaterThan(2);
+    const last = multi.length - 1;
+    expect(resolveReadingPage(multi, 0, last)).toBe(last);
+    expect(resolveReadingPage(multi, 0, 0)).toBe(0);
+  });
+
+  it("usa startOffset para achar a fatia certa do parágrafo", () => {
+    const long = paragraph("long", 20, 50);
+    const multi = paginateReading(long, 60);
+    expect(multi.length).toBeGreaterThan(1);
+    const mid = multi[Math.floor(multi.length / 2)]!;
+    const slice = mid.slices[0]!;
+    expect(resolveReadingPage(multi, slice.paragraphIndex, 0, slice.startOffset)).toBe(
+      Math.floor(multi.length / 2)
+    );
+  });
+
+  it("clampa pageIndex quando o parágrafo não existe", () => {
     expect(normalizeReadingPosition(pages, 99, 0)).toEqual({
-      pageIndex: pages.length - 1,
-      paragraphIndex: pages[pages.length - 1].slices[0].paragraphIndex,
+      pageIndex: 0,
+      paragraphIndex: pages[0].slices[0].paragraphIndex,
+      startOffset: pages[0].slices[0].startOffset,
     });
+    expect(normalizeReadingPosition(pages, 99, 50).pageIndex).toBe(pages.length - 1);
+  });
+});
+
+describe("contentOffset helpers", () => {
+  it("round-trip: offset do início da página i resolve de volta para i", () => {
+    const content = [paragraph("a", 6, 40), paragraph("b", 6, 40), paragraph("c", 6, 40)].join(
+      "\n\n"
+    );
+    const pages = paginateReading(content, 70);
+    expect(pages.length).toBeGreaterThan(1);
+    for (let index = 0; index < pages.length; index += 1) {
+      const slice = pages[index]!.slices[0]!;
+      const offset = contentOffsetFromSlice(content, slice.paragraphIndex, slice.startOffset);
+      expect(resolvePageByContentOffset(pages, content, offset)).toBe(index);
+    }
+  });
+
+  it("mesmo offset cobre o trecho em fits com wordTarget diferentes", () => {
+    const content = paragraph("long", 24, 45);
+    const fine = paginateReading(content, 50);
+    const coarse = paginateReading(content, 120);
+    expect(fine.length).toBeGreaterThan(coarse.length);
+    const mid = fine[Math.floor(fine.length / 2)]!;
+    const slice = mid.slices[0]!;
+    const offset = contentOffsetFromSlice(content, slice.paragraphIndex, slice.startOffset);
+    const finePage = resolvePageByContentOffset(fine, content, offset);
+    const coarsePage = resolvePageByContentOffset(coarse, content, offset);
+    const fineRange = pageContentRange(content, fine[finePage]!);
+    const coarseRange = pageContentRange(content, coarse[coarsePage]!);
+    expect(offset).toBeGreaterThanOrEqual(fineRange.start);
+    expect(offset).toBeLessThan(fineRange.end);
+    expect(offset).toBeGreaterThanOrEqual(coarseRange.start);
+    expect(offset).toBeLessThan(coarseRange.end);
+  });
+
+  it("bordas: 0, length, separador, emoji e parágrafo gigante", () => {
+    const content = `Hello 😀 world.\n\n${paragraph("giant", 30, 40)}`;
+    const pages = paginateReading(content, 60);
+    expect(resolvePageByContentOffset(pages, content, 0)).toBe(0);
+    expect(resolvePageByContentOffset(pages, content, content.length)).toBe(pages.length - 1);
+    const sep = content.indexOf("\n\n");
+    expect(sep).toBeGreaterThan(0);
+    const afterSep = resolvePageByContentOffset(pages, content, sep + 2);
+    expect(afterSep).toBeGreaterThanOrEqual(0);
+    expect(safeUtf16Offset("a😀b", 2)).toBe(1);
+    expect(hashNormalizedContent(content)).toHaveLength(8);
+  });
+
+  it("anti-ratchet na última página usa content.length", () => {
+    const content = paragraph("end", 8, 30);
+    const pages = paginateReading(content, 40);
+    const last = pages.length - 1;
+    expect(contentOffsetForPageAnchor(content, pages, last)).toBe(content.length);
+  });
+
+  it("anti-ratchet no meio fica dentro da página", () => {
+    const content = paragraph("mid", 20, 40);
+    const pages = paginateReading(content, 50);
+    expect(pages.length).toBeGreaterThan(2);
+    const offset = contentOffsetForPageAnchor(content, pages, 1);
+    const range = pageContentRange(content, pages[1]!);
+    expect(offset).toBeGreaterThanOrEqual(range.start);
+    expect(offset).toBeLessThan(range.end);
+  });
+
+  it("fit key agrupa jitter de altura em baldes de 8px", () => {
+    expect(bucketFitHeight(148)).toBe(144);
+    expect(bucketFitHeight(135)).toBe(128);
+    expect(buildReadingFitKey(371.4, 148, 22, 1)).toBe(buildReadingFitKey(371, 145, 22, 1));
+    expect(buildReadingFitKey(371, 148, 22, 1)).not.toBe(buildReadingFitKey(371, 135, 22, 1));
   });
 });
 

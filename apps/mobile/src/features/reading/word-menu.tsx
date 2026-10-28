@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -48,6 +48,7 @@ import { userFacingError } from "../../api";
 import { useSession } from "../../session";
 import { speakWord } from "../../speech";
 import { shell, useTheme } from "../../theme";
+import { useReaderTheme } from "./reader-theme";
 import { type Vault, type Word } from "../../types";
 import { type WordAnchor } from "./page-text";
 
@@ -433,8 +434,10 @@ export function ReadingWordMenu({
   saved,
   vaults,
   full = false,
+  voiceId = null,
   onClose,
   onChanged,
+  onCloseSession,
 }: {
   clean: string;
   anchor: WordAnchor;
@@ -446,16 +449,29 @@ export function ReadingWordMenu({
   saved: SavedReadingWord | null;
   vaults: Vault[];
   full?: boolean;
+  voiceId?: string | null;
   onClose: () => void;
   onChanged: () => Promise<void>;
+  onCloseSession?: (info: { dirty: boolean; materialized: boolean }) => void;
 }) {
   const theme = useTheme();
+  const reader = useReaderTheme();
   const router = useRouter();
   const { request } = useSession();
   const window = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const [expanded, setExpanded] = useState(full);
   const [localSaved, setLocalSaved] = useState<SavedReadingWord | null>(saved);
+  const dirtyRef = useRef(false);
+  const materializedRef = useRef(false);
+  const markDirty = () => {
+    dirtyRef.current = true;
+  };
+  const requestClose = () => {
+    const info = { dirty: dirtyRef.current, materialized: materializedRef.current };
+    if (onCloseSession) onCloseSession(info);
+    else onClose();
+  };
   const [selectedMeanings, setSelectedMeanings] = useState<string[]>(saved?.translations ?? []);
   const [customMeaning, setCustomMeaning] = useState("");
   const [notes, setNotes] = useState(saved?.notes ?? "");
@@ -769,6 +785,7 @@ export function ReadingWordMenu({
     translations: string[],
     nextConfidence?: number
   ): Promise<SavedReadingWord> => {
+    markDirty();
     setSaving(true);
     setActionError(null);
     try {
@@ -789,6 +806,7 @@ export function ReadingWordMenu({
         setLocalSaved(next);
         setSelectedMeanings(next.translations);
         await refreshOrigins(next.id);
+        materializedRef.current = true;
       } else {
         const created = await request<Word>("/words", {
           method: "POST",
@@ -807,6 +825,7 @@ export function ReadingWordMenu({
         setLocalSaved(next);
         setSelectedMeanings(next.translations);
         await refreshOrigins(next.id);
+        materializedRef.current = true;
       }
       try {
         await onChanged();
@@ -826,6 +845,7 @@ export function ReadingWordMenu({
   const handleAddMeaning = async (value: string) => {
     const meaning = value.trim();
     if (!meaning || hasMeaning(selectedMeanings, meaning) || saving) return;
+    markDirty();
     const previous = selectedMeanings;
     const next = [...selectedMeanings, meaning];
     setSelectedMeanings(next);
@@ -841,6 +861,7 @@ export function ReadingWordMenu({
   };
 
   const handleRemoveMeaning = async (value: string) => {
+    markDirty();
     const previous = selectedMeanings;
     const next = selectedMeanings.filter((item) => item.toLowerCase() !== value.toLowerCase());
     setSelectedMeanings(next);
@@ -854,6 +875,7 @@ export function ReadingWordMenu({
 
   const handleConfidence = async (level: number) => {
     if (saving) return;
+    markDirty();
     if (localSaved) {
       setSaving(true);
       setActionError(null);
@@ -863,6 +885,7 @@ export function ReadingWordMenu({
           body: JSON.stringify({ confidence: level }),
         });
         setLocalSaved(toSaved(updated, localSaved.vaultName));
+        materializedRef.current = true;
         try {
           await onChanged();
         } catch {
@@ -886,6 +909,7 @@ export function ReadingWordMenu({
     if (!localSaved) return;
     const value = notes.trim() || null;
     if ((localSaved.notes ?? null) === value) return;
+    markDirty();
     setSaving(true);
     setActionError(null);
     try {
@@ -894,6 +918,7 @@ export function ReadingWordMenu({
         body: JSON.stringify({ notes: value }),
       });
       setLocalSaved(toSaved(updated, localSaved.vaultName));
+      materializedRef.current = true;
       try {
         await onChanged();
       } catch {
@@ -908,6 +933,7 @@ export function ReadingWordMenu({
 
   const handleRemove = async () => {
     if (!localSaved || saving) return;
+    markDirty();
     setSaving(true);
     setActionError(null);
     try {
@@ -922,6 +948,7 @@ export function ReadingWordMenu({
       setLocalSaved(null);
       setSelectedMeanings([]);
       setOrigins([]);
+      materializedRef.current = true;
       try {
         await onChanged();
       } catch {
@@ -1097,14 +1124,29 @@ export function ReadingWordMenu({
               <Pressable
                 disabled={saving || !resolvedVaultId || hasMeaning(selectedMeanings, suggestedTranslation)}
                 onPress={() => void handleAddMeaning(suggestedTranslation)}
-                style={styles.saveChip}
+                style={[
+                  styles.saveChip,
+                  hasMeaning(selectedMeanings, suggestedTranslation)
+                    ? { backgroundColor: theme.colors.green }
+                    : { backgroundColor: reader.menu.chip },
+                ]}
               >
                 <Ionicons
                   name={hasMeaning(selectedMeanings, suggestedTranslation) ? "checkmark" : "add"}
                   size={14}
-                  color={theme.colors.greenText}
+                  color={
+                    hasMeaning(selectedMeanings, suggestedTranslation) ? "#ffffff" : theme.colors.greenText
+                  }
                 />
-                <Text style={{ color: theme.colors.greenText, fontFamily: theme.fonts.semibold, fontSize: 12 }}>
+                <Text
+                  style={{
+                    color: hasMeaning(selectedMeanings, suggestedTranslation)
+                      ? "#ffffff"
+                      : theme.colors.greenText,
+                    fontFamily: theme.fonts.semibold,
+                    fontSize: 12,
+                  }}
+                >
                   {hasMeaning(selectedMeanings, suggestedTranslation) ? "Salva" : "Salvar"}
                 </Text>
               </Pressable>
@@ -1248,7 +1290,7 @@ export function ReadingWordMenu({
       {sheet ? (
         <Pressable
           accessibilityLabel="Fechar painel"
-          onPress={onClose}
+          onPress={requestClose}
           style={[styles.sheetDone, { backgroundColor: theme.colors.green }]}
         >
           <Ionicons name="checkmark" size={22} color={shell.foreground} />
@@ -1257,13 +1299,13 @@ export function ReadingWordMenu({
     </View>
   );
   return (
-    <Modal transparent={!sheet} visible animationType={sheet ? "slide" : "fade"} onRequestClose={onClose} statusBarTranslucent>
+    <Modal transparent={!sheet} visible animationType={sheet ? "slide" : "fade"} onRequestClose={requestClose} statusBarTranslucent>
       <KeyboardAvoidingView
-        style={{ flex: 1, backgroundColor: sheet ? shell.background : "transparent" }}
+        style={{ flex: 1, backgroundColor: sheet ? reader.background : "transparent" }}
         behavior={Platform.OS === "ios" ? "padding" : "padding"}
         keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
       >
-        {sheet ? null : <Pressable accessibilityLabel="Fechar" style={StyleSheet.absoluteFill} onPress={onClose} />}
+        {sheet ? null : <Pressable accessibilityLabel="Fechar" style={StyleSheet.absoluteFill} onPress={requestClose} />}
         <View
           onLayout={(event) => {
             if (sheet) return;
@@ -1280,6 +1322,10 @@ export function ReadingWordMenu({
           <View
             style={[
               styles.card,
+              {
+                backgroundColor: reader.menu.card,
+                borderColor: reader.menu.cardBorder,
+              },
               sheet && styles.cardSheet,
               sheet && { paddingTop: insets.top },
               !sheet && { maxHeight: fittedCard },
@@ -1302,12 +1348,15 @@ export function ReadingWordMenu({
                 <View style={styles.headerTitle}>
                   <Pressable
                     accessibilityLabel={`Ouvir ${clean}`}
-                    onPress={() => speakWord(clean)}
-                    style={styles.iconChip}
+                    onPress={() => speakWord(clean, { voiceId })}
+                    style={[styles.iconChip, { backgroundColor: reader.menu.chip }]}
                   >
-                    <Ionicons name="volume-high-outline" size={18} color={shell.foreground} />
+                    <Ionicons name="volume-high-outline" size={18} color={reader.foreground} />
                   </Pressable>
-                  <Text numberOfLines={1} style={[styles.word, { fontFamily: theme.fonts.serifItalic }]}>
+                  <Text
+                    numberOfLines={1}
+                    style={[styles.word, { color: reader.foreground, fontFamily: theme.fonts.serifItalic }]}
+                  >
                     {clean}
                   </Text>
                 </View>
@@ -1319,13 +1368,17 @@ export function ReadingWordMenu({
                     <IconButton
                       label="Remover palavra"
                       name="trash-outline"
-                      color={shell.muted}
+                      color={reader.menu.muted}
                       disabled={saving || !localSaved}
                       onPress={() => void handleRemove()}
                     />
                   )}
-                  <Pressable accessibilityLabel="Fechar painel" onPress={onClose} style={styles.iconChip}>
-                    <Ionicons name="close" size={18} color={shell.foreground} />
+                  <Pressable
+                    accessibilityLabel="Fechar painel"
+                    onPress={requestClose}
+                    style={[styles.iconChip, { backgroundColor: reader.menu.chip }]}
+                  >
+                    <Ionicons name="close" size={18} color={reader.foreground} />
                   </Pressable>
                 </View>
               </View>
@@ -1458,7 +1511,7 @@ export function ReadingWordMenu({
                 {!resolvedVaultId ? (
                   <Pressable
                     onPress={() => {
-                      onClose();
+                      requestClose();
                       router.push("/vaults" as Href);
                     }}
                     style={styles.vaultCta}
@@ -1490,7 +1543,10 @@ export function ReadingWordMenu({
                             return (
                               <Pressable
                                 key={vault.id}
-                                onPress={() => setVaultId(String(vault.id))}
+                                onPress={() => {
+                                  markDirty();
+                                  setVaultId(String(vault.id));
+                                }}
                                 style={[styles.vaultChip, active && styles.vaultChipActive]}
                               >
                                 <Ionicons

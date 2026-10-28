@@ -1,5 +1,7 @@
 import * as Speech from "expo-speech";
 
+const WORD_SPEECH_RATE = 0.88;
+
 let speakToken = 0;
 let voicePromise: Promise<string | null> | null = null;
 const speakerVoices = new Map<string, string | null>();
@@ -21,31 +23,56 @@ function scoreVoice(voice: Speech.Voice) {
   return score;
 }
 
-async function pickEnglishVoice(prefer?: "higher" | "lower") {
+export type ReadingVoiceOption = {
+  identifier: string;
+  name: string;
+  language: string;
+};
+
+/** Vozes EN ordenadas por qualidade; lista vazia se indisponível. */
+export async function listEnglishVoices(): Promise<ReadingVoiceOption[]> {
   try {
     const voices = await Speech.getAvailableVoicesAsync();
-    const english = voices
+    return voices
       .filter((voice) => voice.language?.toLowerCase().startsWith("en"))
-      .sort((left, right) => scoreVoice(right) - scoreVoice(left));
-    if (english.length === 0) return null;
-    if (!prefer) return english[0]?.identifier ?? null;
-
-    const named = english.filter((voice) => {
-      const name = `${voice.name} ${voice.identifier}`.toLowerCase();
-      if (prefer === "higher") {
-        return /samantha|karen|moira|tessa|fiona|susan|zoe|female|woman|salli|joanna|ivy|kimberly/.test(name);
-      }
-      return /daniel|alex|fred|arthur|aaron|male|man|matthew|justin|joey|brian/.test(name);
-    });
-    return (named[0] ?? english[prefer === "higher" ? 0 : Math.min(1, english.length - 1)])?.identifier ?? null;
+      .sort((left, right) => scoreVoice(right) - scoreVoice(left))
+      .map((voice) => ({
+        identifier: voice.identifier,
+        name: voice.name || voice.identifier,
+        language: voice.language || "en",
+      }));
   } catch {
-    return null;
+    return [];
   }
+}
+
+async function pickEnglishVoice(prefer?: "higher" | "lower") {
+  const english = await listEnglishVoices();
+  if (english.length === 0) return null;
+  if (!prefer) return english[0]?.identifier ?? null;
+
+  const named = english.filter((voice) => {
+    const name = `${voice.name} ${voice.identifier}`.toLowerCase();
+    if (prefer === "higher") {
+      return /samantha|karen|moira|tessa|fiona|susan|zoe|female|woman|salli|joanna|ivy|kimberly/.test(name);
+    }
+    return /daniel|alex|fred|arthur|aaron|male|man|matthew|justin|joey|brian/.test(name);
+  });
+  return (named[0] ?? english[prefer === "higher" ? 0 : Math.min(1, english.length - 1)])?.identifier ?? null;
 }
 
 async function defaultVoice() {
   if (!voicePromise) voicePromise = pickEnglishVoice();
   return voicePromise;
+}
+
+async function resolveVoice(voiceId?: string | null, speaker?: string | null) {
+  if (voiceId) {
+    const available = await listEnglishVoices();
+    if (available.some((voice) => voice.identifier === voiceId)) return voiceId;
+  }
+  if (speaker) return voiceForSpeaker(speaker);
+  return defaultVoice();
 }
 
 async function voiceForSpeaker(speaker?: string | null) {
@@ -67,15 +94,15 @@ function pitchForSpeaker(speaker?: string | null) {
   return code % 2 === 0 ? 1.08 : 0.92;
 }
 
-export function speakWord(word: string) {
+export function speakWord(word: string, options?: { voiceId?: string | null }) {
   const mine = ++speakToken;
   Speech.stop();
   void (async () => {
-    const voice = await defaultVoice();
+    const voice = await resolveVoice(options?.voiceId);
     if (speakToken !== mine) return;
     Speech.speak(word, {
       language: "en-US",
-      rate: 0.88,
+      rate: WORD_SPEECH_RATE,
       pitch: 1,
       voice: voice ?? undefined,
     });
@@ -85,7 +112,7 @@ export function speakWord(word: string) {
 export function speakPassage(
   text: string,
   onEnd?: () => void,
-  options?: { speaker?: string | null; rate?: number }
+  options?: { speaker?: string | null; rate?: number; voiceId?: string | null }
 ) {
   const spoken = text.replace(/\s+/g, " ").trim();
   const mine = ++speakToken;
@@ -101,7 +128,7 @@ export function speakPassage(
     onEnd?.();
   };
   void (async () => {
-    const voice = await voiceForSpeaker(options?.speaker);
+    const voice = await resolveVoice(options?.voiceId, options?.speaker);
     if (speakToken !== mine) return;
     setTimeout(() => {
       if (speakToken !== mine) return;

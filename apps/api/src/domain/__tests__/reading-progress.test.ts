@@ -1,7 +1,7 @@
 import { prisma } from "../../prisma/client";
 import { getCurrentUser } from "../../auth/current-user";
 import { getReadingProgress, saveReadingProgress } from "../books";
-import { normalizeReadingPosition, paginateReading } from "@word-map/shared/reading-pages";
+import { chapterContentRevision } from "@word-map/shared/reading-pages";
 
 jest.mock("../../prisma/client", () => ({
   prisma: {
@@ -66,6 +66,7 @@ function ownedBook() {
 
 describe("reading progress", () => {
   const content = chapterContent();
+  const revision = chapterContentRevision(content);
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -76,65 +77,126 @@ describe("reading progress", () => {
       title: "Capítulo 1",
       content,
       order: 0,
+      contentLength: revision.contentLength,
+      contentHash: revision.contentHash,
+      normalizationVersion: revision.normalizationVersion,
       createdAt: new Date(),
       updatedAt: new Date(),
     } as never);
     mockPrisma.book.findUnique.mockResolvedValue(ownedBook() as never);
+    mockPrisma.readingProgress.findUnique.mockResolvedValue(null);
     mockPrisma.readingProgress.upsert.mockImplementation(
-      async (args: { create: { pageIndex: number; paragraphIndex: number } }) =>
-        args.create as never
+      async (args: {
+        create: {
+          pageIndex: number;
+          paragraphIndex: number;
+          contentOffset: number | null;
+          reachedEndAt: Date | null;
+        };
+      }) => args.create as never
     );
   });
 
-  it("grava e relê o paragraphIndex sem duplicar a linha", async () => {
-    const pages = paginateReading(content);
-    const target = pages.findIndex((page) =>
-      page.slices.some((slice) => slice.paragraphIndex === 2)
-    );
-    const position = normalizeReadingPosition(pages, 2, target);
-    mockPrisma.readingProgress.findUnique.mockResolvedValue({
-      id: 1,
-      userId: user.id,
-      chapterId: 8,
-      pageIndex: position.pageIndex,
-      paragraphIndex: position.paragraphIndex,
-      updatedAt: new Date(),
-    } as never);
+  it("grava e relê pageIndex/paragraphIndex/contentOffset", async () => {
+    mockPrisma.readingProgress.findUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({
+        id: 1,
+        userId: user.id,
+        chapterId: 8,
+        pageIndex: 6,
+        paragraphIndex: 2,
+        contentOffset: 420,
+        reachedEndAt: null,
+        updatedAt: new Date(),
+      } as never);
 
-    const saved = await saveReadingProgress(8, target, 2);
-    await saveReadingProgress(8, target, 2);
+    const saved = await saveReadingProgress(8, {
+      pageIndex: 6,
+      paragraphIndex: 2,
+      contentOffset: 420,
+      contentRevision: revision,
+    });
     const loaded = await getReadingProgress(8);
 
-    expect(saved).toEqual(position);
-    expect(loaded).toEqual(position);
-    expect(mockPrisma.readingProgress.upsert).toHaveBeenCalledTimes(2);
-    expect(mockPrisma.readingProgress.create).not.toHaveBeenCalled();
+    expect(saved.pageIndex).toBe(6);
+    expect(saved.paragraphIndex).toBe(2);
+    expect(saved.contentOffset).toBe(420);
+    expect(saved.contentRevision).toEqual(revision);
+    expect(loaded).toEqual(
+      expect.objectContaining({
+        pageIndex: 6,
+        paragraphIndex: 2,
+        contentOffset: 420,
+        contentRevision: revision,
+      })
+    );
     expect(mockPrisma.readingProgress.upsert).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { userId_chapterId: { userId: user.id, chapterId: 8 } },
+        create: expect.objectContaining({
+          pageIndex: 6,
+          paragraphIndex: 2,
+          contentOffset: 420,
+        }),
+        update: expect.objectContaining({
+          pageIndex: 6,
+          paragraphIndex: 2,
+          contentOffset: 420,
+        }),
       })
     );
   });
 
-  it("reabre pela página do parágrafo quando o pageIndex está defasado", async () => {
-    const pages = paginateReading(content);
-    const target = pages.findIndex((page) =>
-      page.slices.some((slice) => slice.paragraphIndex === 2)
+  it("PUT sem contentOffset zera o offset (app antigo)", async () => {
+    await saveReadingProgress(8, { pageIndex: 3, paragraphIndex: 1 });
+    expect(mockPrisma.readingProgress.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ contentOffset: null }),
+        update: expect.objectContaining({ contentOffset: null }),
+      })
     );
-    expect(target).toBeGreaterThan(0);
+  });
+
+  it("última página marca reachedEndAt e não limpa ao voltar", async () => {
+    const endAt = new Date("2026-01-01T00:00:00.000Z");
+    mockPrisma.readingProgress.findUnique.mockResolvedValue({
+      reachedEndAt: endAt,
+    } as never);
+
+    const saved = await saveReadingProgress(8, {
+      pageIndex: 1,
+      paragraphIndex: 0,
+      contentOffset: 10,
+      contentRevision: revision,
+    });
+
+    expect(saved.reachedEndAt).toEqual(endAt);
+    expect(mockPrisma.readingProgress.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.not.objectContaining({ reachedEndAt: expect.anything() }),
+      })
+    );
+  });
+
+  it("não remapeia progresso salvo com paginação diferente da do cliente", async () => {
     mockPrisma.readingProgress.findUnique.mockResolvedValue({
       id: 1,
       userId: user.id,
       chapterId: 8,
-      pageIndex: 0,
-      paragraphIndex: 2,
+      pageIndex: 6,
+      paragraphIndex: 1,
+      contentOffset: null,
+      reachedEndAt: null,
       updatedAt: new Date(),
     } as never);
 
-    await expect(getReadingProgress(8)).resolves.toEqual({
-      pageIndex: target,
-      paragraphIndex: pages[target].slices[0].paragraphIndex,
-    });
+    await expect(getReadingProgress(8)).resolves.toEqual(
+      expect.objectContaining({
+        pageIndex: 6,
+        paragraphIndex: 1,
+        contentOffset: null,
+      })
+    );
   });
 
   it("não grava quando o capítulo está fora de acesso", async () => {
@@ -144,26 +206,24 @@ describe("reading progress", () => {
       isOfficial: false,
     } as never);
 
-    await expect(saveReadingProgress(8, 0, 0)).rejects.toThrow(
-      "Livro não encontrado"
-    );
+    await expect(
+      saveReadingProgress(8, { pageIndex: 0, paragraphIndex: 0 })
+    ).rejects.toThrow("Livro não encontrado");
     expect(mockPrisma.readingProgress.upsert).not.toHaveBeenCalled();
   });
 
-  it("cai na última página quando o parágrafo não existe mais", async () => {
-    const pages = paginateReading(content);
-    mockPrisma.readingProgress.findUnique.mockResolvedValue({
-      id: 1,
-      userId: user.id,
-      chapterId: 8,
-      pageIndex: 0,
-      paragraphIndex: 99,
-      updatedAt: new Date(),
-    } as never);
-
-    await expect(getReadingProgress(8)).resolves.toEqual({
-      pageIndex: pages.length - 1,
-      paragraphIndex: pages[pages.length - 1].slices[0].paragraphIndex,
+  it("normaliza índices negativos ao gravar", async () => {
+    const saved = await saveReadingProgress(8, {
+      pageIndex: -2,
+      paragraphIndex: -1,
+      contentOffset: -5,
     });
+    expect(saved).toEqual(
+      expect.objectContaining({
+        pageIndex: 0,
+        paragraphIndex: 0,
+        contentOffset: 0,
+      })
+    );
   });
 });

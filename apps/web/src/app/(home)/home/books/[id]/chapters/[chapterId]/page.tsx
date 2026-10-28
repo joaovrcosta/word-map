@@ -10,6 +10,7 @@ import {
   getReadingProgress,
   saveReadingProgress,
   updateChapter,
+  type ContentRevision,
   type ReadingPosition,
 } from "@/actions/books";
 import type { Text } from "@/actions/actions";
@@ -25,9 +26,13 @@ export default function ChapterPage() {
   const [canEdit, setCanEdit] = useState(false);
   const [bookTitle, setBookTitle] = useState("");
   const [isLoading, setIsLoading] = useState(true);
+  const [contentRevision, setContentRevision] = useState<ContentRevision | null>(
+    null
+  );
   const [position, setPosition] = useState<ReadingPosition>({
     pageIndex: 0,
     paragraphIndex: 0,
+    contentOffset: null,
   });
   const [progressReady, setProgressReady] = useState(false);
   const [saveArmed, setSaveArmed] = useState(false);
@@ -44,6 +49,7 @@ export default function ChapterPage() {
 
       setCanEdit(chapter.canEdit);
       setBookTitle(chapter.bookTitle);
+      if (chapter.contentRevision) setContentRevision(chapter.contentRevision);
       setText({
         id: chapter.id,
         title: chapter.title,
@@ -71,7 +77,12 @@ export default function ChapterPage() {
     getReadingProgress(chapterId)
       .then((progress) => {
         if (cancelled) return;
-        if (progress) setPosition(progress);
+        if (progress) {
+          setPosition(progress);
+          if (progress.contentRevision) {
+            setContentRevision(progress.contentRevision);
+          }
+        }
       })
       .catch(() => undefined)
       .finally(() => {
@@ -86,7 +97,8 @@ export default function ChapterPage() {
     if (!progressReady || saveArmed) return;
     if (
       debouncedPosition.pageIndex === position.pageIndex &&
-      debouncedPosition.paragraphIndex === position.paragraphIndex
+      debouncedPosition.paragraphIndex === position.paragraphIndex &&
+      (debouncedPosition.contentOffset ?? null) === (position.contentOffset ?? null)
     ) {
       setSaveArmed(true);
     }
@@ -97,18 +109,33 @@ export default function ChapterPage() {
     void saveReadingProgress(
       chapterId,
       debouncedPosition.pageIndex,
-      debouncedPosition.paragraphIndex
+      debouncedPosition.paragraphIndex,
+      debouncedPosition.contentOffset ?? null,
+      contentRevision
     ).catch(() => undefined);
-  }, [saveArmed, chapterId, debouncedPosition]);
+  }, [saveArmed, chapterId, debouncedPosition, contentRevision]);
 
-  const handleReadingPosition = useCallback((next: ReadingPosition) => {
-    setPosition((current) =>
-      current.pageIndex === next.pageIndex &&
-        current.paragraphIndex === next.paragraphIndex
-        ? current
-        : next
-    );
-  }, []);
+  const handleReadingPosition = useCallback(
+    (next: {
+      pageIndex: number;
+      paragraphIndex: number;
+      contentOffset: number;
+    }) => {
+      setPosition((current) =>
+        current.pageIndex === next.pageIndex &&
+          current.paragraphIndex === next.paragraphIndex &&
+          current.contentOffset === next.contentOffset
+          ? current
+          : {
+              ...current,
+              pageIndex: next.pageIndex,
+              paragraphIndex: next.paragraphIndex,
+              contentOffset: next.contentOffset,
+            }
+      );
+    },
+    []
+  );
 
   const handleSave = async (title: string, content: string) => {
     await updateChapter(chapterId, title, content);
@@ -157,6 +184,7 @@ export default function ChapterPage() {
             paged
             initialPageIndex={position.pageIndex}
             initialParagraphIndex={position.paragraphIndex}
+            initialContentOffset={position.contentOffset}
             onReadingPosition={handleReadingPosition}
             sourceTitle={
               bookTitle ? `${bookTitle} · ${text.title}` : text.title

@@ -97,7 +97,19 @@ export class BooksService {
     return getReadingProgress(chapterId);
   }
 
-  saveProgress(chapterId: number, pageIndex: number, paragraphIndex: number) {
-    return saveReadingProgress(chapterId, pageIndex, paragraphIndex);
+  saveProgress(
+    chapterId: number,
+    input: {
+      pageIndex: number;
+      paragraphIndex: number;
+      contentOffset?: number | null;
+      contentRevision?: {
+        contentLength: number;
+        contentHash: string;
+        normalizationVersion: number;
+      } | null;
+    }
+  ) {
+    return saveReadingProgress(chapterId, input);
   }
 }

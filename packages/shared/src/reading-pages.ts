@@ -383,30 +383,57 @@ export function paginateReadingToFit(
 export function resolveReadingPage(
   pages: ReadingPage[],
   paragraphIndex: number,
-  pageIndex = 0
+  pageIndex = 0,
+  startOffset?: number | null
 ): number {
   if (pages.length === 0) return 0;
+
+  // Só usa offset quando veio de uma fatia real (number).
+  // `null`/`undefined` = desconhecido (ex.: progresso da API) — prioriza pageIndex.
+  // Evita startOffset 0 “falso” cair no início do parágrafo (página 2 em vez de 5).
+  if (typeof startOffset === "number") {
+    const byOffset = pages.findIndex((page) =>
+      page.slices.some(
+        (slice) =>
+          slice.paragraphIndex === paragraphIndex &&
+          startOffset >= slice.startOffset &&
+          startOffset < slice.startOffset + Math.max(slice.text.length, 1)
+      )
+    );
+    if (byOffset >= 0) return byOffset;
+  }
+
   const matches = pages
     .map((page, index) => ({ page, index }))
     .filter(({ page }) =>
       page.slices.some((slice) => slice.paragraphIndex === paragraphIndex)
     );
-  if (matches.length === 0) return pages.length - 1;
+  if (matches.length === 0) {
+    return Math.min(Math.max(pageIndex, 0), pages.length - 1);
+  }
   const hinted = matches.find((match) => match.index === pageIndex);
   if (hinted) return hinted.index;
-  return matches[0].index;
+  // Parágrafo longo cobre várias páginas: não voltar sempre à primeira.
+  return matches.reduce((best, match) =>
+    Math.abs(match.index - pageIndex) < Math.abs(best.index - pageIndex) ? match : best
+  ).index;
 }
 
 export function normalizeReadingPosition(
   pages: ReadingPage[],
   paragraphIndex: number,
-  pageIndex = 0
-): { pageIndex: number; paragraphIndex: number } {
-  const resolved = resolveReadingPage(pages, paragraphIndex, pageIndex);
+  pageIndex = 0,
+  startOffset?: number | null
+): { pageIndex: number; paragraphIndex: number; startOffset: number } {
+  const resolved = resolveReadingPage(pages, paragraphIndex, pageIndex, startOffset);
   const page = pages[resolved];
+  const slice =
+    page?.slices.find((item) => item.paragraphIndex === paragraphIndex) ??
+    page?.slices[0];
   return {
     pageIndex: resolved,
-    paragraphIndex: page?.slices[0]?.paragraphIndex ?? 0,
+    paragraphIndex: slice?.paragraphIndex ?? 0,
+    startOffset: slice?.startOffset ?? 0,
   };
 }
 
@@ -423,3 +450,142 @@ export function recoverParagraphs(
     return slices.map((slice) => slice.text).join(" ");
   });
 }
+
+/** Versão da normalização usada no mapeamento contentOffset. */
+export const CONTENT_NORMALIZATION_VERSION = 1;
+
+/**
+ * Separador entre parágrafos no content normalizado e no texto da página.
+ * Length fixo (2) — offsets globais somam isto entre parágrafos.
+ */
+export const PARAGRAPH_SEPARATOR = "\n\n";
+export const PARAGRAPH_SEPARATOR_LENGTH = PARAGRAPH_SEPARATOR.length;
+
+export const FIT_HEIGHT_BUCKET_PX = 8;
+/** Avanço tipicamente ~3 linhas em caracteres estimados (anti-ratchet). */
+export const READING_ANCHOR_ADVANCE_CHARS = 80;
+
+/** Evita cair no meio de um par UTF-16 (emoji). */
+export function safeUtf16Offset(text: string, offset: number): number {
+  if (!Number.isFinite(offset)) return 0;
+  let next = Math.max(0, Math.min(Math.floor(offset), text.length));
+  if (next > 0 && next < text.length) {
+    const code = text.charCodeAt(next - 1);
+    if (code >= 0xd800 && code <= 0xdbff) next -= 1;
+  }
+  return next;
+}
+
+/** FNV-1a 32-bit hex — idêntico em Node e Hermes. */
+export function hashNormalizedContent(content: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < content.length; index += 1) {
+    hash ^= content.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(16).padStart(8, "0");
+}
+
+export function chapterContentRevision(normalizedContent: string) {
+  return {
+    contentLength: normalizedContent.length,
+    contentHash: hashNormalizedContent(normalizedContent),
+    normalizationVersion: CONTENT_NORMALIZATION_VERSION,
+  };
+}
+
+/** Bases UTF-16 de cada parágrafo em `content` (parágrafos unidos por PARAGRAPH_SEPARATOR). */
+export function paragraphBaseOffsets(paragraphs: string[]): number[] {
+  const bases: number[] = [];
+  let cursor = 0;
+  for (let index = 0; index < paragraphs.length; index += 1) {
+    bases.push(cursor);
+    cursor += paragraphs[index]!.length;
+    if (index < paragraphs.length - 1) cursor += PARAGRAPH_SEPARATOR_LENGTH;
+  }
+  return bases;
+}
+
+export function contentOffsetFromSlice(
+  content: string,
+  paragraphIndex: number,
+  startOffset: number
+): number {
+  const paragraphs = splitParagraphs(content);
+  if (paragraphs.length === 0) return 0;
+  const bases = paragraphBaseOffsets(paragraphs);
+  const clampedPara = Math.min(Math.max(paragraphIndex, 0), paragraphs.length - 1);
+  const paragraph = paragraphs[clampedPara] ?? "";
+  const local = safeUtf16Offset(paragraph, startOffset);
+  return safeUtf16Offset(content, (bases[clampedPara] ?? 0) + local);
+}
+
+export function pageContentRange(
+  content: string,
+  page: ReadingPage
+): { start: number; end: number } {
+  if (!page.slices.length) return { start: 0, end: 0 };
+  const first = page.slices[0]!;
+  const last = page.slices[page.slices.length - 1]!;
+  const start = contentOffsetFromSlice(content, first.paragraphIndex, first.startOffset);
+  const end =
+    contentOffsetFromSlice(content, last.paragraphIndex, last.startOffset) + last.text.length;
+  return { start, end: Math.min(end, content.length) };
+}
+
+export function resolvePageByContentOffset(
+  pages: ReadingPage[],
+  content: string,
+  contentOffset: number
+): number {
+  if (pages.length === 0) return 0;
+  const offset = safeUtf16Offset(content, contentOffset);
+  if (offset <= 0) return 0;
+  if (offset >= content.length) return pages.length - 1;
+
+  for (let index = 0; index < pages.length; index += 1) {
+    const range = pageContentRange(content, pages[index]!);
+    if (offset >= range.start && offset < range.end) return index;
+    if (offset < range.start) return Math.max(0, index - 1);
+  }
+  return pages.length - 1;
+}
+
+/**
+ * Offset a persistir para a página atual (anti-ratchet).
+ * Última página → content.length. Senão, início + avanço, clampado ao fim da página - 1.
+ */
+export function contentOffsetForPageAnchor(
+  content: string,
+  pages: ReadingPage[],
+  pageIndex: number,
+  advanceChars = READING_ANCHOR_ADVANCE_CHARS
+): number {
+  if (pages.length === 0 || !content.length) return 0;
+  const clamped = Math.min(Math.max(pageIndex, 0), pages.length - 1);
+  if (clamped >= pages.length - 1) return content.length;
+
+  const range = pageContentRange(content, pages[clamped]!);
+  if (range.end <= range.start) return safeUtf16Offset(content, range.start);
+  const advanced = range.start + Math.max(0, advanceChars);
+  const capped = Math.min(advanced, range.end - 1);
+  return safeUtf16Offset(content, Math.max(range.start, capped));
+}
+
+export function bucketFitHeight(height: number, bucket = FIT_HEIGHT_BUCKET_PX): number {
+  if (!Number.isFinite(height) || height <= 0) return bucket;
+  return Math.max(bucket, Math.floor(height / bucket) * bucket);
+}
+
+export function buildReadingFitKey(
+  width: number,
+  height: number,
+  fontSize: number,
+  fontScale = 1
+): string {
+  const w = Math.round(width);
+  const h = bucketFitHeight(height);
+  const scale = Number.isFinite(fontScale) ? fontScale : 1;
+  return `${w}x${h}:${fontSize}:${scale.toFixed(2)}`;
+}
+

@@ -26,16 +26,26 @@ export type BookListItem = {
   inLibrary: boolean;
 };
 
+export type ContentRevision = {
+  contentLength: number;
+  contentHash: string;
+  normalizationVersion: number;
+};
+
 export type ChapterSummary = {
   id: number;
   bookId: number;
   title: string;
   order: number;
+  contentLength?: number;
+  contentOffset?: number | null;
+  reachedEndAt?: string | null;
 };
 
 export type BookDetail = BookListItem & {
   chapters: ChapterSummary[];
   canEdit: boolean;
+  readingFraction?: number;
 };
 
 export type ChapterDetail = {
@@ -46,11 +56,15 @@ export type ChapterDetail = {
   order: number;
   canEdit: boolean;
   bookTitle: string;
+  contentRevision?: ContentRevision;
 };
 
 export type ReadingPosition = {
   pageIndex: number;
   paragraphIndex: number;
+  contentOffset?: number | null;
+  reachedEndAt?: string | null;
+  contentRevision?: ContentRevision;
 };
 
 export const GRAMMATICAL_CLASSES: Array<[string, string]> = [

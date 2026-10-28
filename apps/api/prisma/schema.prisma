@@ -223,26 +223,31 @@ model Book {
 }
 
 model Chapter {
-  id        Int      @id @default(autoincrement())
-  bookId    Int
-  title     String
-  content   String   @db.Text
-  order     Int      @default(0)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  book            Book              @relation(fields: [bookId], references: [id], onDelete: Cascade)
-  readingProgress ReadingProgress[]
+  id                    Int               @id @default(autoincrement())
+  bookId                Int
+  title                 String
+  content               String            @db.Text
+  order                 Int               @default(0)
+  contentLength         Int               @default(0)
+  contentHash           String            @default("")
+  normalizationVersion  Int               @default(0)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+  book                  Book              @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  readingProgress       ReadingProgress[]
 }
 
 model ReadingProgress {
-  id             Int      @id @default(autoincrement())
+  id             Int       @id @default(autoincrement())
   userId         Int
   chapterId      Int
   pageIndex      Int
   paragraphIndex Int
-  updatedAt      DateTime @updatedAt
-  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  chapter        Chapter  @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  contentOffset  Int?
+  reachedEndAt   DateTime?
+  updatedAt      DateTime  @updatedAt
+  user           User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  chapter        Chapter   @relation(fields: [chapterId], references: [id], onDelete: Cascade)
 
   @@unique([userId, chapterId])
 }

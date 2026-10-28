@@ -44,8 +44,10 @@ import {
 import type { ContextualizePayload } from "@/lib/contextualize-client";
 import { buildReadingContext } from "@/lib/reading-context";
 import {
+  contentOffsetForPageAnchor,
   paginateReading,
   paginateReadingToFit,
+  resolvePageByContentOffset,
   resolveReadingPage,
   splitParagraphs,
   splitSentences,
@@ -63,9 +65,11 @@ interface TextViewerProps {
   paged?: boolean;
   initialPageIndex?: number;
   initialParagraphIndex?: number;
+  initialContentOffset?: number | null;
   onReadingPosition?: (position: {
     pageIndex: number;
     paragraphIndex: number;
+    contentOffset: number;
   }) => void;
   sourceTitle?: string;
   sourceKind?: "book" | "text";
@@ -85,6 +89,7 @@ export function TextViewer({
   paged = false,
   initialPageIndex = 0,
   initialParagraphIndex = 0,
+  initialContentOffset = null,
   onReadingPosition,
   sourceTitle,
   sourceKind = "text",
@@ -233,13 +238,34 @@ export function TextViewer({
 
   useEffect(() => {
     if (!paged) return;
-    const key = `${initialPageIndex}:${initialParagraphIndex}:${editContent}`;
+    const key = `${initialPageIndex}:${initialParagraphIndex}:${initialContentOffset ?? "x"}:${editContent}`;
     if (appliedPositionKey.current === key) return;
     appliedPositionKey.current = key;
+    const pagesForRestore = paginateReading(editContent);
+    if (initialContentOffset != null && initialContentOffset > 0) {
+      setPageIndex(
+        resolvePageByContentOffset(
+          pagesForRestore,
+          editContent,
+          initialContentOffset
+        )
+      );
+      return;
+    }
     setPageIndex(
-      resolveReadingPage(paginateReading(editContent), initialParagraphIndex, initialPageIndex)
+      resolveReadingPage(
+        pagesForRestore,
+        initialParagraphIndex,
+        initialPageIndex
+      )
     );
-  }, [paged, editContent, initialPageIndex, initialParagraphIndex]);
+  }, [
+    paged,
+    editContent,
+    initialPageIndex,
+    initialParagraphIndex,
+    initialContentOffset,
+  ]);
 
   useEffect(() => {
     if (!paged || pages.length === 0) return;
@@ -274,8 +300,13 @@ export function TextViewer({
   useEffect(() => {
     if (!paged || pages.length === 0) return;
     const paragraphIndex = pages[pageIndex]?.slices[0]?.paragraphIndex ?? 0;
-    onReadingPosition?.({ pageIndex, paragraphIndex });
-  }, [paged, pageIndex, pages, onReadingPosition]);
+    const contentOffset = contentOffsetForPageAnchor(
+      editContent,
+      pages,
+      pageIndex
+    );
+    onReadingPosition?.({ pageIndex, paragraphIndex, contentOffset });
+  }, [paged, pageIndex, pages, onReadingPosition, editContent]);
 
   useEffect(() => {
     if (!paged || !selection) return;

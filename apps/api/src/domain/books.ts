@@ -8,9 +8,8 @@ import {
 } from "../auth/current-user";
 import { publicErrorMessage } from "../lib/public-error";
 import {
+  chapterContentRevision,
   formatChapterContent,
-  normalizeReadingPosition,
-  paginateReading,
 } from "@word-map/shared/reading-pages";
 
 const GENERIC_ERROR = "Não foi possível concluir a ação. Tente novamente.";
@@ -38,23 +37,44 @@ export type BookListItem = {
   inLibrary: boolean;
 };
 
+export type ContentRevision = {
+  contentLength: number;
+  contentHash: string;
+  normalizationVersion: number;
+};
+
 export type ChapterSummary = {
   id: number;
   bookId: number;
   title: string;
   order: number;
+  contentLength: number;
   createdAt: Date;
   updatedAt: Date;
+  contentOffset: number | null;
+  reachedEndAt: Date | null;
 };
 
 export type BookDetail = BookListItem & {
   chapters: ChapterSummary[];
   canEdit: boolean;
+  /** Fração 0..1 pela soma de offsets / soma de contentLength. */
+  readingFraction: number;
 };
 
 export type ReadingPosition = {
   pageIndex: number;
   paragraphIndex: number;
+  contentOffset: number | null;
+  reachedEndAt: Date | null;
+  contentRevision: ContentRevision;
+};
+
+export type SaveReadingProgressInput = {
+  pageIndex: number;
+  paragraphIndex: number;
+  contentOffset?: number | null;
+  contentRevision?: ContentRevision | null;
 };
 
 export type ChapterDetail = {
@@ -67,7 +87,32 @@ export type ChapterDetail = {
   updatedAt: Date;
   canEdit: boolean;
   bookTitle: string;
+  contentRevision: ContentRevision;
 };
+
+function revisionForContent(content: string): ContentRevision {
+  return chapterContentRevision(content);
+}
+
+function revisionFromChapter(chapter: {
+  content: string;
+  contentLength: number;
+  contentHash: string;
+  normalizationVersion: number;
+}): ContentRevision {
+  if (
+    chapter.normalizationVersion > 0 &&
+    chapter.contentLength > 0 &&
+    chapter.contentHash
+  ) {
+    return {
+      contentLength: chapter.contentLength,
+      contentHash: chapter.contentHash,
+      normalizationVersion: chapter.normalizationVersion,
+    };
+  }
+  return revisionForContent(chapter.content);
+}
 
 function canManageBook(
   user: User,
@@ -393,12 +438,16 @@ export async function addChapter(
       select: { order: true },
     });
 
+    const revision = revisionForContent(trimmedContent);
     const chapter = await prisma.chapter.create({
       data: {
         bookId,
         title: trimmedTitle,
         content: trimmedContent,
         order: (last?.order ?? -1) + 1,
+        contentLength: revision.contentLength,
+        contentHash: revision.contentHash,
+        normalizationVersion: revision.normalizationVersion,
       },
     });
 
@@ -433,9 +482,16 @@ export async function updateChapter(
       throw new Error("Conteúdo obrigatório");
     }
 
+    const revision = revisionForContent(trimmedContent);
     const updated = await prisma.chapter.update({
       where: { id: chapterId },
-      data: { title: trimmedTitle, content: trimmedContent },
+      data: {
+        title: trimmedTitle,
+        content: trimmedContent,
+        contentLength: revision.contentLength,
+        contentHash: revision.contentHash,
+        normalizationVersion: revision.normalizationVersion,
+      },
     });
 
     revalidateBookPaths(chapter.bookId);
@@ -502,18 +558,56 @@ export async function getBookById(bookId: number): Promise<BookDetail | null> {
   try {
     const user = await requireUser();
     const { book, isOwner, inLibrary } = await getAccessibleBook(user, bookId);
+    const progressRows = await prisma.readingProgress.findMany({
+      where: {
+        userId: user.id,
+        chapterId: { in: book.chapters.map((chapter) => chapter.id) },
+      },
+      select: {
+        chapterId: true,
+        contentOffset: true,
+        reachedEndAt: true,
+      },
+    });
+    const progressByChapter = new Map(
+      progressRows.map((row) => [row.chapterId, row])
+    );
 
-    return {
-      ...toListItem(book, inLibrary),
-      canEdit: isOwner || (book.isOfficial && isContentStaff(user.role)),
-      chapters: book.chapters.map((chapter) => ({
+    let totalLength = 0;
+    let totalOffset = 0;
+    const chapters = book.chapters.map((chapter) => {
+      const revision = revisionFromChapter(chapter);
+      const progress = progressByChapter.get(chapter.id);
+      const contentOffset = progress?.contentOffset ?? null;
+      const reachedEndAt = progress?.reachedEndAt ?? null;
+      totalLength += revision.contentLength;
+      if (reachedEndAt || contentOffset === revision.contentLength) {
+        totalOffset += revision.contentLength;
+      } else if (contentOffset != null) {
+        totalOffset += Math.min(
+          Math.max(0, contentOffset),
+          revision.contentLength
+        );
+      }
+      return {
         id: chapter.id,
         bookId: chapter.bookId,
         title: chapter.title,
         order: chapter.order,
+        contentLength: revision.contentLength,
         createdAt: chapter.createdAt,
         updatedAt: chapter.updatedAt,
-      })),
+        contentOffset,
+        reachedEndAt,
+      };
+    });
+
+    return {
+      ...toListItem(book, inLibrary),
+      canEdit: isOwner || (book.isOfficial && isContentStaff(user.role)),
+      chapters,
+      readingFraction:
+        totalLength > 0 ? Math.min(1, totalOffset / totalLength) : 0,
     };
   } catch (error) {
     if (error instanceof Error && error.message === "Livro não encontrado") {
@@ -537,6 +631,7 @@ export async function getChapterById(
     }
 
     const { book, isOwner } = await getAccessibleBook(user, chapter.bookId);
+    const contentRevision = revisionFromChapter(chapter);
 
     return {
       id: chapter.id,
@@ -548,6 +643,7 @@ export async function getChapterById(
       updatedAt: chapter.updatedAt,
       canEdit: isOwner || (book.isOfficial && isContentStaff(user.role)),
       bookTitle: book.title,
+      contentRevision,
     };
   } catch (error) {
     if (error instanceof Error && error.message === "Livro não encontrado") {
@@ -568,21 +664,47 @@ async function readableChapter(user: User, chapterId: number) {
   return chapter;
 }
 
+function clampProgressIndex(value: number) {
+  if (!Number.isFinite(value)) return 0;
+  return Math.max(0, Math.floor(value));
+}
+
+function clampContentOffset(value: number | null | undefined, length: number) {
+  if (value == null || !Number.isFinite(value)) return null;
+  return Math.max(0, Math.min(Math.floor(value), Math.max(0, length)));
+}
+
+/**
+ * Persiste o progresso do cliente sem remapar por `paginateReading`.
+ * Mobile pagina por altura da tela; remapar por contagem de palavras
+ * corrompia a posição (ex.: página 6 voltava como 3).
+ *
+ * PUT sem `contentOffset` (app antigo) zera o offset para não deixar
+ * âncora velha; o app novo sempre envia offset + contentRevision.
+ */
 export async function getReadingProgress(
   chapterId: number
 ): Promise<ReadingPosition | null> {
   try {
     const user = await requireUser();
     const chapter = await readableChapter(user, chapterId);
+    const contentRevision = revisionFromChapter(chapter);
     const stored = await prisma.readingProgress.findUnique({
       where: { userId_chapterId: { userId: user.id, chapterId } },
     });
-    if (!stored) return null;
-    return normalizeReadingPosition(
-      paginateReading(chapter.content),
-      stored.paragraphIndex,
-      stored.pageIndex
-    );
+    if (!stored) {
+      return null;
+    }
+    return {
+      pageIndex: clampProgressIndex(stored.pageIndex),
+      paragraphIndex: clampProgressIndex(stored.paragraphIndex),
+      contentOffset: clampContentOffset(
+        stored.contentOffset,
+        contentRevision.contentLength
+      ),
+      reachedEndAt: stored.reachedEndAt,
+      contentRevision,
+    };
   } catch (error) {
     if (error instanceof Error && error.message === "Livro não encontrado") {
       return null;
@@ -593,31 +715,69 @@ export async function getReadingProgress(
 
 export async function saveReadingProgress(
   chapterId: number,
-  pageIndex: number,
-  paragraphIndex: number
+  input: SaveReadingProgressInput
 ): Promise<ReadingPosition> {
   try {
     const user = await requireUser();
     const chapter = await readableChapter(user, chapterId);
-    const position = normalizeReadingPosition(
-      paginateReading(chapter.content),
-      paragraphIndex,
-      pageIndex
+    const contentRevision = revisionFromChapter(chapter);
+    const pageIndex = clampProgressIndex(input.pageIndex);
+    const paragraphIndex = clampProgressIndex(input.paragraphIndex);
+
+    // App antigo: campo ausente → zera offset (não deixa âncora stale).
+    const offsetProvided = Object.prototype.hasOwnProperty.call(
+      input,
+      "contentOffset"
     );
+    let contentOffset: number | null = null;
+    if (offsetProvided && input.contentOffset != null) {
+      contentOffset = clampContentOffset(
+        input.contentOffset,
+        contentRevision.contentLength
+      );
+    }
+
+    const existing = await prisma.readingProgress.findUnique({
+      where: { userId_chapterId: { userId: user.id, chapterId } },
+      select: { reachedEndAt: true },
+    });
+
+    const atEnd =
+      contentOffset != null &&
+      contentRevision.contentLength > 0 &&
+      contentOffset >= contentRevision.contentLength;
+    const reachedEndAt =
+      atEnd && !existing?.reachedEndAt
+        ? new Date()
+        : existing?.reachedEndAt ?? null;
+
     await prisma.readingProgress.upsert({
       where: { userId_chapterId: { userId: user.id, chapterId } },
       create: {
         userId: user.id,
         chapterId,
-        pageIndex: position.pageIndex,
-        paragraphIndex: position.paragraphIndex,
+        pageIndex,
+        paragraphIndex,
+        contentOffset,
+        reachedEndAt,
       },
       update: {
-        pageIndex: position.pageIndex,
-        paragraphIndex: position.paragraphIndex,
+        pageIndex,
+        paragraphIndex,
+        contentOffset,
+        ...(reachedEndAt && !existing?.reachedEndAt
+          ? { reachedEndAt }
+          : {}),
       },
     });
-    return position;
+
+    return {
+      pageIndex,
+      paragraphIndex,
+      contentOffset,
+      reachedEndAt,
+      contentRevision,
+    };
   } catch (error) {
     wrapError(error);
   }

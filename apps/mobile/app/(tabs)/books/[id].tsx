@@ -355,6 +355,9 @@ export default function BookDetailScreen() {
                 ? "1 capítulo"
                 : `${chapters.length} capítulos`}
               {book?.isOfficial ? " · Acervo" : " · Seu livro"}
+              {typeof book?.readingFraction === "number" && book.readingFraction > 0
+                ? ` · ${Math.round(book.readingFraction * 100)}% lido`
+                : ""}
             </Text>
           </View>
         ) : null}
@@ -419,6 +422,16 @@ export default function BookDetailScreen() {
                       }}
                     >
                       Capítulo {index + 1}
+                      {chapter.reachedEndAt
+                        ? " · Concluído"
+                        : chapter.contentLength && chapter.contentOffset != null
+                          ? ` · ${Math.min(
+                              100,
+                              Math.round(
+                                (chapter.contentOffset / chapter.contentLength) * 100
+                              )
+                            )}%`
+                          : ""}
                     </Text>
                     <Text
                       style={{

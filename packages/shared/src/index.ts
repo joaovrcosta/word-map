@@ -5,6 +5,7 @@ export * from "./flashcard-schedule";
 export * from "./flashcard-queue";
 export * from "./flashcard-points";
 export * from "./reading-pages";
+export * from "./reading-preferences";
 export * from "./reading-context";
 export * from "./grammar-guide";
 export * from "./translate-config";

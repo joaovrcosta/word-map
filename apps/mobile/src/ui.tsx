@@ -26,12 +26,14 @@ export function Screen({
   padded = true,
   safeBottom = false,
   reserveTabBar = true,
+  backgroundColor,
 }: {
   children: ReactNode;
   scroll?: boolean;
   padded?: boolean;
   safeBottom?: boolean;
   reserveTabBar?: boolean;
+  backgroundColor?: string;
 }) {
   const theme = useTheme();
   const tabInset = useTabBarInset();
@@ -39,7 +41,7 @@ export function Screen({
   return (
     <SafeAreaView
       edges={safeBottom ? ["top", "right", "bottom", "left"] : ["top", "left", "right"]}
-      style={[styles.screen, { backgroundColor: theme.colors.background }]}
+      style={[styles.screen, { backgroundColor: backgroundColor ?? theme.colors.background }]}
     >
       {scroll ? (
         <ScrollView
