@@ -46,7 +46,6 @@ import { buildReadingContext } from "@/lib/reading-context";
 import {
   contentOffsetForPageAnchor,
   paginateReading,
-  paginateReadingToFit,
   resolvePageByContentOffset,
   resolveReadingPage,
   splitParagraphs,
@@ -128,7 +127,6 @@ export function TextViewer({
   const backHref = readingBackHref(usePathname()) ?? "/home";
   const [pageIndex, setPageIndex] = useState(initialPageIndex);
   const [fontSize, setFontSize] = useState(22);
-  const [frame, setFrame] = useState({ width: 0, height: 0 });
   const [showPhrase, setShowPhrase] = useState(false);
   const [showSavedWords, setShowSavedWords] = useState(false);
   const { markInteraction } = useStudyHeartbeat({
@@ -146,27 +144,11 @@ export function TextViewer({
   } | null>(null);
   const [liveSentence, setLiveSentence] = useState("");
   const frameRef = useRef<HTMLDivElement>(null);
-  const measureRef = useRef<HTMLDivElement>(null);
-  const anchorRef = useRef({
-    paragraphIndex: initialParagraphIndex,
-    startOffset: 0,
-  });
-  const fitKeyRef = useRef("");
   const touchStartX = useRef(0);
-  const pages = useMemo(() => {
-    if (!paged) return [];
-    const probe = measureRef.current;
-    if (!probe || frame.height < 80 || frame.width < 40) {
-      return paginateReading(editContent);
-    }
-    probe.style.width = `${frame.width}px`;
-    probe.style.fontSize = `${fontSize}px`;
-    probe.style.lineHeight = "1.7";
-    return paginateReadingToFit(editContent, (sample) => {
-      probe.textContent = sample;
-      return probe.offsetHeight <= frame.height - 24;
-    });
-  }, [paged, editContent, frame, fontSize]);
+  const pages = useMemo(
+    () => (paged ? paginateReading(editContent) : []),
+    [paged, editContent]
+  );
   const speechText = paged && !isEditing ? (pages[pageIndex]?.text ?? "") : "";
   const pageIndexRef = useRef(pageIndex);
   const pagesRef = useRef(pages);
@@ -177,7 +159,6 @@ export function TextViewer({
     const next = pageIndexRef.current + 1;
     if (next >= pagesRef.current.length) return false;
     setPageIndex(next);
-    document.querySelector("main")?.scrollTo({ top: 0 });
     return true;
   });
   const spokenRangeRef = useRef<SpokenRange | null>(null);
@@ -211,24 +192,6 @@ export function TextViewer({
       paintSpokenWord(root, range);
     });
   }, [speech.subscribe, speechText]);
-  useLayoutEffect(() => {
-    if (!paged || isEditing) return;
-    const node = frameRef.current;
-    if (!node) return;
-    const apply = () => {
-      const width = Math.max(0, node.clientWidth - 40);
-      const height = node.clientHeight;
-      setFrame((current) =>
-        Math.abs(current.width - width) <= 1 && Math.abs(current.height - height) <= 1
-          ? current
-          : { width, height }
-      );
-    };
-    apply();
-    const observer = new ResizeObserver(apply);
-    observer.observe(node);
-    return () => observer.disconnect();
-  }, [paged, isEditing, showPhrase, fontSize]);
   useLayoutEffect(() => {
     const root = spokenRootRef.current;
     if (!root) return;
@@ -266,36 +229,6 @@ export function TextViewer({
     initialParagraphIndex,
     initialContentOffset,
   ]);
-
-  useEffect(() => {
-    if (!paged || pages.length === 0) return;
-    const key = `${frame.width}x${frame.height}x${fontSize}`;
-    if (fitKeyRef.current === key) {
-      const slice = pages[pageIndex]?.slices[0];
-      if (slice) {
-        anchorRef.current = {
-          paragraphIndex: slice.paragraphIndex,
-          startOffset: slice.startOffset,
-        };
-      }
-      return;
-    }
-    fitKeyRef.current = key;
-    const { paragraphIndex, startOffset } = anchorRef.current;
-    const located = pages.findIndex((page) =>
-      page.slices.some(
-        (slice) =>
-          slice.paragraphIndex === paragraphIndex &&
-          startOffset >= slice.startOffset &&
-          startOffset < slice.startOffset + slice.text.length
-      )
-    );
-    const next =
-      located >= 0
-        ? located
-        : resolveReadingPage(pages, paragraphIndex, pageIndex);
-    if (next !== pageIndex) setPageIndex(next);
-  }, [paged, pages, pageIndex, frame, fontSize]);
 
   useEffect(() => {
     if (!paged || pages.length === 0) return;
@@ -789,7 +722,6 @@ export function TextViewer({
     [foundWords, selectedWord, handleSelectWord, paged, isEditing]
   );
 
-  // Memoizar a renderização do texto interativo
   const visibleText =
     paged && !isEditing ? (pages[pageIndex]?.text ?? "") : editContent;
   const contextPayload = useMemo<ContextualizePayload | null>(() => {
@@ -831,14 +763,13 @@ export function TextViewer({
       if (!clean || seen.has(clean)) continue;
       seen.add(clean);
       const vault = item.vaultInfo[0];
-      const saved =
-        vault?.words.find((entry) => normalizeToken(entry.name) === clean) ??
-        vault?.words[0];
+      const saved = vault?.words.find((entry) => normalizeToken(entry.name) === clean);
+      if (!saved) continue;
       rows.push({
-        word: saved?.name || item.word,
+        word: saved.name || item.word,
         clean,
-        translation: saved?.translations?.[0] ?? "",
-        level: Math.min(4, Math.max(1, saved?.confidence || 1)),
+        translation: saved.translations?.[0] ?? "",
+        level: Math.min(4, Math.max(1, saved.confidence || 1)),
       });
     }
     rows.sort((a, b) => a.word.localeCompare(b.word, "en"));
@@ -986,11 +917,6 @@ export function TextViewer({
             </div>
           ) : reader ? (
             <div ref={frameRef} className="relative min-h-0 flex-1 overflow-hidden px-5">
-              <div
-                ref={measureRef}
-                aria-hidden
-                className="pointer-events-none absolute top-0 left-0 opacity-0"
-              />
               <div
                 ref={setReadingRoot}
                 data-text-selection-container

@@ -7,9 +7,9 @@ import { useSession } from "../../session";
 import type { StudyToday } from "../../study";
 import { useTheme } from "../../theme";
 
-const ACCENT = "#7B6CFF";
+const RING_ACTIVE = "#ff9600";
 const SIZE = 36;
-const STROKE = 2.5;
+const STROKE = 1.5;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
@@ -44,8 +44,8 @@ export function StudyOffenseChip({ onPress, compact = false }: Props) {
   const goalSeconds = Math.max(1, (today?.goalMinutes ?? 5) * 60);
   const progress = Math.min(1, (today?.seconds ?? 0) / goalSeconds);
   const done = Boolean(today?.completed) || progress >= 1;
-  const flameColor = done ? "#ff9600" : theme.shell.muted;
-  const ringColor = progress > 0 ? ACCENT : theme.shell.line;
+  const inProgress = !done && progress > 0;
+  const flameColor = done || inProgress ? RING_ACTIVE : theme.shell.muted;
   const streakLabel = today?.currentStreak && today.currentStreak > 0 ? String(today.currentStreak) : null;
 
   if (compact) {
@@ -68,28 +68,32 @@ export function StudyOffenseChip({ onPress, compact = false }: Props) {
           justifyContent: "center",
         }}
       >
-        <Svg width={SIZE} height={SIZE} style={{ position: "absolute" }}>
-          <Circle
-            cx={SIZE / 2}
-            cy={SIZE / 2}
-            r={RADIUS}
-            stroke={theme.shell.line}
-            strokeWidth={STROKE}
-            fill="none"
-          />
-          <Circle
-            cx={SIZE / 2}
-            cy={SIZE / 2}
-            r={RADIUS}
-            stroke={ringColor}
-            strokeWidth={STROKE}
-            fill="none"
-            strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
-            strokeDashoffset={CIRCUMFERENCE * (1 - progress)}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
-          />
-        </Svg>
+        {inProgress ? (
+          <Svg width={SIZE} height={SIZE} style={{ position: "absolute" }}>
+            <Circle
+              cx={SIZE / 2}
+              cy={SIZE / 2}
+              r={RADIUS}
+              stroke={theme.shell.line}
+              strokeWidth={STROKE}
+              fill="none"
+              opacity={0.45}
+            />
+            <Circle
+              cx={SIZE / 2}
+              cy={SIZE / 2}
+              r={RADIUS}
+              stroke={RING_ACTIVE}
+              strokeWidth={STROKE}
+              fill="none"
+              strokeDasharray={`${CIRCUMFERENCE} ${CIRCUMFERENCE}`}
+              strokeDashoffset={CIRCUMFERENCE * (1 - progress)}
+              strokeLinecap="round"
+              opacity={0.9}
+              transform={`rotate(-90 ${SIZE / 2} ${SIZE / 2})`}
+            />
+          </Svg>
+        ) : null}
         <Ionicons name="flame" size={18} color={flameColor} />
         {streakLabel ? (
           <Text

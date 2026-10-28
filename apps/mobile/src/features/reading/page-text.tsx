@@ -1,6 +1,5 @@
 import {
   memo,
-  useEffect,
   useMemo,
   useRef,
   type ComponentRef,
@@ -131,8 +130,6 @@ export type ReadingPageTextProps = {
   onToggleRangeWord: (tokenIndex: number, clean: string, occurrence: number, anchor: WordAnchor) => void;
 };
 
-let readingPageTextMounted = 0;
-
 export const ReadingPageText = memo(function ReadingPageText({
   text,
   width,
@@ -146,150 +143,160 @@ export const ReadingPageText = memo(function ReadingPageText({
   onLongPressWord,
   onToggleRangeWord,
 }: ReadingPageTextProps) {
-  useEffect(() => {
-    if (!__DEV__) return;
-    readingPageTextMounted += 1;
-    console.log(`[ReadingPageText] mounted=${readingPageTextMounted}`);
-    return () => {
-      readingPageTextMounted -= 1;
-    };
-  }, []);
   const theme = useTheme();
   const reader = useReaderTheme();
   const lineHeight = Math.round(fontSize * 1.45);
-  const baseStyle = {
-    width,
-    color: reader.foreground,
-    fontFamily: theme.fonts.regular,
-    fontSize,
-    lineHeight,
-  };
-  const rangeSet = rangeIndexes ? new Set(rangeIndexes) : null;
-  const ranging = Boolean(rangeSet);
+  const baseStyle = useMemo(
+    () => ({
+      width,
+      color: reader.foreground,
+      fontFamily: theme.fonts.regular,
+      fontSize,
+      lineHeight,
+    }),
+    [width, reader.foreground, theme.fonts.regular, fontSize, lineHeight]
+  );
+
+  const nodes = useMemo(() => {
+    if (!text.trim()) return null;
+
+    type Parsed = {
+      index: number;
+      start: number;
+      end: number;
+      surface: string;
+      clean: string;
+      occurrence: number;
+      inVault: boolean;
+      phrase: string | null;
+    };
+
+    const parsed: Parsed[] = [];
+    const seen = new Map<string, number>();
+    const pattern = /\S+/g;
+    let match: RegExpExecArray | null = pattern.exec(text);
+    let tokenIndex = 0;
+    while (match) {
+      const surface = match[0];
+      const clean = normalizeToken(surface);
+      if (clean) {
+        const occurrence = seen.get(clean) ?? 0;
+        seen.set(clean, occurrence + 1);
+        parsed.push({
+          index: tokenIndex,
+          start: match.index,
+          end: match.index + surface.length,
+          surface,
+          clean,
+          occurrence,
+          inVault: vaultWords.has(clean),
+          phrase: null,
+        });
+      }
+      tokenIndex += 1;
+      match = pattern.exec(text);
+    }
+
+    const phrases = [...vaultPhrases];
+    if (selectedClean && normalizePhrase(selectedClean).includes(" ")) {
+      phrases.push(selectedClean);
+    }
+    const covered = phraseCoverage(parsed, phrases);
+    for (const item of parsed) {
+      const phrase = covered.get(item.index) ?? null;
+      item.phrase = phrase;
+      if (phrase) item.inVault = true;
+    }
+
+    const rangeSet = rangeIndexes ? new Set(rangeIndexes) : null;
+    const ranging = Boolean(rangeSet);
+    const selectedPhrase = selectedClean ? normalizePhrase(selectedClean) : "";
+    const selectedSet = new Set<number>();
+    for (const item of parsed) {
+      const inRange = rangeSet?.has(item.index) ?? false;
+      const alone =
+        !ranging && selectedClean === item.clean && selectedOccurrence === item.occurrence;
+      const phraseSelected =
+        !ranging && Boolean(selectedPhrase.includes(" ") && item.phrase === selectedPhrase);
+      if (inRange || alone || phraseSelected) selectedSet.add(item.index);
+    }
+
+    const nextNodes: ReactNode[] = [];
+    let cursor = 0;
+    parsed.forEach((item, order) => {
+      if (item.start > cursor) nextNodes.push(text.slice(cursor, item.start));
+      const selected = selectedSet.has(item.index);
+      const next = parsed[order + 1];
+      const nextSelected = Boolean(next && selectedSet.has(next.index));
+      const prev = parsed[order - 1];
+      const prevSelected = Boolean(prev && selectedSet.has(prev.index));
+      const nextJoined =
+        (selected && nextSelected) ||
+        (Boolean(item.phrase) && next?.phrase === item.phrase && !ranging);
+      const prevJoined =
+        (selected && prevSelected) ||
+        (Boolean(item.phrase) && prev?.phrase === item.phrase && !ranging);
+      const joined = selected || (Boolean(item.phrase) && !ranging);
+      const rangeRole: SelectRole = !joined
+        ? null
+        : prevJoined || nextJoined
+          ? prevJoined && nextJoined
+            ? "middle"
+            : prevJoined
+              ? "end"
+              : "start"
+          : "solo";
+      const bridge = nextJoined && next ? text.slice(item.end, next.start) : "";
+      nextNodes.push(
+        <WordToken
+          key={`word-${item.index}`}
+          surface={item.surface}
+          bridge={bridge}
+          inVault={item.inVault}
+          selected={selected}
+          selectRole={rangeRole}
+          similar={
+            !ranging &&
+            selectedClean === item.clean &&
+            selectedOccurrence != null &&
+            selectedOccurrence !== item.occurrence
+          }
+          delayLongPress={RANGE_LONG_PRESS_MS}
+          onPress={(anchor) => {
+            if (ranging) {
+              onToggleRangeWord(item.index, item.clean, item.occurrence, anchor);
+              return;
+            }
+            if (item.phrase) {
+              onSelectWord(item.phrase, 0, anchor);
+              return;
+            }
+            onSelectWord(item.clean, item.occurrence, anchor);
+          }}
+          onLongPress={(anchor) => {
+            onLongPressWord(item.clean, item.occurrence, anchor, item.index);
+          }}
+        />
+      );
+      cursor = nextJoined && next ? next.start : item.end;
+    });
+    if (cursor < text.length) nextNodes.push(text.slice(cursor));
+    return nextNodes;
+  }, [
+    text,
+    vaultWords,
+    vaultPhrases,
+    selectedClean,
+    selectedOccurrence,
+    rangeIndexes,
+    onSelectWord,
+    onLongPressWord,
+    onToggleRangeWord,
+  ]);
 
   if (!text.trim()) {
     return <Text style={baseStyle}>Este capítulo está vazio.</Text>;
   }
-
-  type Parsed = {
-    index: number;
-    start: number;
-    end: number;
-    surface: string;
-    clean: string;
-    occurrence: number;
-    inVault: boolean;
-    phrase: string | null;
-  };
-
-  const parsed: Parsed[] = [];
-  const seen = new Map<string, number>();
-  const pattern = /\S+/g;
-  let match: RegExpExecArray | null = pattern.exec(text);
-  let tokenIndex = 0;
-  while (match) {
-    const surface = match[0];
-    const clean = normalizeToken(surface);
-    if (clean) {
-      const occurrence = seen.get(clean) ?? 0;
-      seen.set(clean, occurrence + 1);
-      parsed.push({
-        index: tokenIndex,
-        start: match.index,
-        end: match.index + surface.length,
-        surface,
-        clean,
-        occurrence,
-        inVault: vaultWords.has(clean),
-        phrase: null,
-      });
-    }
-    tokenIndex += 1;
-    match = pattern.exec(text);
-  }
-
-  const phrases = [...vaultPhrases];
-  if (selectedClean && normalizePhrase(selectedClean).includes(" ")) {
-    phrases.push(selectedClean);
-  }
-  const covered = phraseCoverage(parsed, phrases);
-  for (const item of parsed) {
-    const phrase = covered.get(item.index) ?? null;
-    item.phrase = phrase;
-    if (phrase) item.inVault = true;
-  }
-
-  const selectedPhrase = selectedClean ? normalizePhrase(selectedClean) : "";
-  const selectedSet = new Set<number>();
-  for (const item of parsed) {
-    const inRange = rangeSet?.has(item.index) ?? false;
-    const alone =
-      !ranging && selectedClean === item.clean && selectedOccurrence === item.occurrence;
-    const phraseSelected =
-      !ranging && Boolean(selectedPhrase.includes(" ") && item.phrase === selectedPhrase);
-    if (inRange || alone || phraseSelected) selectedSet.add(item.index);
-  }
-
-  const nodes: ReactNode[] = [];
-  let cursor = 0;
-  parsed.forEach((item, order) => {
-    if (item.start > cursor) nodes.push(text.slice(cursor, item.start));
-    const selected = selectedSet.has(item.index);
-    const next = parsed[order + 1];
-    const nextSelected = Boolean(next && selectedSet.has(next.index));
-    const prev = parsed[order - 1];
-    const prevSelected = Boolean(prev && selectedSet.has(prev.index));
-    const nextJoined =
-      (selected && nextSelected) ||
-      (Boolean(item.phrase) && next?.phrase === item.phrase && !ranging);
-    const prevJoined =
-      (selected && prevSelected) ||
-      (Boolean(item.phrase) && prev?.phrase === item.phrase && !ranging);
-    const joined = selected || (Boolean(item.phrase) && !ranging);
-    const rangeRole: SelectRole = !joined
-      ? null
-      : prevJoined || nextJoined
-        ? prevJoined && nextJoined
-          ? "middle"
-          : prevJoined
-            ? "end"
-            : "start"
-        : "solo";
-    const bridge = nextJoined && next ? text.slice(item.end, next.start) : "";
-    nodes.push(
-      <WordToken
-        key={`word-${item.index}`}
-        surface={item.surface}
-        bridge={bridge}
-        inVault={item.inVault}
-        selected={selected}
-        selectRole={rangeRole}
-        similar={
-          !ranging &&
-          selectedClean === item.clean &&
-          selectedOccurrence != null &&
-          selectedOccurrence !== item.occurrence
-        }
-        delayLongPress={RANGE_LONG_PRESS_MS}
-        onPress={(anchor) => {
-          if (ranging) {
-            onToggleRangeWord(item.index, item.clean, item.occurrence, anchor);
-            return;
-          }
-          if (item.phrase) {
-            onSelectWord(item.phrase, 0, anchor);
-            return;
-          }
-          onSelectWord(item.clean, item.occurrence, anchor);
-        }}
-        onLongPress={(anchor) => {
-          onLongPressWord(item.clean, item.occurrence, anchor, item.index);
-        }}
-      />
-    );
-    cursor = nextJoined && next ? next.start : item.end;
-  });
-  if (cursor < text.length) nodes.push(text.slice(cursor));
 
   return (
     <Text selectable={false} style={baseStyle}>
@@ -313,7 +320,7 @@ export type PageSlotProps = {
   header?: ReactNode;
 };
 
-/** Página do pager: texto plain fora da janela; ReadingPageText interativo dentro. */
+/** Página do pager: texto plain fora da janela; ReadingPageText interativo na página ativa. */
 export const PageSlot = memo(function PageSlot({
   text,
   active,
@@ -455,7 +462,7 @@ function selectRadii(role: SelectRole): {
   };
 }
 
-function WordToken({
+const WordToken = memo(function WordToken({
   surface,
   bridge = "",
   selected,
@@ -484,10 +491,12 @@ function WordToken({
   const { leading, core, trailing } = splitTokenEdges(surface);
   const marked = inVault || similar || selected;
   const radii = selectRadii(selectRole ?? (marked ? "solo" : null));
+  // Padding extra só na seleção — vault usa só cor/fundo no glyph (sem shift de linha).
+  const needsPad = selected || similar;
   const padLeft =
-    selectRole === "middle" || selectRole === "end" ? 0 : marked ? 5 : 0;
+    selectRole === "middle" || selectRole === "end" ? 0 : needsPad ? 5 : 0;
   const padRight =
-    selectRole === "middle" || selectRole === "start" ? 0 : marked ? 5 : 0;
+    selectRole === "middle" || selectRole === "start" ? 0 : needsPad ? 5 : 0;
 
   const clearLong = () => {
     if (longTimer.current) {
@@ -558,7 +567,7 @@ function WordToken({
           overflow: "hidden",
           paddingLeft: padLeft,
           paddingRight: padRight,
-          paddingVertical: selected || inVault ? 1 : 0,
+          paddingVertical: needsPad ? 1 : 0,
           ...radii,
         }}
       >
@@ -568,4 +577,4 @@ function WordToken({
       {trailing}
     </Text>
   );
-}
+});

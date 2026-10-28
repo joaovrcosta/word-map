@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import {
   AccessibilityInfo,
   ActivityIndicator,
@@ -396,31 +396,48 @@ export function findSavedReadingWord(
   clean: string
 ): SavedReadingWord | null {
   const needle = normalizePhrase(clean);
-  const match = foundWords.find(
-    (item) =>
-      normalizePhrase(item.word) === needle || item.word.toLowerCase() === clean.toLowerCase()
-  );
-  if (!match) return null;
-  const vault = match.vaultInfo[0];
-  const word =
-    vault?.words.find(
-      (item) =>
-        normalizePhrase(item.name) === needle || item.name.toLowerCase() === clean.toLowerCase()
-    ) ?? vault?.words[0];
-  if (!vault || !word) return null;
-  const stored = vaults
-    .find((item) => item.id === vault.id)
-    ?.words.find((item) => item.id === word.id);
-  return {
-    id: word.id,
-    name: word.name,
-    vaultId: vault.id,
-    vaultName: vault.name,
-    translations: stored?.translations ?? word.translations,
-    grammaticalClass: stored?.grammaticalClass ?? word.grammaticalClass,
-    confidence: stored?.confidence ?? word.confidence,
-    notes: stored?.notes ?? word.notes ?? null,
-  };
+  const matchesSurface = (value: string) =>
+    normalizePhrase(value) === needle || value.toLowerCase() === clean.toLowerCase();
+
+  // Só a forma exata da superfície (knew ≠ know). Lemma no check-text
+  // ainda destaca no texto, mas não reutiliza a palavra do vault.
+  for (const item of foundWords) {
+    if (!matchesSurface(item.word)) continue;
+    for (const vault of item.vaultInfo) {
+      const word = vault.words.find((entry) => matchesSurface(entry.name));
+      if (!word) continue;
+      const stored = vaults
+        .find((row) => row.id === vault.id)
+        ?.words.find((entry) => entry.id === word.id);
+      return {
+        id: word.id,
+        name: word.name,
+        vaultId: vault.id,
+        vaultName: vault.name,
+        translations: stored?.translations ?? word.translations,
+        grammaticalClass: stored?.grammaticalClass ?? word.grammaticalClass,
+        confidence: stored?.confidence ?? word.confidence,
+        notes: stored?.notes ?? word.notes ?? null,
+      };
+    }
+  }
+
+  for (const vault of vaults) {
+    const word = vault.words.find((entry) => matchesSurface(entry.name));
+    if (!word) continue;
+    return {
+      id: word.id,
+      name: word.name,
+      vaultId: vault.id,
+      vaultName: vault.name,
+      translations: word.translations,
+      grammaticalClass: word.grammaticalClass,
+      confidence: word.confidence,
+      notes: word.notes ?? null,
+    };
+  }
+
+  return null;
 }
 
 export function ReadingWordMenu({

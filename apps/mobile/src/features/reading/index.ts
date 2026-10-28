@@ -14,6 +14,12 @@ export {
 export { findSavedReadingWord, ReadingWordMenu, type FoundTextWord } from "./word-menu";
 export { useReadingPreferences } from "./preferences";
 export {
+  pickReadingProgress,
+  readProgressCache,
+  writeProgressCache,
+  type CachedReadingProgress,
+} from "./progress-cache";
+export {
   makeReaderStyles,
   ReaderThemeProvider,
   resolveReaderTheme,

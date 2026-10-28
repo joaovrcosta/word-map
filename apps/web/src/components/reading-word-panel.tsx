@@ -95,27 +95,26 @@ export function findSavedReadingWord(
   }>,
   clean: string
 ): SavedReadingWord | undefined {
-  const match = foundWords.find(
-    (item) => item.word.toLowerCase() === clean.toLowerCase()
-  );
-  if (!match) return undefined;
-
-  const vault = match.vaultInfo[0];
-  const word =
-    vault?.words.find((item) => item.name.toLowerCase() === clean.toLowerCase()) ??
-    vault?.words[0];
-  if (!vault || !word) return undefined;
-
-  return {
-    id: word.id,
-    name: word.name,
-    vaultId: vault.id,
-    vaultName: vault.name,
-    translations: word.translations,
-    grammaticalClass: word.grammaticalClass,
-    confidence: word.confidence,
-    notes: word.notes ?? null,
-  };
+  const needle = clean.toLowerCase();
+  // Só a forma exata (knew ≠ know). Highlight por lemma continua no check-text.
+  for (const item of foundWords) {
+    if (item.word.toLowerCase() !== needle) continue;
+    for (const vault of item.vaultInfo) {
+      const word = vault.words.find((entry) => entry.name.toLowerCase() === needle);
+      if (!word) continue;
+      return {
+        id: word.id,
+        name: word.name,
+        vaultId: vault.id,
+        vaultName: vault.name,
+        translations: word.translations,
+        grammaticalClass: word.grammaticalClass,
+        confidence: word.confidence,
+        notes: word.notes ?? null,
+      };
+    }
+  }
+  return undefined;
 }
 
 type DictionaryWordInfo = {

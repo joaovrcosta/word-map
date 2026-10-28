@@ -1,4 +1,4 @@
-export const PAGE_WORD_TARGET = 200;
+export const PAGE_WORD_TARGET = 150;
 
 const ABBREVIATIONS =
   /(?:^|[\s"“‘])(Mr|Mrs|Ms|Dr|St|Sr|Jr|Prof|Sir)\.\s*$/i;
@@ -553,7 +553,8 @@ export function resolvePageByContentOffset(
 
 /**
  * Offset a persistir para a página atual (anti-ratchet).
- * Última página → content.length. Senão, início + avanço, clampado ao fim da página - 1.
+ * Última página → content.length. Senão, ~1/3 dentro da página (evita borda
+ * com a página anterior, que restaurava N como N-1).
  */
 export function contentOffsetForPageAnchor(
   content: string,
@@ -567,8 +568,9 @@ export function contentOffsetForPageAnchor(
 
   const range = pageContentRange(content, pages[clamped]!);
   if (range.end <= range.start) return safeUtf16Offset(content, range.start);
-  const advanced = range.start + Math.max(0, advanceChars);
-  const capped = Math.min(advanced, range.end - 1);
+  const span = range.end - range.start;
+  const intoPage = Math.max(advanceChars, Math.floor(span / 3));
+  const capped = Math.min(range.start + intoPage, range.end - 1);
   return safeUtf16Offset(content, Math.max(range.start, capped));
 }
 

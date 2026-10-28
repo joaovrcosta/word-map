@@ -1,10 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   Alert,
-  InteractionManager,
   KeyboardAvoidingView,
   Modal,
-  PixelRatio,
   Platform,
   Pressable,
   ScrollView,
@@ -20,15 +18,13 @@ import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { BookArt, bookAuthor } from "../../../../../src/features/books/cover";
 import {
-  buildReadingFitKey,
   chapterContentRevision,
   contentOffsetForPageAnchor,
   contentOffsetFromSlice,
-  estimateWrappedTextHeight,
   formatChapterContent,
   isPhraseName,
   normalizeToken,
-  paginateReadingToFit,
+  paginateReading,
   resolvePageByContentOffset,
   type ReadingPage,
 } from "@word-map/shared";
@@ -39,14 +35,17 @@ import {
   MAX_RANGE_WORDS,
   nextRangeIndexes,
   PageSlot,
+  pickReadingProgress,
   ReaderThemeProvider,
   ReadingWordMenu,
+  readProgressCache,
   spanFromIndexes,
   TextSettingsSheet,
   tokenizePageText,
   useReaderTheme,
   useReadingPreferences,
   useResolvedReaderTheme,
+  writeProgressCache,
   type FoundTextWord,
   type WordAnchor,
 } from "../../../../../src/features/reading";
@@ -64,21 +63,8 @@ import { ErrorText, Field, Heading, Loading, PrimaryButton, Screen } from "../..
 
 const LEVEL_COLORS = ["#ff4b4b", "#ff9600", "#ffc800", "#24c875"];
 const LEVEL_TEXT = ["#ffffff", "#ffffff", "#3c3c3c", "#ffffff"];
-const WINDOW_RADIUS = 1;
-const WORDS_DEFER_MS = 300;
-/** Folga contra padding de highlights / arredondamento da estimativa. */
-const FIT_HEIGHT_MARGIN = 28;
-const FIT_LAYOUT_DEBOUNCE_MS = 100;
-/** Reserva fixa da intro só na 1ª página (sem onLayout — evita jitter de fit). */
-const INTRO_RESERVE_PX = 148;
-
-type BootstrapPhase =
-  | "loadingPrefs"
-  | "loadingChapter"
-  | "measuring"
-  | "fitting"
-  | "restoring"
-  | "settled";
+const WINDOW_RADIUS_MAX = 1;
+const WORDS_READY_TIMEOUT_MS = 2500;
 
 function pendingFoundWord(clean: string): FoundTextWord {
   return {
@@ -124,10 +110,12 @@ export default function ChapterReaderScreen() {
   const [chapter, setChapter] = useState<ChapterDetail | null>(null);
   const [missing, setMissing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
   const [pageIndex, setPageIndex] = useState(0);
   const [windowIndex, setWindowIndex] = useState(0);
   const [pages, setPages] = useState<ReadingPage[]>([]);
-  const [bootstrapPhase, setBootstrapPhase] = useState<BootstrapPhase>("loadingPrefs");
+  const [readerReady, setReaderReady] = useState(false);
+  const [windowRadius, setWindowRadius] = useState(0);
   const fontSize = prefs?.fontSize ?? 18;
   const [width, setWidth] = useState(0);
   const [frameHeight, setFrameHeight] = useState(0);
@@ -140,10 +128,9 @@ export default function ChapterReaderScreen() {
   const [editing, setEditing] = useState(false);
   const [pendingAutoSave, setPendingAutoSave] = useState<string | null>(null);
   const autoSaveInFlight = useRef(new Set<string>());
-  const settled = bootstrapPhase === "settled";
   const { markInteraction } = useStudyHeartbeat({
     kind: "reading",
-    enabled: settled && !editing,
+    enabled: readerReady && !editing && !loading,
   });
   useEffect(() => {
     markInteraction();
@@ -168,17 +155,9 @@ export default function ChapterReaderScreen() {
   const advancing = useRef(false);
   const openedAt = useRef(0);
   const wordsRequestId = useRef(0);
-  /** Âncora estável: só muda em restore inicial ou virada do usuário. */
   const anchorRef = useRef({ contentOffset: 0 });
   const contentRevisionRef = useRef<ContentRevision | null>(null);
   const movedRef = useRef(false);
-  const settledRef = useRef(false);
-  const fitKeyRef = useRef("");
-  const fitCacheRef = useRef(new Map<string, ReadingPage[]>());
-  const layoutDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const pendingLayoutRef = useRef<{ width: number; height: number } | null>(null);
-  const lastLayoutKeyRef = useRef("");
-  const stableLayoutCountRef = useRef(0);
   const saveInFlightRef = useRef(false);
   const saveQueuedRef = useRef<{
     pageIndex: number;
@@ -188,45 +167,9 @@ export default function ChapterReaderScreen() {
   const chapterContentRef = useRef("");
   pagesRef.current = pages;
   widthRef.current = width;
-  settledRef.current = settled;
-
-  const lineHeight = Math.round(fontSize * 1.5);
-
-  const buildFittedPages = useCallback(
-    (content: string, pageWidth: number, pageHeight: number): ReadingPage[] => {
-      if (!content.trim() || pageWidth < 40 || pageHeight < 80) {
-        return [{ text: content.trim() ? content : "", wordCount: 0, slices: [] }];
-      }
-      // Intro só na 1ª página, com reserva fixa (sem medir de novo a cada layout).
-      return paginateReadingToFit(content, (sample, pageOrdinal) => {
-        const reserve = pageOrdinal === 0 ? INTRO_RESERVE_PX : 0;
-        const budget = pageHeight - reserve - FIT_HEIGHT_MARGIN;
-        if (budget < lineHeight * 2) return false;
-        return estimateWrappedTextHeight(sample, pageWidth, fontSize, lineHeight) <= budget;
-      });
-    },
-    [fontSize, lineHeight]
-  );
-
-  const jumpToOffset = useCallback(
-    (nextPages: ReadingPage[], content: string, offset: number) => {
-      const nextIndex = resolvePageByContentOffset(nextPages, content, offset);
-      pageIndexRef.current = nextIndex;
-      windowIndexRef.current = nextIndex;
-      setPageIndex(nextIndex);
-      setWindowIndex(nextIndex);
-      setPages(nextPages);
-      requestAnimationFrame(() => {
-        const w = widthRef.current;
-        if (w > 0) scrollRef.current?.scrollTo({ x: nextIndex * w, animated: false });
-      });
-    },
-    []
-  );
 
   const saveProgress = useCallback(
     async (force = false) => {
-      if (!force && !settledRef.current) return;
       if (!force && !movedRef.current) return;
       const content = chapterContentRef.current;
       if (!content && !contentRevisionRef.current) return;
@@ -237,6 +180,8 @@ export default function ChapterReaderScreen() {
       const contentOffset = contentOffsetForPageAnchor(content, pagesRef.current, idx);
       anchorRef.current = { contentOffset };
       const payload = { pageIndex: idx, paragraphIndex, contentOffset };
+
+      void writeProgressCache(chapterId, payload);
 
       if (saveInFlightRef.current) {
         saveQueuedRef.current = payload;
@@ -295,39 +240,38 @@ export default function ChapterReaderScreen() {
     [saveProgress]
   );
 
-  const runFit = useCallback(
-    (pageWidth: number, pageHeight: number) => {
-      const content = chapterContentRef.current;
-      if (!content || pageWidth < 40 || pageHeight < 80) return;
-      const fontScale = PixelRatio.getFontScale();
-      const key = buildReadingFitKey(pageWidth, pageHeight, fontSize, fontScale);
-      if (fitKeyRef.current === key && pagesRef.current.length > 0) {
-        setBootstrapPhase("settled");
-        return;
-      }
+  const jumpToPage = useCallback((nextPages: ReadingPage[], content: string, offset: number) => {
+    const nextIndex =
+      offset > 0 ? resolvePageByContentOffset(nextPages, content, offset) : 0;
+    pageIndexRef.current = nextIndex;
+    windowIndexRef.current = nextIndex;
+    setPageIndex(nextIndex);
+    setWindowIndex(nextIndex);
+    setPages(nextPages);
+  }, []);
 
-      setBootstrapPhase("fitting");
-      let nextPages = fitCacheRef.current.get(key);
-      if (!nextPages) {
-        nextPages = buildFittedPages(content, pageWidth, pageHeight);
-        fitCacheRef.current.set(key, nextPages);
-      }
-      fitKeyRef.current = key;
-      setBootstrapPhase("restoring");
-      // Sempre por contentOffset — nunca pageIndex absoluto (8 num fit vira 3 noutro).
-      jumpToOffset(nextPages, content, anchorRef.current.contentOffset);
-      setBootstrapPhase("settled");
-    },
-    [buildFittedPages, fontSize, jumpToOffset]
-  );
+  useLayoutEffect(() => {
+    if (!readerReady || !width || pages.length === 0) return;
+    scrollRef.current?.scrollTo({
+      x: pageIndexRef.current * width,
+      animated: false,
+    });
+  }, [readerReady, pages, pageIndex, width]);
 
   useEffect(() => {
-    if (!prefsReady) {
-      setBootstrapPhase("loadingPrefs");
+    if (!readerReady) {
+      setWindowRadius(0);
       return;
     }
+    const handle = setTimeout(() => setWindowRadius(WINDOW_RADIUS_MAX), 120);
+    return () => clearTimeout(handle);
+  }, [readerReady]);
+
+  useEffect(() => {
+    if (!prefsReady) return;
     let cancelled = false;
-    setBootstrapPhase("loadingChapter");
+    setLoading(true);
+    setReaderReady(false);
     setMissing(false);
     setError(null);
     setFoundWords([]);
@@ -335,102 +279,68 @@ export default function ChapterReaderScreen() {
     setPages([]);
     setPageIndex(0);
     pageIndexRef.current = 0;
-    fitKeyRef.current = "";
-    fitCacheRef.current.clear();
-    lastLayoutKeyRef.current = "";
-    stableLayoutCountRef.current = 0;
     movedRef.current = false;
     setSelection(null);
     setRangeIndexes(null);
     setRangeAnchor(null);
     setPendingAutoSave(null);
     autoSaveInFlight.current.clear();
-    if (__DEV__) console.time("chapter-first-paint");
     (async () => {
       try {
-        const [detail, progress] = await Promise.all([
+        const [detail, localProgress, remoteProgress] = await Promise.all([
           requestRef.current<ChapterDetail | null>(`/chapters/${chapterId}`),
-          requestRef.current<ReadingPosition | null>(`/chapters/${chapterId}/progress`),
+          readProgressCache(chapterId),
+          requestRef.current<ReadingPosition | null>(`/chapters/${chapterId}/progress`).catch(
+            () => null
+          ),
         ]);
         if (cancelled) return;
         if (!detail) {
           setMissing(true);
-          setPages([]);
           setChapter(null);
-          setBootstrapPhase("settled");
+          setLoading(false);
+          setReaderReady(true);
           return;
         }
         const revision = detail.contentRevision ?? chapterContentRevision(detail.content);
         contentRevisionRef.current = revision;
         chapterContentRef.current = detail.content;
-        const rawOffset = progress?.contentOffset;
+        const nextPages = paginateReading(detail.content);
+        const picked = pickReadingProgress(localProgress, remoteProgress);
+        if (picked.source === "remote" && remoteProgress) {
+          void writeProgressCache(chapterId, {
+            pageIndex: picked.pageIndex,
+            paragraphIndex: picked.paragraphIndex,
+            contentOffset: picked.contentOffset,
+          });
+        }
         let offset = 0;
-        if (rawOffset != null && rawOffset > 0 && revision.contentLength > 0) {
-          offset = Math.min(rawOffset, revision.contentLength);
-        } else if ((progress?.paragraphIndex ?? 0) > 0 || (progress?.pageIndex ?? 0) > 0) {
-          // Legado sem offset: âncora no início do parágrafo salvo (estável entre fits).
-          // Nunca usar pageIndex cru — 8/135 vira 3 noutro layout.
-          offset = contentOffsetFromSlice(
-            detail.content,
-            progress?.paragraphIndex ?? 0,
-            0
-          );
+        if (picked.contentOffset != null && picked.contentOffset > 0 && revision.contentLength > 0) {
+          offset = Math.min(picked.contentOffset, revision.contentLength);
+        } else if (picked.paragraphIndex > 0 || picked.pageIndex > 0) {
+          if (picked.contentOffset == null && picked.pageIndex > 0) {
+            offset = contentOffsetForPageAnchor(detail.content, nextPages, picked.pageIndex);
+          } else {
+            offset = contentOffsetFromSlice(detail.content, picked.paragraphIndex, 0);
+          }
         }
         anchorRef.current = { contentOffset: offset };
-        pageIndexRef.current = 0;
-        setPageIndex(0);
+        jumpToPage(nextPages, detail.content, offset);
         setChapter(detail);
-        setBootstrapPhase("measuring");
-        if (__DEV__) console.timeEnd("chapter-first-paint");
+        setLoading(false);
+        setReaderReady(true);
       } catch (cause) {
         if (cancelled) return;
         setError(cause instanceof Error ? cause.message : "Não foi possível abrir o capítulo");
-        setBootstrapPhase("settled");
-        if (__DEV__) console.timeEnd("chapter-first-paint");
+        setLoading(false);
+        setReaderReady(true);
       }
     })();
     return () => {
       cancelled = true;
       wordsRequestId.current += 1;
-      if (layoutDebounceRef.current) clearTimeout(layoutDebounceRef.current);
     };
-    // Só chapterId/prefs — `request` estável via token; evitar reload mid-leitura.
-  }, [chapterId, prefsReady]);
-
-  // Só a flag "já pode medir" — não re-disparar fit só porque settled mudou.
-  const canMeasure =
-    bootstrapPhase === "measuring" || bootstrapPhase === "settled";
-
-  useEffect(() => {
-    if (!canMeasure || !chapter || width < 40 || frameHeight < 80) return;
-    pendingLayoutRef.current = { width, height: frameHeight };
-    if (layoutDebounceRef.current) clearTimeout(layoutDebounceRef.current);
-    layoutDebounceRef.current = setTimeout(() => {
-      const pending = pendingLayoutRef.current;
-      if (!pending) return;
-      const fontScale = PixelRatio.getFontScale();
-      const key = buildReadingFitKey(pending.width, pending.height, fontSize, fontScale);
-      // Exige 2 leituras iguais do layout antes do 1º fit.
-      if (key === lastLayoutKeyRef.current) {
-        stableLayoutCountRef.current += 1;
-      } else {
-        lastLayoutKeyRef.current = key;
-        stableLayoutCountRef.current = 1;
-      }
-      if (pagesRef.current.length === 0 && stableLayoutCountRef.current < 2) {
-        layoutDebounceRef.current = setTimeout(() => {
-          const again = pendingLayoutRef.current;
-          if (!again) return;
-          runFit(again.width, again.height);
-        }, FIT_LAYOUT_DEBOUNCE_MS);
-        return;
-      }
-      runFit(pending.width, pending.height);
-    }, FIT_LAYOUT_DEBOUNCE_MS);
-    return () => {
-      if (layoutDebounceRef.current) clearTimeout(layoutDebounceRef.current);
-    };
-  }, [canMeasure, chapter, width, frameHeight, fontSize, runFit]);
+  }, [chapterId, prefsReady, jumpToPage]);
 
   const reloadWords = useCallback(
     async (requestId?: number) => {
@@ -468,24 +378,15 @@ export default function ChapterReaderScreen() {
   );
 
   useEffect(() => {
-    if (!settled || !chapter) return;
-    let cancelled = false;
-    let ran = false;
-    const run = () => {
-      if (cancelled || ran) return;
-      ran = true;
-      const id = ++wordsRequestId.current;
-      void reloadWords(id);
-    };
-    const interaction = InteractionManager.runAfterInteractions(run);
-    const timeout = setTimeout(run, WORDS_DEFER_MS);
+    if (!chapter) return;
+    const id = ++wordsRequestId.current;
+    const timeout = setTimeout(() => undefined, WORDS_READY_TIMEOUT_MS);
+    void reloadWords(id);
     return () => {
-      cancelled = true;
-      wordsRequestId.current += 1;
       clearTimeout(timeout);
-      interaction.cancel?.();
+      wordsRequestId.current += 1;
     };
-  }, [settled, chapter, reloadWords]);
+  }, [chapter, reloadWords]);
 
   useEffect(() => {
     setSelection(null);
@@ -496,20 +397,15 @@ export default function ChapterReaderScreen() {
   useEffect(() => {
     return () => {
       if (!movedRef.current) return;
-      // Garante página a partir do scroll visual, não só do último syncPage.
-      const w = widthRef.current;
-      if (w > 0 && scrollRef.current) {
-        // pageIndexRef já deve estar certo; reforça âncora antes do flush.
-        const content = chapterContentRef.current;
-        if (content && pagesRef.current.length > 0) {
-          anchorRef.current = {
-            contentOffset: contentOffsetForPageAnchor(
-              content,
-              pagesRef.current,
-              pageIndexRef.current
-            ),
-          };
-        }
+      const content = chapterContentRef.current;
+      if (content && pagesRef.current.length > 0) {
+        anchorRef.current = {
+          contentOffset: contentOffsetForPageAnchor(
+            content,
+            pagesRef.current,
+            pageIndexRef.current
+          ),
+        };
       }
       void saveProgress(true);
     };
@@ -596,15 +492,18 @@ export default function ChapterReaderScreen() {
     [pendingAutoSave]
   );
 
-  const toggleRange = useCallback((tokenIndex: number, _clean: string, _occurrence: number, anchor: WordAnchor) => {
-    setRangeIndexes((prev) => {
-      const current = prev ?? [];
-      const next = nextRangeIndexes(current, tokenIndex, MAX_RANGE_WORDS);
-      if (next.length > current.length) softTapHaptic();
-      return next;
-    });
-    setRangeAnchor(anchor);
-  }, []);
+  const toggleRange = useCallback(
+    (tokenIndex: number, _clean: string, _occurrence: number, anchor: WordAnchor) => {
+      setRangeIndexes((prev) => {
+        const current = prev ?? [];
+        const next = nextRangeIndexes(current, tokenIndex, MAX_RANGE_WORDS);
+        if (next.length > current.length) softTapHaptic();
+        return next;
+      });
+      setRangeAnchor(anchor);
+    },
+    []
+  );
 
   const cancelRange = () => {
     setRangeIndexes(null);
@@ -712,14 +611,13 @@ export default function ChapterReaderScreen() {
   };
 
   const onScroll = (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    if (!settledRef.current || !width) return;
+    if (!width) return;
     const next = Math.round(event.nativeEvent.contentOffset.x / width);
     const clamped = Math.min(Math.max(next, 0), Math.max(pagesRef.current.length - 1, 0));
     if (windowIndexRef.current !== clamped) {
       windowIndexRef.current = clamped;
       setWindowIndex(clamped);
     }
-    // Atualiza âncora durante o gesto — não esperar só o momentumEnd (Android falha).
     if (clamped !== pageIndexRef.current) {
       syncPage(clamped, true, true);
     }
@@ -771,11 +669,9 @@ export default function ChapterReaderScreen() {
       contentRevisionRef.current = revision;
       chapterContentRef.current = nextContent;
       anchorRef.current = { contentOffset: 0 };
-      fitKeyRef.current = "";
-      fitCacheRef.current.clear();
-      lastLayoutKeyRef.current = "";
-      stableLayoutCountRef.current = 0;
       movedRef.current = true;
+      const nextPages = paginateReading(nextContent);
+      jumpToPage(nextPages, nextContent, 0);
       setChapter((current) =>
         current
           ? {
@@ -786,9 +682,6 @@ export default function ChapterReaderScreen() {
             }
           : current
       );
-      if (width >= 40 && frameHeight >= 80) {
-        runFit(width, frameHeight);
-      }
       setEditing(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível salvar o capítulo");
@@ -797,7 +690,7 @@ export default function ChapterReaderScreen() {
     }
   };
 
-  if (!prefsReady || bootstrapPhase === "loadingPrefs" || bootstrapPhase === "loadingChapter") {
+  if (!prefsReady || loading) {
     return <Loading />;
   }
 
@@ -816,317 +709,371 @@ export default function ChapterReaderScreen() {
 
   return (
     <ReaderThemeProvider mode={prefs.theme}>
-    <Screen safeBottom backgroundColor={readerTheme.background}>
-      <StatusBar style={readerTheme.statusBarStyle === "light" ? "light" : "dark"} />
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
-        <Pressable onPress={() => router.back()} hitSlop={10} accessibilityRole="button" accessibilityLabel="Fechar">
-          <Ionicons name="close" size={26} color={readerTheme.icon} />
-        </Pressable>
-        <View style={[{ flex: 1, height: 4, borderRadius: 2 }, readerStyles.progressTrack]}>
-          <View
-            style={[
-              {
-                height: 4,
-                borderRadius: 2,
-                width: `${Math.round(progress * 100)}%`,
-              },
-              readerStyles.progressFill,
-            ]}
-          />
-        </View>
-        {chapter?.canEdit ? (
-          <Pressable onPress={openEdit} hitSlop={10} accessibilityRole="button" accessibilityLabel="Editar capítulo">
-            <Ionicons name="create-outline" size={22} color={readerTheme.icon} />
+      <Screen safeBottom backgroundColor={readerTheme.background}>
+        <StatusBar style={readerTheme.statusBarStyle === "light" ? "light" : "dark"} />
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Fechar"
+          >
+            <Ionicons name="close" size={26} color={readerTheme.icon} />
           </Pressable>
-        ) : null}
-        <Pressable
-          onPress={() => setSettingsOpen(true)}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Configurações do texto"
-        >
-          <Text style={{ color: readerTheme.foreground, fontFamily: theme.fonts.bold, fontSize: 18, letterSpacing: -1 }}>
-            TT
-          </Text>
-        </Pressable>
-      </View>
-      {error ? <ErrorText>{error}</ErrorText> : null}
-      {missing ? (
-        <Text style={{ marginTop: 24, color: readerTheme.muted, fontFamily: theme.fonts.regular }}>
-          Capítulo não encontrado.
-        </Text>
-      ) : (
-        <View
-          style={{ flex: 1, marginTop: 16, overflow: "hidden" }}
-          onLayout={(event) => {
-            const nextWidth = event.nativeEvent.layout.width;
-            const nextHeight = event.nativeEvent.layout.height;
-            setWidth((current) => (Math.abs(current - nextWidth) <= 1 ? current : nextWidth));
-            setFrameHeight((current) =>
-              Math.abs(current - nextHeight) <= 1 ? current : nextHeight
-            );
-          }}
-        >
-          {width > 0 && frameHeight > 0 && pages.length > 0 ? (
-            <ScrollView
-              ref={scrollRef}
-              horizontal
-              pagingEnabled
-              nestedScrollEnabled
-              showsHorizontalScrollIndicator={false}
-              onScroll={onScroll}
-              onMomentumScrollEnd={onScrollEnd}
-              onScrollEndDrag={onScrollEnd}
-              onScrollBeginDrag={() => {
-                dismissFromScroll();
-                if (!keepListening.current) return;
-                keepListening.current = false;
-                stopSpeech();
-                setListening(false);
-              }}
-              scrollEventThrottle={16}
-              style={{ width, flex: 1 }}
-              snapToInterval={width}
-              snapToAlignment="start"
-              disableIntervalMomentum
+          <View style={[{ flex: 1, height: 4, borderRadius: 2 }, readerStyles.progressTrack]}>
+            <View
+              style={[
+                {
+                  height: 4,
+                  borderRadius: 2,
+                  width: `${Math.round(progress * 100)}%`,
+                },
+                readerStyles.progressFill,
+              ]}
+            />
+          </View>
+          {chapter?.canEdit ? (
+            <Pressable
+              onPress={openEdit}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Editar capítulo"
             >
-              {pages.map((page, index) => {
-                const active = Math.abs(index - windowIndex) <= WINDOW_RADIUS;
-                return (
-                  <View key={index} style={{ width, height: frameHeight, overflow: "hidden" }}>
-                    {index === 0 && chapter ? (
-                      <ReadingIntro
-                        bookTitle={chapter.bookTitle}
-                        chapterTitle={chapter.title}
-                        bookId={chapter.bookId}
-                      />
-                    ) : null}
-                    <PageSlot
-                      text={page.text}
-                      active={active}
-                      width={width}
-                      fontSize={fontSize}
-                      foundWords={active ? foundWords : EMPTY_FOUND}
-                      selectedClean={index === pageIndex ? (selection?.clean ?? null) : null}
-                      selectedOccurrence={index === pageIndex ? (selection?.occurrence ?? null) : null}
-                      rangeIndexes={index === pageIndex ? rangeIndexes : null}
-                      onSelectWord={selectWord}
-                      onLongPressWord={beginRange}
-                      onToggleRangeWord={toggleRange}
-                    />
-                  </View>
-                );
-              })}
-            </ScrollView>
-          ) : chapter ? (
-            <Loading />
+              <Ionicons name="create-outline" size={22} color={readerTheme.icon} />
+            </Pressable>
           ) : null}
+          <Pressable
+            onPress={() => setSettingsOpen(true)}
+            hitSlop={10}
+            accessibilityRole="button"
+            accessibilityLabel="Configurações do texto"
+          >
+            <Text
+              style={{
+                color: readerTheme.foreground,
+                fontFamily: theme.fonts.bold,
+                fontSize: 18,
+                letterSpacing: -1,
+              }}
+            >
+              TT
+            </Text>
+          </Pressable>
         </View>
-      )}
-      {chapter && pages.length > 0 ? (
-        rangeIndexes ? (
+        {error ? <ErrorText>{error}</ErrorText> : null}
+        {missing ? (
+          <Text style={{ marginTop: 24, color: readerTheme.muted, fontFamily: theme.fonts.regular }}>
+            Capítulo não encontrado.
+          </Text>
+        ) : (
           <View
-            style={{
-              marginTop: 8,
-              borderRadius: 20,
-              backgroundColor: readerTheme.surface,
-              paddingHorizontal: 14,
-              paddingVertical: 12,
-              flexDirection: "row",
-              alignItems: "center",
-              gap: 10,
-              borderWidth: 1,
-              borderColor: readerTheme.border,
+            style={{ flex: 1, marginTop: 16, overflow: "hidden" }}
+            onLayout={(event) => {
+              const nextWidth = event.nativeEvent.layout.width;
+              const nextHeight = event.nativeEvent.layout.height;
+              setWidth((current) => (Math.abs(current - nextWidth) <= 1 ? current : nextWidth));
+              setFrameHeight((current) =>
+                Math.abs(current - nextHeight) <= 1 ? current : nextHeight
+              );
             }}
           >
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                numberOfLines={1}
-                style={{ color: readerTheme.foreground, fontFamily: theme.fonts.bold, fontSize: 15 }}
+            {width > 0 && frameHeight > 0 && pages.length > 0 && readerReady ? (
+              <ScrollView
+                ref={scrollRef}
+                horizontal
+                pagingEnabled
+                nestedScrollEnabled
+                showsHorizontalScrollIndicator={false}
+                onScroll={onScroll}
+                onMomentumScrollEnd={onScrollEnd}
+                onScrollEndDrag={onScrollEnd}
+                onScrollBeginDrag={() => {
+                  dismissFromScroll();
+                  if (!keepListening.current) return;
+                  keepListening.current = false;
+                  stopSpeech();
+                  setListening(false);
+                }}
+                scrollEventThrottle={16}
+                style={{ width, flex: 1 }}
+                snapToInterval={width}
+                snapToAlignment="start"
+                disableIntervalMomentum
               >
-                {rangeSpan || "…"}
-              </Text>
-              <Text style={{ marginTop: 2, color: readerTheme.muted, fontFamily: theme.fonts.medium, fontSize: 12 }}>
-                {rangeIndexes.length}/{MAX_RANGE_WORDS} · toque nas vizinhas
-              </Text>
-            </View>
-            <Pressable
-              onPress={cancelRange}
-              hitSlop={8}
-              style={{
-                paddingHorizontal: 12,
-                paddingVertical: 10,
-                borderRadius: 999,
-                backgroundColor: readerTheme.menu.chip,
-              }}
-            >
-              <Text style={{ color: readerTheme.menu.chipText, fontFamily: theme.fonts.semibold, fontSize: 13 }}>
-                Cancelar
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={confirmRange}
-              hitSlop={8}
-              style={{
-                paddingHorizontal: 14,
-                paddingVertical: 10,
-                borderRadius: 999,
-                backgroundColor: shell.tones.green,
-              }}
-            >
-              <Text style={{ color: shell.onPastel, fontFamily: theme.fonts.bold, fontSize: 13 }}>Abrir</Text>
-            </Pressable>
+                {pages.map((page, index) => {
+                  const active = Math.abs(index - windowIndex) <= windowRadius;
+                  return (
+                    <View key={index} style={{ width, height: frameHeight }}>
+                      <ScrollView
+                        nestedScrollEnabled
+                        showsVerticalScrollIndicator={false}
+                        bounces={false}
+                        keyboardShouldPersistTaps="handled"
+                        contentContainerStyle={{ paddingBottom: 16 }}
+                        style={{ flex: 1 }}
+                      >
+                        {index === 0 && chapter ? (
+                          <ReadingIntro
+                            bookTitle={chapter.bookTitle}
+                            chapterTitle={chapter.title}
+                            bookId={chapter.bookId}
+                          />
+                        ) : null}
+                        <PageSlot
+                          text={page.text}
+                          active={active}
+                          width={width}
+                          fontSize={fontSize}
+                          foundWords={active ? foundWords : EMPTY_FOUND}
+                          selectedClean={index === pageIndex ? (selection?.clean ?? null) : null}
+                          selectedOccurrence={
+                            index === pageIndex ? (selection?.occurrence ?? null) : null
+                          }
+                          rangeIndexes={index === pageIndex ? rangeIndexes : null}
+                          onSelectWord={selectWord}
+                          onLongPressWord={beginRange}
+                          onToggleRangeWord={toggleRange}
+                        />
+                      </ScrollView>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            ) : chapter ? (
+              <Loading />
+            ) : null}
           </View>
-        ) : (
-          <View style={{ flexDirection: "row", alignItems: "center", paddingTop: 8 }}>
-            <Pressable
-              onPress={toggleListen}
-              disabled={!(pages[pageIndex]?.text ?? "").trim()}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel={listening ? "Pausar leitura" : "Ouvir esta página"}
-              style={{ flex: 1, alignItems: "flex-start", minWidth: 56 }}
+        )}
+        {chapter && pages.length > 0 && readerReady ? (
+          rangeIndexes ? (
+            <View
+              style={{
+                marginTop: 8,
+                borderRadius: 20,
+                backgroundColor: readerTheme.surface,
+                paddingHorizontal: 14,
+                paddingVertical: 12,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 10,
+                borderWidth: 1,
+                borderColor: readerTheme.border,
+              }}
             >
-              <Ionicons
-                name={listening ? "pause" : "headset-outline"}
-                size={26}
-                color={listening ? readerTheme.accent : readerTheme.icon}
-              />
-            </Pressable>
-            <Text style={{ color: readerTheme.muted, fontFamily: theme.fonts.semibold }}>
-              {pageIndex + 1} / {pages.length}
-            </Text>
-            <Pressable
-              onPress={() => setWordsOpen(true)}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel={`${listedWords.length} palavras salvas neste livro`}
-              style={{ flex: 1, alignItems: "flex-end", minWidth: 56 }}
-            >
-              <View>
-                <Ionicons name="list-outline" size={26} color={readerTheme.icon} />
-                <View
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text
+                  numberOfLines={1}
                   style={{
-                    position: "absolute",
-                    top: -6,
-                    right: -10,
-                    minWidth: 18,
-                    height: 18,
-                    borderRadius: 9,
-                    paddingHorizontal: 4,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: readerTheme.accent,
+                    color: readerTheme.foreground,
+                    fontFamily: theme.fonts.bold,
+                    fontSize: 15,
                   }}
                 >
-                  <Text style={{ color: "#ffffff", fontFamily: theme.fonts.bold, fontSize: 10 }}>
-                    {listedWords.length}
-                  </Text>
-                </View>
+                  {rangeSpan || "…"}
+                </Text>
+                <Text
+                  style={{
+                    marginTop: 2,
+                    color: readerTheme.muted,
+                    fontFamily: theme.fonts.medium,
+                    fontSize: 12,
+                  }}
+                >
+                  {rangeIndexes.length}/{MAX_RANGE_WORDS} · toque nas vizinhas
+                </Text>
               </View>
-            </Pressable>
-          </View>
-        )
-      ) : null}
-      <BookWordsSheet
-        open={wordsOpen}
-        words={listedWords}
-        onClose={() => setWordsOpen(false)}
-        onPick={(word) => {
-          setWordsOpen(false);
-          selectWord(normalizeToken(word.name) || word.name, 0, { x: 0, y: 0, width: 0, height: 0 }, true);
-        }}
-      />
-      <TextSettingsSheet
-        visible={settingsOpen}
-        onClose={() => setSettingsOpen(false)}
-        prefs={prefs}
-        onChange={patchPrefs}
-        onSpeechSettingsCommit={restartListeningIfNeeded}
-      />
-      {chapter && selection ? (
-        <ReadingWordMenu
-          clean={selection.clean}
-          anchor={selection.anchor}
-          sourceText={pages[pageIndex]?.text ?? ""}
-          chapterContent={chapter.content}
-          pages={pages}
-          pageIndex={pageIndex}
-          bookTitle={chapter.bookTitle}
-          saved={saved?.id && saved.id > 0 ? saved : null}
-          vaults={vaults}
-          full={selection.full}
-          voiceId={prefs.voiceId}
-          onClose={() => closeWordMenu()}
-          onCloseSession={closeWordMenu}
-          onChanged={async () => {
-            if (pendingAutoSave) {
-              autoSaveInFlight.current.delete(pendingAutoSave);
-              setPendingAutoSave(null);
-            }
-            try {
-              await reloadWords(++wordsRequestId.current);
-            } catch {
-              Alert.alert("Erro", "Não foi possível atualizar as palavras salvas.");
-            }
-          }}
-        />
-      ) : null}
-
-      <Modal animationType="fade" transparent visible={editing} onRequestClose={closeEdit}>
-        <KeyboardAvoidingView
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-          style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }}
-        >
-          <Pressable style={{ flex: 1, justifyContent: "center", padding: 24 }} onPress={closeEdit}>
-            <Pressable
-              onPress={(event) => event.stopPropagation()}
-              style={{
-                backgroundColor: theme.shell.surface,
-                borderRadius: theme.radii.lg,
-                padding: 20,
-                borderWidth: 1,
-                borderColor: theme.shell.line,
-                maxHeight: sheetMaxHeight,
-                overflow: "hidden",
-              }}
-            >
-              <Heading>Editar capítulo</Heading>
-              <Field
-                autoFocus
-                value={editTitle}
-                onChangeText={setEditTitle}
-                placeholder="Título do capítulo"
-                style={{ marginTop: 12 }}
-              />
-              <Field
-                value={editContent}
-                onChangeText={setEditContent}
-                placeholder="Texto do capítulo"
-                multiline
-                scrollEnabled
-                textAlignVertical="top"
+              <Pressable
+                onPress={cancelRange}
+                hitSlop={8}
                 style={{
-                  marginTop: 10,
-                  height: contentMaxHeight,
-                  maxHeight: contentMaxHeight,
+                  paddingHorizontal: 12,
+                  paddingVertical: 10,
+                  borderRadius: 999,
+                  backgroundColor: readerTheme.menu.chip,
                 }}
-              />
-              <PrimaryButton
-                label={savingEdit ? "Salvando..." : "Salvar alterações"}
-                disabled={savingEdit || !editTitle.trim() || !editContent.trim()}
-                onPress={() => void saveEdit()}
-              />
-              <Pressable onPress={closeEdit} style={{ alignItems: "center", marginTop: 14 }}>
-                <Text style={{ color: theme.colors.mutedForeground, fontFamily: theme.fonts.semibold }}>
+              >
+                <Text
+                  style={{
+                    color: readerTheme.menu.chipText,
+                    fontFamily: theme.fonts.semibold,
+                    fontSize: 13,
+                  }}
+                >
                   Cancelar
                 </Text>
               </Pressable>
+              <Pressable
+                onPress={confirmRange}
+                hitSlop={8}
+                style={{
+                  paddingHorizontal: 14,
+                  paddingVertical: 10,
+                  borderRadius: 999,
+                  backgroundColor: shell.tones.green,
+                }}
+              >
+                <Text style={{ color: shell.onPastel, fontFamily: theme.fonts.bold, fontSize: 13 }}>
+                  Abrir
+                </Text>
+              </Pressable>
+            </View>
+          ) : (
+            <View style={{ flexDirection: "row", alignItems: "center", paddingTop: 8 }}>
+              <Pressable
+                onPress={toggleListen}
+                disabled={!(pages[pageIndex]?.text ?? "").trim()}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={listening ? "Pausar leitura" : "Ouvir esta página"}
+                style={{ flex: 1, alignItems: "flex-start", minWidth: 56 }}
+              >
+                <Ionicons
+                  name={listening ? "pause" : "headset-outline"}
+                  size={26}
+                  color={listening ? readerTheme.accent : readerTheme.icon}
+                />
+              </Pressable>
+              <Text style={{ color: readerTheme.muted, fontFamily: theme.fonts.semibold }}>
+                {pageIndex + 1} / {pages.length}
+              </Text>
+              <Pressable
+                onPress={() => setWordsOpen(true)}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel={`${listedWords.length} palavras salvas neste livro`}
+                style={{ flex: 1, alignItems: "flex-end", minWidth: 56 }}
+              >
+                <View>
+                  <Ionicons name="list-outline" size={26} color={readerTheme.icon} />
+                  <View
+                    style={{
+                      position: "absolute",
+                      top: -6,
+                      right: -10,
+                      minWidth: 18,
+                      height: 18,
+                      borderRadius: 9,
+                      paddingHorizontal: 4,
+                      alignItems: "center",
+                      justifyContent: "center",
+                      backgroundColor: readerTheme.accent,
+                    }}
+                  >
+                    <Text style={{ color: "#ffffff", fontFamily: theme.fonts.bold, fontSize: 10 }}>
+                      {listedWords.length}
+                    </Text>
+                  </View>
+                </View>
+              </Pressable>
+            </View>
+          )
+        ) : null}
+        <BookWordsSheet
+          open={wordsOpen}
+          words={listedWords}
+          onClose={() => setWordsOpen(false)}
+          onPick={(word) => {
+            setWordsOpen(false);
+            selectWord(normalizeToken(word.name) || word.name, 0, {
+              x: 0,
+              y: 0,
+              width: 0,
+              height: 0,
+            }, true);
+          }}
+        />
+        <TextSettingsSheet
+          visible={settingsOpen}
+          onClose={() => setSettingsOpen(false)}
+          prefs={prefs}
+          onChange={patchPrefs}
+          onSpeechSettingsCommit={restartListeningIfNeeded}
+        />
+        {chapter && selection ? (
+          <ReadingWordMenu
+            clean={selection.clean}
+            anchor={selection.anchor}
+            sourceText={pages[pageIndex]?.text ?? ""}
+            chapterContent={chapter.content}
+            pages={pages}
+            pageIndex={pageIndex}
+            bookTitle={chapter.bookTitle}
+            saved={saved?.id && saved.id > 0 ? saved : null}
+            vaults={vaults}
+            full={selection.full}
+            voiceId={prefs.voiceId}
+            onClose={() => closeWordMenu()}
+            onCloseSession={closeWordMenu}
+            onChanged={async () => {
+              if (pendingAutoSave) {
+                autoSaveInFlight.current.delete(pendingAutoSave);
+                setPendingAutoSave(null);
+              }
+              try {
+                await reloadWords(++wordsRequestId.current);
+              } catch {
+                Alert.alert("Erro", "Não foi possível atualizar as palavras salvas.");
+              }
+            }}
+          />
+        ) : null}
+
+        <Modal animationType="fade" transparent visible={editing} onRequestClose={closeEdit}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
+            style={{ flex: 1, backgroundColor: "rgba(0,0,0,0.45)" }}
+          >
+            <Pressable style={{ flex: 1, justifyContent: "center", padding: 24 }} onPress={closeEdit}>
+              <Pressable
+                onPress={(event) => event.stopPropagation()}
+                style={{
+                  backgroundColor: theme.shell.surface,
+                  borderRadius: theme.radii.lg,
+                  padding: 20,
+                  borderWidth: 1,
+                  borderColor: theme.shell.line,
+                  maxHeight: sheetMaxHeight,
+                  overflow: "hidden",
+                }}
+              >
+                <Heading>Editar capítulo</Heading>
+                <Field
+                  autoFocus
+                  value={editTitle}
+                  onChangeText={setEditTitle}
+                  placeholder="Título do capítulo"
+                  style={{ marginTop: 12 }}
+                />
+                <Field
+                  value={editContent}
+                  onChangeText={setEditContent}
+                  placeholder="Texto do capítulo"
+                  multiline
+                  scrollEnabled
+                  textAlignVertical="top"
+                  style={{
+                    marginTop: 10,
+                    height: contentMaxHeight,
+                    maxHeight: contentMaxHeight,
+                  }}
+                />
+                <PrimaryButton
+                  label={savingEdit ? "Salvando..." : "Salvar alterações"}
+                  disabled={savingEdit || !editTitle.trim() || !editContent.trim()}
+                  onPress={() => void saveEdit()}
+                />
+                <Pressable onPress={closeEdit} style={{ alignItems: "center", marginTop: 14 }}>
+                  <Text
+                    style={{ color: theme.colors.mutedForeground, fontFamily: theme.fonts.semibold }}
+                  >
+                    Cancelar
+                  </Text>
+                </Pressable>
+              </Pressable>
             </Pressable>
-          </Pressable>
-        </KeyboardAvoidingView>
-      </Modal>
-    </Screen>
+          </KeyboardAvoidingView>
+        </Modal>
+      </Screen>
     </ReaderThemeProvider>
   );
 }
@@ -1138,8 +1085,7 @@ function wordsSavedInChapter(found: FoundTextWord[]): BookWord[] {
     const clean = normalizeToken(item.word);
     if (!clean || seen.has(clean)) continue;
     const vault = item.vaultInfo[0];
-    const saved =
-      vault?.words.find((entry) => normalizeToken(entry.name) === clean) ?? vault?.words[0];
+    const saved = vault?.words.find((entry) => normalizeToken(entry.name) === clean);
     if (!saved || saved.id <= 0) continue;
     seen.add(clean);
     rows.push({
@@ -1181,7 +1127,10 @@ function BookWordsSheet({
   const ordered = [...words].sort((a, b) => a.name.localeCompare(b.name, "en"));
   return (
     <Modal visible={open} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable onPress={onClose} style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.45)" }}>
+      <Pressable
+        onPress={onClose}
+        style={{ flex: 1, justifyContent: "flex-end", backgroundColor: "rgba(0,0,0,0.45)" }}
+      >
         <Pressable
           onPress={() => undefined}
           style={{
@@ -1196,7 +1145,9 @@ function BookWordsSheet({
           }}
         >
           <View style={{ alignItems: "center", marginBottom: 12 }}>
-            <View style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: reader.menu.cardBorder }} />
+            <View
+              style={{ width: 40, height: 4, borderRadius: 2, backgroundColor: reader.menu.cardBorder }}
+            />
           </View>
           <Text
             style={{
@@ -1247,7 +1198,13 @@ function BookWordsSheet({
                         backgroundColor: LEVEL_COLORS[level - 1],
                       }}
                     >
-                      <Text style={{ color: LEVEL_TEXT[level - 1], fontFamily: theme.fonts.bold, fontSize: 11 }}>
+                      <Text
+                        style={{
+                          color: LEVEL_TEXT[level - 1],
+                          fontFamily: theme.fonts.bold,
+                          fontSize: 11,
+                        }}
+                      >
                         {level}
                       </Text>
                     </View>
@@ -1308,7 +1265,12 @@ function ReadingIntro({
         <View style={{ flex: 1 }}>
           <Text
             numberOfLines={2}
-            style={{ color: readerTheme.foreground, fontFamily: theme.fonts.bold, fontSize: 16, lineHeight: 20 }}
+            style={{
+              color: readerTheme.foreground,
+              fontFamily: theme.fonts.bold,
+              fontSize: 16,
+              lineHeight: 20,
+            }}
           >
             {bookTitle}
           </Text>
