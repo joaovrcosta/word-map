@@ -1,5 +1,6 @@
 import {
   countWords,
+  estimateWrappedTextHeight,
   formatChapterContent,
   normalizeReadingPosition,
   paginateReading,
@@ -122,6 +123,18 @@ describe("paginateReading", () => {
     const pages = paginateReadingToFit(huge, () => false);
     expect(pages).toHaveLength(1);
     expect(pages[0].text).toBe(huge);
+  });
+
+  it("estima altura de texto quebrado por largura", () => {
+    const short = estimateWrappedTextHeight("Hello world", 200, 18, 26);
+    const long = estimateWrappedTextHeight(
+      Array.from({ length: 80 }, (_, i) => `word${i}`).join(" "),
+      200,
+      18,
+      26
+    );
+    expect(short).toBeLessThan(long);
+    expect(short).toBeGreaterThanOrEqual(26);
   });
 
   it("reconstrói os parágrafos sem perder nem duplicar texto", () => {

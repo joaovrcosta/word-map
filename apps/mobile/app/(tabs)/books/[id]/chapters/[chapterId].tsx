@@ -17,10 +17,12 @@ import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
 import { BookArt, bookAuthor } from "../../../../../src/features/books/cover";
 import {
+  estimateWrappedTextHeight,
   formatChapterContent,
   normalizeReadingPosition,
   normalizeToken,
-  paginateReading,
+  paginateReadingToFit,
+  type ReadingPage,
 } from "@word-map/shared";
 import {
   EMPTY_FOUND,
@@ -46,6 +48,10 @@ const LEVEL_COLORS = ["#ff4b4b", "#ff9600", "#ffc800", "#24c875"];
 const LEVEL_TEXT = ["#ffffff", "#ffffff", "#3c3c3c", "#ffffff"];
 const WINDOW_RADIUS = 1;
 const WORDS_DEFER_MS = 300;
+/** Reserva inicial do ReadingIntro (capa + título) até o onLayout real. */
+const INTRO_HEIGHT_GUESS = 148;
+/** Folga contra padding de highlights / arredondamento da estimativa. */
+const FIT_HEIGHT_MARGIN = 28;
 
 function softTapHaptic() {
   if (Platform.OS === "web") return;
@@ -65,9 +71,12 @@ export default function ChapterReaderScreen() {
   const [error, setError] = useState<string | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [windowIndex, setWindowIndex] = useState(0);
+  const [pages, setPages] = useState<ReadingPage[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [fontSize, setFontSize] = useState(FONT_SIZES[0]);
   const [width, setWidth] = useState(0);
+  const [frameHeight, setFrameHeight] = useState(0);
+  const [introHeight, setIntroHeight] = useState(INTRO_HEIGHT_GUESS);
   const [settled, setSettled] = useState(false);
   const [foundWords, setFoundWords] = useState<FoundTextWord[]>([]);
   const [bookWords, setBookWords] = useState<BookWord[]>([]);
@@ -96,15 +105,59 @@ export default function ChapterReaderScreen() {
   const scrollRef = useRef<ScrollView>(null);
   const pageIndexRef = useRef(0);
   const windowIndexRef = useRef(0);
-  const pagesRef = useRef<ReturnType<typeof paginateReading>>([]);
+  const pagesRef = useRef<ReadingPage[]>([]);
   const widthRef = useRef(0);
   const keepListening = useRef(false);
   const advancing = useRef(false);
   const openedAt = useRef(0);
   const wordsRequestId = useRef(0);
-  const [pages, setPages] = useState<ReturnType<typeof paginateReading>>([]);
+  const progressAnchor = useRef({ paragraphIndex: 0, pageIndex: 0 });
+  const fitKeyRef = useRef("");
   pagesRef.current = pages;
   widthRef.current = width;
+
+  const lineHeight = Math.round(fontSize * 1.5);
+
+  const buildFittedPages = useCallback(
+    (content: string, pageWidth: number, pageHeight: number, intro: number): ReadingPage[] => {
+      if (!content.trim() || pageWidth < 40 || pageHeight < 80) {
+        return [{ text: content.trim() ? content : "", wordCount: 0, slices: [] }];
+      }
+      return paginateReadingToFit(content, (sample, pageOrdinal) => {
+        const reserve = pageOrdinal === 0 ? intro : 0;
+        const budget = pageHeight - reserve - FIT_HEIGHT_MARGIN;
+        if (budget < lineHeight * 2) return false;
+        return estimateWrappedTextHeight(sample, pageWidth, fontSize, lineHeight) <= budget;
+      });
+    },
+    [fontSize, lineHeight]
+  );
+
+  const applyPages = useCallback(
+    (nextPages: ReadingPage[], preferAnchor = true) => {
+      const anchor = preferAnchor
+        ? progressAnchor.current
+        : {
+            paragraphIndex: pagesRef.current[pageIndexRef.current]?.slices[0]?.paragraphIndex ?? 0,
+            pageIndex: pageIndexRef.current,
+          };
+      const position = normalizeReadingPosition(
+        nextPages,
+        anchor.paragraphIndex,
+        anchor.pageIndex
+      );
+      progressAnchor.current = {
+        paragraphIndex: position.paragraphIndex,
+        pageIndex: position.pageIndex,
+      };
+      pageIndexRef.current = position.pageIndex;
+      windowIndexRef.current = position.pageIndex;
+      setPageIndex(position.pageIndex);
+      setWindowIndex(position.pageIndex);
+      setPages(nextPages);
+    },
+    []
+  );
 
   const syncPage = useCallback((next: number, clearSelection = true) => {
     const clamped = Math.min(Math.max(next, 0), Math.max(pagesRef.current.length - 1, 0));
@@ -115,6 +168,11 @@ export default function ChapterReaderScreen() {
     }
     pageIndexRef.current = clamped;
     setPageIndex(clamped);
+    const page = pagesRef.current[clamped];
+    progressAnchor.current = {
+      paragraphIndex: page?.slices[0]?.paragraphIndex ?? progressAnchor.current.paragraphIndex,
+      pageIndex: clamped,
+    };
     if (windowIndexRef.current !== clamped) {
       windowIndexRef.current = clamped;
       setWindowIndex(clamped);
@@ -123,6 +181,18 @@ export default function ChapterReaderScreen() {
 
   useEffect(() => {
     let cancelled = false;
+    setSettled(false);
+    setHydrated(false);
+    setMissing(false);
+    setError(null);
+    setFoundWords([]);
+    setBookWords([]);
+    setPages([]);
+    setIntroHeight(INTRO_HEIGHT_GUESS);
+    fitKeyRef.current = "";
+    setSelection(null);
+    setRangeIndexes(null);
+    setRangeAnchor(null);
     if (__DEV__) console.time("chapter-first-paint");
     (async () => {
       try {
@@ -133,18 +203,15 @@ export default function ChapterReaderScreen() {
         if (cancelled) return;
         if (!detail) {
           setMissing(true);
+          setPages([]);
+          setChapter(null);
           setHydrated(true);
           return;
         }
-        const nextPages = paginateReading(detail.content);
-        const position = progress
-          ? normalizeReadingPosition(nextPages, progress.paragraphIndex, progress.pageIndex)
-          : { pageIndex: 0, paragraphIndex: 0 };
-        pageIndexRef.current = position.pageIndex;
-        windowIndexRef.current = position.pageIndex;
-        setPageIndex(position.pageIndex);
-        setWindowIndex(position.pageIndex);
-        setPages(nextPages);
+        progressAnchor.current = {
+          paragraphIndex: progress?.paragraphIndex ?? 0,
+          pageIndex: progress?.pageIndex ?? 0,
+        };
         setChapter(detail);
         setHydrated(true);
         if (__DEV__) console.timeEnd("chapter-first-paint");
@@ -162,10 +229,19 @@ export default function ChapterReaderScreen() {
   }, [chapterId, request]);
 
   useEffect(() => {
-    if (!hydrated || !width) return;
+    if (!hydrated || !chapter || width < 40 || frameHeight < 80) return;
+    const key = `${chapter.id}:${width}x${frameHeight}:${fontSize}:${introHeight}`;
+    if (fitKeyRef.current === key) return;
+    fitKeyRef.current = key;
+    const nextPages = buildFittedPages(chapter.content, width, frameHeight, introHeight);
+    applyPages(nextPages, true);
+  }, [hydrated, chapter, width, frameHeight, fontSize, introHeight, buildFittedPages, applyPages]);
+
+  useEffect(() => {
+    if (!hydrated || !width || pages.length === 0) return;
     scrollRef.current?.scrollTo({ x: pageIndexRef.current * width, animated: false });
     setSettled(true);
-  }, [hydrated, width]);
+  }, [hydrated, width, pages]);
 
   const reloadWords = useCallback(
     async (requestId?: number) => {
@@ -437,19 +513,18 @@ export default function ChapterReaderScreen() {
       });
       const nextContent = formatChapterContent(updated.content ?? content);
       const nextTitle = updated.title ?? title;
-      const nextPages = paginateReading(nextContent);
-      const nextIndex = Math.min(pageIndexRef.current, Math.max(nextPages.length - 1, 0));
-      setPages(nextPages);
+      fitKeyRef.current = "";
       setChapter((current) =>
         current ? { ...current, title: nextTitle, content: nextContent } : current
       );
-      syncPage(nextIndex, false);
-      setEditing(false);
-      if (width) {
+      if (width >= 40 && frameHeight >= 80) {
+        const nextPages = buildFittedPages(nextContent, width, frameHeight, introHeight);
+        applyPages(nextPages, false);
         requestAnimationFrame(() => {
-          scrollRef.current?.scrollTo({ x: nextIndex * width, animated: false });
+          scrollRef.current?.scrollTo({ x: pageIndexRef.current * width, animated: false });
         });
       }
+      setEditing(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível salvar o capítulo");
     } finally {
@@ -502,10 +577,17 @@ export default function ChapterReaderScreen() {
         </Text>
       ) : (
         <View
-          style={{ flex: 1, marginTop: 16 }}
-          onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
+          style={{ flex: 1, marginTop: 16, overflow: "hidden" }}
+          onLayout={(event) => {
+            const nextWidth = event.nativeEvent.layout.width;
+            const nextHeight = event.nativeEvent.layout.height;
+            setWidth((current) => (Math.abs(current - nextWidth) <= 1 ? current : nextWidth));
+            setFrameHeight((current) =>
+              Math.abs(current - nextHeight) <= 1 ? current : nextHeight
+            );
+          }}
         >
-          {width > 0 ? (
+          {width > 0 && frameHeight > 0 && pages.length > 0 ? (
             <ScrollView
               ref={scrollRef}
               horizontal
@@ -515,6 +597,7 @@ export default function ChapterReaderScreen() {
               onScroll={onScroll}
               onMomentumScrollEnd={onScrollEnd}
               onScrollBeginDrag={() => {
+                dismissFromScroll();
                 if (!keepListening.current) return;
                 keepListening.current = false;
                 stopSpeech();
@@ -529,37 +612,42 @@ export default function ChapterReaderScreen() {
               {pages.map((page, index) => {
                 const active = Math.abs(index - windowIndex) <= WINDOW_RADIUS;
                 return (
-                  <View key={index} style={{ width, height: "100%" }}>
-                    <ScrollView
-                      nestedScrollEnabled
-                      onScrollBeginDrag={dismissFromScroll}
-                      contentContainerStyle={{ paddingBottom: 24 }}
-                    >
-                      {index === 0 && chapter ? (
+                  <View key={index} style={{ width, height: frameHeight, overflow: "hidden" }}>
+                    {index === 0 && chapter ? (
+                      <View
+                        onLayout={(event) => {
+                          const next = Math.ceil(event.nativeEvent.layout.height);
+                          setIntroHeight((current) =>
+                            Math.abs(current - next) <= 2 ? current : next
+                          );
+                        }}
+                      >
                         <ReadingIntro
                           bookTitle={chapter.bookTitle}
                           chapterTitle={chapter.title}
                           bookId={chapter.bookId}
                         />
-                      ) : null}
-                      <PageSlot
-                        text={page.text}
-                        active={active}
-                        width={width}
-                        fontSize={fontSize}
-                        foundWords={active ? foundWords : EMPTY_FOUND}
-                        selectedClean={index === pageIndex ? (selection?.clean ?? null) : null}
-                        selectedOccurrence={index === pageIndex ? (selection?.occurrence ?? null) : null}
-                        rangeIndexes={index === pageIndex ? rangeIndexes : null}
-                        onSelectWord={selectWord}
-                        onLongPressWord={beginRange}
-                        onToggleRangeWord={toggleRange}
-                      />
-                    </ScrollView>
+                      </View>
+                    ) : null}
+                    <PageSlot
+                      text={page.text}
+                      active={active}
+                      width={width}
+                      fontSize={fontSize}
+                      foundWords={active ? foundWords : EMPTY_FOUND}
+                      selectedClean={index === pageIndex ? (selection?.clean ?? null) : null}
+                      selectedOccurrence={index === pageIndex ? (selection?.occurrence ?? null) : null}
+                      rangeIndexes={index === pageIndex ? rangeIndexes : null}
+                      onSelectWord={selectWord}
+                      onLongPressWord={beginRange}
+                      onToggleRangeWord={toggleRange}
+                    />
                   </View>
                 );
               })}
             </ScrollView>
+          ) : hydrated && chapter ? (
+            <Loading />
           ) : null}
         </View>
       )}

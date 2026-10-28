@@ -308,9 +308,39 @@ function pageFromSlices(slices: PageSlice[]): ReadingPage {
   return { text, wordCount: countWords(text), slices };
 }
 
+/**
+ * Estima a altura de um bloco de texto com quebra de linha (sem medir no DOM/RN).
+ * Usado por `paginateReadingToFit` no mobile quando não há probe síncrono.
+ */
+export function estimateWrappedTextHeight(
+  text: string,
+  width: number,
+  fontSize: number,
+  lineHeight: number,
+  avgCharFactor = 0.52
+): number {
+  if (width <= 0 || fontSize <= 0 || lineHeight <= 0) return Number.POSITIVE_INFINITY;
+  const trimmed = text.trim();
+  if (!trimmed) return lineHeight;
+
+  const maxChars = Math.max(1, Math.floor(width / (fontSize * avgCharFactor)));
+  const blocks = trimmed.split(/\n+/);
+  let totalLines = 0;
+  for (let index = 0; index < blocks.length; index += 1) {
+    const block = blocks[index]!.replace(/\s+/g, " ").trim();
+    if (!block) {
+      totalLines += 1;
+      continue;
+    }
+    totalLines += Math.max(1, Math.ceil(block.length / maxChars));
+    if (index < blocks.length - 1) totalLines += 1;
+  }
+  return totalLines * lineHeight;
+}
+
 export function paginateReadingToFit(
   content: string,
-  fits: (text: string) => boolean
+  fits: (text: string, pageIndex: number) => boolean
 ): ReadingPage[] {
   const paragraphs = splitParagraphs(content);
   if (paragraphs.length === 0) {
@@ -320,6 +350,7 @@ export function paginateReadingToFit(
   const units = sentenceUnits(paragraphs);
   const pages: ReadingPage[] = [];
   let cursor = 0;
+  let pageIndex = 0;
 
   while (cursor < units.length) {
     let low = cursor;
@@ -331,7 +362,7 @@ export function paginateReadingToFit(
       const text = pageFromSlices(
         slicesFromUnits(paragraphs, units.slice(cursor, mid + 1))
       ).text;
-      if (mid === cursor || fits(text)) {
+      if (mid === cursor || fits(text, pageIndex)) {
         best = mid;
         low = mid + 1;
       } else {
@@ -343,6 +374,7 @@ export function paginateReadingToFit(
       pageFromSlices(slicesFromUnits(paragraphs, units.slice(cursor, best + 1)))
     );
     cursor = best + 1;
+    pageIndex += 1;
   }
 
   return pages;
