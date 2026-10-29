@@ -46,7 +46,6 @@ export function StudyOffenseChip({ onPress, compact = false }: Props) {
   const done = Boolean(today?.completed) || progress >= 1;
   const inProgress = !done && progress > 0;
   const flameColor = done || inProgress ? RING_ACTIVE : theme.shell.muted;
-  const streakLabel = today?.currentStreak && today.currentStreak > 0 ? String(today.currentStreak) : null;
 
   if (compact) {
     return (
@@ -95,20 +94,6 @@ export function StudyOffenseChip({ onPress, compact = false }: Props) {
           </Svg>
         ) : null}
         <Ionicons name="flame" size={18} color={flameColor} />
-        {streakLabel ? (
-          <Text
-            style={{
-              position: "absolute",
-              right: -1,
-              bottom: 0,
-              color: flameColor,
-              fontFamily: theme.fonts.bold,
-              fontSize: 9,
-            }}
-          >
-            {streakLabel}
-          </Text>
-        ) : null}
       </Pressable>
     );
   }
