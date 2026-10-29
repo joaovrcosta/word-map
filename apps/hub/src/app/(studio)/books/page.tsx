@@ -41,10 +41,20 @@ export default function BooksPage() {
 
   return (
     <div>
-      <h1 className="text-3xl font-extrabold">Livros</h1>
-      <p className="mt-2 text-sm text-[#667085]">
-        Um livro oficial fica disponível na loja para os leitores adicionarem à biblioteca.
-      </p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-extrabold">Livros</h1>
+          <p className="mt-2 text-sm text-[#667085]">
+            Um livro oficial fica disponível na loja para os leitores adicionarem à biblioteca.
+          </p>
+        </div>
+        <Link
+          href="/books/import"
+          className="rounded-xl border border-[#24c875] px-4 py-2 text-sm font-extrabold text-[#14804a]"
+        >
+          Importar PDF
+        </Link>
+      </div>
 
       <form onSubmit={onSubmit} className="mt-6 rounded-3xl bg-white p-5 shadow-sm">
         <h2 className="font-extrabold">Novo livro</h2>

@@ -22,6 +22,18 @@ export function countWords(text: string): number {
   return trimmed.split(/\s+/).length;
 }
 
+/** Ritmo médio de leitura em voz alta / learner (~200 wpm). */
+export const AVERAGE_READING_WORDS_PER_MINUTE = 200;
+
+/** Minutos de leitura estimados (mín. 1 se houver texto). */
+export function estimateReadingMinutes(
+  wordCount: number,
+  wordsPerMinute = AVERAGE_READING_WORDS_PER_MINUTE
+): number {
+  if (wordCount <= 0) return 0;
+  return Math.max(1, Math.round(wordCount / wordsPerMinute));
+}
+
 export function splitParagraphs(content: string): string[] {
   if (!content.trim()) return [];
   return content
@@ -127,6 +139,75 @@ export function formatChapterContent(raw: string): string {
 
   flush();
   return paragraphs.join("\n\n");
+}
+
+export type ImportedChapter = {
+  title: string;
+  content: string;
+};
+
+/**
+ * Detecta títulos de capítulo no texto bruto do PDF (antes de formatChapterContent,
+ * que remove linhas tipo "Chapter 1" como lixo de página).
+ */
+const CHAPTER_HEADING =
+  /^(chapter|capítulo|capitulo|letter|part|parte|book|volume)\s+([0-9]+|[ivxlcdm]+)(?:\s*[:.\-–—]\s*(.+))?$/i;
+
+function titleCaseHeading(kind: string, num: string, rest: string): string {
+  const label = `${kind.charAt(0).toUpperCase()}${kind.slice(1).toLowerCase()} ${num}`;
+  return rest ? `${label}: ${rest}` : label;
+}
+
+/**
+ * Parte o texto de um livro em capítulos por headings tipográficos.
+ * Sem capítulos detectados, devolve um único bloco "Capítulo 1".
+ * Matéria antes do 1º capítulo vira "Início" se tiver texto suficiente.
+ */
+export function splitBookChapters(raw: string): ImportedChapter[] {
+  if (!raw.trim()) return [];
+
+  const lines = raw.replace(/\r\n?/g, "\n").split("\n");
+  const breaks: Array<{ lineIndex: number; title: string }> = [];
+
+  for (let i = 0; i < lines.length; i += 1) {
+    const trimmed = lines[i]!.trim();
+    if (!trimmed || trimmed.length > 80) continue;
+    const match = CHAPTER_HEADING.exec(trimmed);
+    if (!match) continue;
+    breaks.push({
+      lineIndex: i,
+      title: titleCaseHeading(match[1]!, match[2]!, (match[3] ?? "").trim()),
+    });
+  }
+
+  if (breaks.length === 0) {
+    const content = formatChapterContent(raw);
+    return content ? [{ title: "Capítulo 1", content }] : [];
+  }
+
+  const chapters: ImportedChapter[] = [];
+  const firstBreak = breaks[0]!;
+  if (firstBreak.lineIndex > 0) {
+    const front = formatChapterContent(lines.slice(0, firstBreak.lineIndex).join("\n"));
+    if (countWords(front) >= 80) {
+      chapters.push({ title: "Início", content: front });
+    }
+  }
+
+  for (let i = 0; i < breaks.length; i += 1) {
+    const start = breaks[i]!.lineIndex + 1;
+    const end = i + 1 < breaks.length ? breaks[i + 1]!.lineIndex : lines.length;
+    const content = formatChapterContent(lines.slice(start, end).join("\n"));
+    if (!content) continue;
+    chapters.push({ title: breaks[i]!.title, content });
+  }
+
+  if (chapters.length === 0) {
+    const content = formatChapterContent(raw);
+    return content ? [{ title: "Capítulo 1", content }] : [];
+  }
+
+  return chapters;
 }
 
 function endsWithAbbreviation(value: string): boolean {

@@ -22,7 +22,7 @@ export const DEFAULT_READING_PREFERENCES: ReadingPreferences = {
   theme: "dark",
   voiceId: null,
   speechRate: READING_SPEECH_RATE_DEFAULT,
-  fontSize: 18,
+  fontSize: 22,
   autoSaveWords: false,
 };
 

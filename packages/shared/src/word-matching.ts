@@ -1,5 +1,50 @@
 export const TOKEN_REGEX = /\b[a-z]+(?:'[a-z]+)?(?:-[a-z]+)*\b/gi;
 
+/**
+ * Separadores tipográficos entre palavras coladas:
+ * travessão (school—ever) e reticências (talk...less / talk…less).
+ * Hífen ASCII (-) permanece em compostos (well-known).
+ */
+export const WORD_BREAK_SEPARATOR =
+  /\.{2,}|\u2026|[\u2012\u2013\u2014\u2212]/g;
+
+export type WordSpan = {
+  start: number;
+  end: number;
+  surface: string;
+};
+
+/** Spans tocáveis: quebra em whitespace, travessão e reticências. */
+export function iterateWordSpans(text: string): WordSpan[] {
+  const spans: WordSpan[] = [];
+  for (const match of text.matchAll(/\S+/g)) {
+    const chunkStart = match.index ?? 0;
+    const chunk = match[0];
+    let last = 0;
+    const separator = new RegExp(WORD_BREAK_SEPARATOR.source, "g");
+    let breakMatch: RegExpExecArray | null = separator.exec(chunk);
+    while (breakMatch) {
+      if (breakMatch.index > last) {
+        spans.push({
+          start: chunkStart + last,
+          end: chunkStart + breakMatch.index,
+          surface: chunk.slice(last, breakMatch.index),
+        });
+      }
+      last = breakMatch.index + breakMatch[0].length;
+      breakMatch = separator.exec(chunk);
+    }
+    if (last < chunk.length) {
+      spans.push({
+        start: chunkStart + last,
+        end: chunkStart + chunk.length,
+        surface: chunk.slice(last),
+      });
+    }
+  }
+  return spans;
+}
+
 export interface MatchableWord {
   id: number;
   name: string;

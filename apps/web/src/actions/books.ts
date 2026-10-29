@@ -18,6 +18,7 @@ export type ChapterSummary = {
   contentLength?: number;
   contentOffset?: number | null;
   reachedEndAt?: Date | string | null;
+  progressUpdatedAt?: Date | string | null;
   createdAt?: Date;
   updatedAt?: Date;
 };
@@ -26,6 +27,8 @@ export type BookDetail = BookListItem & {
   chapters: ChapterSummary[];
   canEdit: boolean;
   readingFraction?: number;
+  wordCount?: number;
+  readingMinutes?: number;
 };
 
 export type ContentRevision = {

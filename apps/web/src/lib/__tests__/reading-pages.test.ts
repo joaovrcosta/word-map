@@ -6,6 +6,7 @@ import {
   countWords,
   estimateWrappedTextHeight,
   formatChapterContent,
+  splitBookChapters,
   hashNormalizedContent,
   normalizeReadingPosition,
   pageContentRange,
@@ -303,5 +304,35 @@ describe("formatChapterContent", () => {
     const clean =
       "First paragraph stays together.\n\nSecond paragraph also stays together.";
     expect(formatChapterContent(clean)).toBe(clean);
+  });
+});
+
+describe("splitBookChapters", () => {
+  it("parte por headings Chapter N e formata o corpo", () => {
+    const front = Array.from({ length: 90 }, (_, i) => `Word${i + 1}`).join(" ");
+    const raw = [
+      front,
+      "Chapter 1",
+      "Dad never drove with us to school—ever. He said the city was safer on foot.",
+      "Chapter 2: The Deal",
+      "We met at midnight under the bridge and waited for the signal.",
+    ].join("\n");
+
+    const chapters = splitBookChapters(raw);
+    expect(chapters.map((item) => item.title)).toEqual([
+      "Início",
+      "Chapter 1",
+      "Chapter 2: The Deal",
+    ]);
+    expect(chapters[1]?.content).toContain("Dad never drove");
+    expect(chapters[1]?.content).not.toMatch(/^Chapter 1$/m);
+    expect(chapters[2]?.content).toContain("midnight");
+  });
+
+  it("sem heading vira um único capítulo", () => {
+    const chapters = splitBookChapters("Just a short story without headings.");
+    expect(chapters).toHaveLength(1);
+    expect(chapters[0]?.title).toBe("Capítulo 1");
+    expect(chapters[0]?.content).toContain("Just a short story");
   });
 });

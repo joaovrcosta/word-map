@@ -7,7 +7,12 @@ import {
   type RefObject,
 } from "react";
 import { Text, type GestureResponderEvent } from "react-native";
-import { normalizePhrase, normalizeToken, splitTokenEdges } from "@word-map/shared";
+import {
+  iterateWordSpans,
+  normalizePhrase,
+  normalizeToken,
+  splitTokenEdges,
+} from "@word-map/shared";
 import { useTheme } from "../../theme";
 import { useReaderTheme } from "./reader-theme";
 
@@ -62,21 +67,21 @@ export type PageWordToken = {
 export function tokenizePageText(text: string, vaultWords: Set<string>): PageWordToken[] {
   const tokens: PageWordToken[] = [];
   const seen = new Map<string, number>();
-  const pattern = /\S+/g;
-  let match: RegExpExecArray | null = pattern.exec(text);
   let index = 0;
-  while (match) {
-    const surface = match[0];
-    const clean = normalizeToken(surface);
+  for (const span of iterateWordSpans(text)) {
+    const clean = normalizeToken(span.surface);
     if (clean) {
       const occurrence = seen.get(clean) ?? 0;
       seen.set(clean, occurrence + 1);
-      const inVault = vaultWords.has(clean);
-      const openable = Boolean(clean);
-      tokens.push({ index, surface, clean, occurrence, openable });
+      tokens.push({
+        index,
+        surface: span.surface,
+        clean,
+        occurrence,
+        openable: Boolean(clean),
+      });
     }
     index += 1;
-    match = pattern.exec(text);
   }
   return tokens;
 }
@@ -173,20 +178,17 @@ export const ReadingPageText = memo(function ReadingPageText({
 
     const parsed: Parsed[] = [];
     const seen = new Map<string, number>();
-    const pattern = /\S+/g;
-    let match: RegExpExecArray | null = pattern.exec(text);
     let tokenIndex = 0;
-    while (match) {
-      const surface = match[0];
-      const clean = normalizeToken(surface);
+    for (const span of iterateWordSpans(text)) {
+      const clean = normalizeToken(span.surface);
       if (clean) {
         const occurrence = seen.get(clean) ?? 0;
         seen.set(clean, occurrence + 1);
         parsed.push({
           index: tokenIndex,
-          start: match.index,
-          end: match.index + surface.length,
-          surface,
+          start: span.start,
+          end: span.end,
+          surface: span.surface,
           clean,
           occurrence,
           inVault: vaultWords.has(clean),
@@ -194,7 +196,6 @@ export const ReadingPageText = memo(function ReadingPageText({
         });
       }
       tokenIndex += 1;
-      match = pattern.exec(text);
     }
 
     const phrases = [...vaultPhrases];

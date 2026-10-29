@@ -30,7 +30,7 @@ import { normalizeGrammaticalClass } from "@/lib/dictionary";
 import { useLoadUserSettings } from "@/hooks/use-user-settings";
 import { useStudyHeartbeat } from "@/hooks/use-study-heartbeat";
 import useUserSettingsStore from "@/store/userSettingsStore";
-import { normalizeToken } from "@/lib/word-matching";
+import { iterateWordSpans, normalizeToken } from "@/lib/word-matching";
 import { useTextSelection } from "@/hooks/use-text-selection";
 import { TextSelectionPopover } from "@/components/text-selection-popover";
 import {
@@ -668,11 +668,9 @@ export function TextViewer({
 
       let last = 0;
       let tokenKey = 0;
-      for (const match of content.matchAll(/\S+/g)) {
-        const start = match.index ?? 0;
+      for (const span of iterateWordSpans(content)) {
+        const { start, end, surface } = span;
         if (start > last) nodes.push(content.slice(last, start));
-        const surface = match[0];
-        const end = start + surface.length;
         const clean = normalizeToken(surface);
         const inVault = vaultWords.has(clean);
         const clickable = inVault || (surface.trim().length > 2 && clean.length >= 3);

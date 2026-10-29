@@ -419,8 +419,6 @@ function ContinueCard({ book, busy, onOpen }: { book: BookListItem; busy: boolea
         padding: 12,
         borderRadius: 16,
         backgroundColor: theme.shell.surface,
-        borderWidth: 1,
-        borderColor: theme.shell.line,
         opacity: busy ? 0.55 : 1,
       }}
     >

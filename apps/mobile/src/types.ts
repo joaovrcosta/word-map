@@ -40,12 +40,15 @@ export type ChapterSummary = {
   contentLength?: number;
   contentOffset?: number | null;
   reachedEndAt?: string | null;
+  progressUpdatedAt?: string | null;
 };
 
 export type BookDetail = BookListItem & {
   chapters: ChapterSummary[];
   canEdit: boolean;
   readingFraction?: number;
+  wordCount?: number;
+  readingMinutes?: number;
 };
 
 export type ChapterDetail = {

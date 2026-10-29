@@ -15,7 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import * as Haptics from "expo-haptics";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useLocalSearchParams, useNavigation } from "expo-router";
 import { BookArt, bookAuthor } from "../../../../../src/features/books/cover";
 import {
   chapterContentRevision,
@@ -45,6 +45,7 @@ import {
   useReaderTheme,
   useReadingPreferences,
   useResolvedReaderTheme,
+  writeBookResume,
   writeProgressCache,
   type FoundTextWord,
   type WordAnchor,
@@ -103,7 +104,9 @@ export default function ChapterReaderScreen() {
   const { request } = useSession();
   const requestRef = useRef(request);
   requestRef.current = request;
+  const navigation = useNavigation();
   const params = useLocalSearchParams<{ id: string; chapterId: string }>();
+  const bookId = Number(params.id);
   const chapterId = Number(params.chapterId);
   const sheetMaxHeight = Math.round(windowHeight * 0.86);
   const contentMaxHeight = Math.max(140, Math.round(windowHeight * 0.34));
@@ -195,7 +198,7 @@ export default function ChapterReaderScreen() {
           next = null;
           saveQueuedRef.current = null;
           try {
-            await request(`/chapters/${chapterId}/progress`, {
+            await requestRef.current(`/chapters/${chapterId}/progress`, {
               method: "PUT",
               body: JSON.stringify({
                 ...body,
@@ -211,8 +214,10 @@ export default function ChapterReaderScreen() {
         saveInFlightRef.current = false;
       }
     },
-    [chapterId, request]
+    [chapterId]
   );
+  const saveProgressRef = useRef(saveProgress);
+  saveProgressRef.current = saveProgress;
 
   const syncPage = useCallback(
     (next: number, clearSelection = true, fromUser = false) => {
@@ -257,6 +262,20 @@ export default function ChapterReaderScreen() {
       animated: false,
     });
   }, [readerReady, pages, pageIndex, width]);
+
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", () => {
+      void saveProgressRef.current(true);
+    });
+    return unsubscribe;
+  }, [navigation]);
+
+  useEffect(() => {
+    return () => {
+      // Fecha sobre o saveProgress deste chapterId (não a ref, que já pode ser o próximo).
+      void saveProgress(true);
+    };
+  }, [chapterId, saveProgress]);
 
   useEffect(() => {
     if (!readerReady) {
@@ -329,6 +348,10 @@ export default function ChapterReaderScreen() {
         setChapter(detail);
         setLoading(false);
         setReaderReady(true);
+        void writeBookResume(detail.bookId || bookId, chapterId);
+        // Marca este capítulo como o último lido (mesmo sem virar página).
+        movedRef.current = true;
+        void saveProgressRef.current(true);
       } catch (cause) {
         if (cancelled) return;
         setError(cause instanceof Error ? cause.message : "Não foi possível abrir o capítulo");
@@ -340,7 +363,7 @@ export default function ChapterReaderScreen() {
       cancelled = true;
       wordsRequestId.current += 1;
     };
-  }, [chapterId, prefsReady, jumpToPage]);
+  }, [bookId, chapterId, prefsReady, jumpToPage]);
 
   const reloadWords = useCallback(
     async (requestId?: number) => {

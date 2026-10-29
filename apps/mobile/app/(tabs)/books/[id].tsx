@@ -15,10 +15,31 @@ import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-ro
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { formatChapterContent } from "@word-map/shared";
 import { BookArt, bookAuthor } from "../../../src/features/books/cover";
+import { readBookResume } from "../../../src/features/reading";
 import { useSession } from "../../../src/session";
 import { shell, tabBarContentInset, useTheme } from "../../../src/theme";
 import { type BookDetail, type ChapterDetail, type ChapterSummary } from "../../../src/types";
 import { ErrorText, Field, Heading, Loading, Muted, PrimaryButton } from "../../../src/ui";
+
+function resumeChapter(chapters: ChapterSummary[], resumeId: number | null) {
+  if (resumeId != null) {
+    const fromLocal = chapters.find((chapter) => chapter.id === resumeId);
+    if (fromLocal) return fromLocal;
+  }
+  let latest: ChapterSummary | null = null;
+  let latestTs = 0;
+  for (const chapter of chapters) {
+    if (!chapter.progressUpdatedAt) continue;
+    const ts = Date.parse(chapter.progressUpdatedAt);
+    if (!Number.isFinite(ts) || ts <= latestTs) continue;
+    latest = chapter;
+    latestTs = ts;
+  }
+  if (latest) return latest;
+  return (
+    chapters.find((chapter) => !chapter.reachedEndAt) ?? chapters[0] ?? null
+  );
+}
 
 type ChapterDraft = {
   id: number | null;
@@ -184,15 +205,23 @@ export default function BookDetailScreen() {
   };
 
   const readBook = () => {
-    if (firstChapter) {
-      router.push(`/books/${bookId}/chapters/${firstChapter.id}` as Href);
+    if (chapters.length === 0) {
+      if (book?.canEdit) {
+        openCreate();
+        return;
+      }
+      setTab("chapters");
       return;
     }
-    if (book?.canEdit) {
-      openCreate();
-      return;
-    }
-    setTab("chapters");
+    void (async () => {
+      const resumeId = await readBookResume(bookId);
+      const target = resumeChapter(chapters, resumeId) ?? firstChapter;
+      if (!target) {
+        setTab("chapters");
+        return;
+      }
+      router.push(`/books/${bookId}/chapters/${target.id}` as Href);
+    })();
   };
 
   if (!book && !missing && !error) return <Loading />;
@@ -359,6 +388,21 @@ export default function BookDetailScreen() {
                 ? ` · ${Math.round(book.readingFraction * 100)}% lido`
                 : ""}
             </Text>
+            {(book?.wordCount ?? 0) > 0 ? (
+              <Text
+                style={{
+                  marginTop: 8,
+                  color: shell.muted,
+                  fontFamily: theme.fonts.medium,
+                  fontSize: 13,
+                }}
+              >
+                {(book?.wordCount ?? 0).toLocaleString("pt-BR")}{" "}
+                {(book?.wordCount ?? 0) === 1 ? "palavra" : "palavras"}
+                {" · ~"}
+                {book?.readingMinutes ?? 0} min de leitura
+              </Text>
+            ) : null}
           </View>
         ) : null}
 
@@ -414,17 +458,24 @@ export default function BookDetailScreen() {
                     }
                     style={{ flex: 1, minWidth: 0 }}
                   >
-                    <Text
+                    <View
                       style={{
-                        color: shell.muted,
-                        fontFamily: theme.fonts.semibold,
-                        fontSize: 12,
+                        flexDirection: "row",
+                        alignItems: "center",
+                        gap: 6,
                       }}
                     >
-                      Capítulo {index + 1}
-                      {chapter.reachedEndAt
-                        ? " · Concluído"
-                        : chapter.contentLength && chapter.contentOffset != null
+                      <Text
+                        style={{
+                          color: shell.muted,
+                          fontFamily: theme.fonts.semibold,
+                          fontSize: 12,
+                        }}
+                      >
+                        Capítulo {index + 1}
+                        {!chapter.reachedEndAt &&
+                        chapter.contentLength &&
+                        chapter.contentOffset != null
                           ? ` · ${Math.min(
                               100,
                               Math.round(
@@ -432,7 +483,11 @@ export default function BookDetailScreen() {
                               )
                             )}%`
                           : ""}
-                    </Text>
+                      </Text>
+                      {chapter.reachedEndAt ? (
+                        <Ionicons name="checkmark-circle" size={16} color="#24c875" />
+                      ) : null}
+                    </View>
                     <Text
                       style={{
                         color: shell.foreground,

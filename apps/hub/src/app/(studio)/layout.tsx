@@ -3,7 +3,13 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api, roleLabel, webOrigin, type SessionUser } from "@/lib/api";
+import {
+  api,
+  clearAccessToken,
+  roleLabel,
+  webOrigin,
+  type SessionUser,
+} from "@/lib/api";
 import { SessionProvider } from "@/lib/session";
 
 const links = [
@@ -30,7 +36,10 @@ export default function StudioLayout({
   }, []);
 
   useEffect(() => {
-    if (user === null) router.replace("/login");
+    if (user === null) {
+      clearAccessToken();
+      router.replace("/login");
+    }
   }, [router, user]);
 
   if (user === undefined || user === null) {
@@ -61,21 +70,25 @@ export default function StudioLayout({
   }
 
   async function logout() {
-    await api("POST", "/auth/logout");
-    router.replace("/login");
+    try {
+      await api("POST", "/auth/logout");
+    } finally {
+      clearAccessToken();
+      router.replace("/login");
+    }
   }
 
   return (
     <SessionProvider user={user}>
-      <div className="min-h-screen md:grid md:grid-cols-[240px_1fr]">
-        <aside className="bg-[#17202a] text-white md:min-h-screen">
+      <div className="min-h-screen md:grid md:h-screen md:grid-cols-[240px_1fr] md:overflow-hidden">
+        <aside className="flex flex-col bg-[#17202a] text-white md:h-full md:overflow-y-auto">
           <div className="px-5 py-6">
             <p className="text-xs font-extrabold uppercase tracking-wide text-[#7ddea8]">
               Word Map
             </p>
             <p className="text-xl font-extrabold">Content Hub</p>
           </div>
-          <nav className="flex gap-2 overflow-x-auto px-3 pb-4 md:block md:space-y-1 md:px-3">
+          <nav className="flex gap-2 overflow-x-auto px-3 pb-4 md:block md:flex-1 md:space-y-1 md:overflow-y-auto md:px-3">
             {links.map((link) => {
               const active =
                 link.href === "/"
@@ -106,23 +119,30 @@ export default function StudioLayout({
               </Link>
             )}
           </nav>
-          <div className="hidden px-5 py-6 md:block">
+          <div className="mt-auto hidden border-t border-white/10 px-5 py-5 md:block">
             <p className="text-sm font-extrabold">{user.name}</p>
             <p className="text-xs text-[#9aa6b2]">{roleLabel(user.role)}</p>
             <button
               type="button"
-              onClick={logout}
-              className="mt-4 text-sm font-bold text-[#7ddea8]"
+              onClick={() => void logout()}
+              className="mt-4 w-full rounded-xl bg-white/10 px-3 py-2.5 text-sm font-extrabold text-white hover:bg-white/15"
             >
-              Sair
+              Deslogar
             </button>
           </div>
         </aside>
-        <div className="min-w-0">
-          <div className="flex items-center justify-between px-4 py-3 md:hidden">
-            <p className="text-sm font-extrabold">{user.name}</p>
-            <button type="button" onClick={logout} className="text-sm font-bold text-[#14804a]">
-              Sair
+        <div className="min-w-0 md:h-full md:overflow-y-auto">
+          <div className="flex items-center justify-between gap-3 border-b border-[#e8edf3] bg-white px-4 py-3 md:hidden">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-extrabold">{user.name}</p>
+              <p className="text-xs text-[#667085]">{roleLabel(user.role)}</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => void logout()}
+              className="shrink-0 rounded-xl bg-[#17202a] px-3 py-2 text-sm font-extrabold text-white"
+            >
+              Deslogar
             </button>
           </div>
           <div className="mx-auto max-w-5xl px-4 py-6 md:px-8 md:py-8">{children}</div>

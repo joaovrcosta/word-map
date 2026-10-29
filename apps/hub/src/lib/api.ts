@@ -119,8 +119,23 @@ export const LEVELS = ["A1", "A2", "B1", "B2", "C1", "C2"] as const;
 export const webOrigin = () =>
   process.env.NEXT_PUBLIC_WEB_URL || "http://localhost:3000";
 
+const TOKEN_KEY = "wordmap-hub-token";
+
 function apiBase() {
   return process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
+}
+
+export function readAccessToken() {
+  if (typeof window === "undefined") return null;
+  return window.localStorage.getItem(TOKEN_KEY);
+}
+
+export function writeAccessToken(token: string) {
+  window.localStorage.setItem(TOKEN_KEY, token);
+}
+
+export function clearAccessToken() {
+  window.localStorage.removeItem(TOKEN_KEY);
 }
 
 function readError(payload: unknown) {
@@ -145,11 +160,15 @@ export async function api<T>(
   path: string,
   body?: unknown
 ): Promise<T> {
+  const headers: Record<string, string> = {};
+  if (body !== undefined) headers["content-type"] = "application/json";
+  const token = readAccessToken();
+  if (token) headers.authorization = `Bearer ${token}`;
+
   const response = await fetch(`${apiBase()}${path}`, {
     method,
     credentials: "include",
-    headers:
-      body === undefined ? undefined : { "content-type": "application/json" },
+    headers,
     body: body === undefined ? undefined : JSON.stringify(body),
     cache: "no-store",
   });

@@ -9,6 +9,8 @@ import {
 import { publicErrorMessage } from "../lib/public-error";
 import {
   chapterContentRevision,
+  countWords,
+  estimateReadingMinutes,
   formatChapterContent,
 } from "@word-map/shared/reading-pages";
 
@@ -53,6 +55,8 @@ export type ChapterSummary = {
   updatedAt: Date;
   contentOffset: number | null;
   reachedEndAt: Date | null;
+  /** Quando o usuário tocou/salvou progresso neste capítulo pela última vez. */
+  progressUpdatedAt: Date | null;
 };
 
 export type BookDetail = BookListItem & {
@@ -60,6 +64,8 @@ export type BookDetail = BookListItem & {
   canEdit: boolean;
   /** Fração 0..1 pela soma de offsets / soma de contentLength. */
   readingFraction: number;
+  wordCount: number;
+  readingMinutes: number;
 };
 
 export type ReadingPosition = {
@@ -567,6 +573,7 @@ export async function getBookById(bookId: number): Promise<BookDetail | null> {
         chapterId: true,
         contentOffset: true,
         reachedEndAt: true,
+        updatedAt: true,
       },
     });
     const progressByChapter = new Map(
@@ -575,12 +582,14 @@ export async function getBookById(bookId: number): Promise<BookDetail | null> {
 
     let totalLength = 0;
     let totalOffset = 0;
+    let wordCount = 0;
     const chapters = book.chapters.map((chapter) => {
       const revision = revisionFromChapter(chapter);
       const progress = progressByChapter.get(chapter.id);
       const contentOffset = progress?.contentOffset ?? null;
       const reachedEndAt = progress?.reachedEndAt ?? null;
       totalLength += revision.contentLength;
+      wordCount += countWords(chapter.content);
       if (reachedEndAt || contentOffset === revision.contentLength) {
         totalOffset += revision.contentLength;
       } else if (contentOffset != null) {
@@ -599,6 +608,7 @@ export async function getBookById(bookId: number): Promise<BookDetail | null> {
         updatedAt: chapter.updatedAt,
         contentOffset,
         reachedEndAt,
+        progressUpdatedAt: progress?.updatedAt ?? null,
       };
     });
 
@@ -608,6 +618,8 @@ export async function getBookById(bookId: number): Promise<BookDetail | null> {
       chapters,
       readingFraction:
         totalLength > 0 ? Math.min(1, totalOffset / totalLength) : 0,
+      wordCount,
+      readingMinutes: estimateReadingMinutes(wordCount),
     };
   } catch (error) {
     if (error instanceof Error && error.message === "Livro não encontrado") {

@@ -2,6 +2,7 @@ import { Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
 const STORAGE_PREFIX = "wordmap-reading-progress:";
+const BOOK_RESUME_PREFIX = "wordmap-book-resume:";
 
 export type CachedReadingProgress = {
   chapterId: number;
@@ -13,6 +14,10 @@ export type CachedReadingProgress = {
 
 function storageKey(chapterId: number) {
   return `${STORAGE_PREFIX}${chapterId}`;
+}
+
+function bookResumeKey(bookId: number) {
+  return `${BOOK_RESUME_PREFIX}${bookId}`;
 }
 
 async function readRaw(key: string): Promise<string | null> {
@@ -90,6 +95,27 @@ export async function writeProgressCache(
   };
   try {
     await writeRaw(storageKey(chapterId), JSON.stringify(payload));
+  } catch {
+    // cache é best-effort
+  }
+}
+
+/** Último capítulo aberto neste livro (resume local). */
+export async function readBookResume(bookId: number): Promise<number | null> {
+  try {
+    const raw = await readRaw(bookResumeKey(bookId));
+    if (!raw) return null;
+    const chapterId = Number(raw);
+    return Number.isFinite(chapterId) && chapterId > 0 ? chapterId : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function writeBookResume(bookId: number, chapterId: number): Promise<void> {
+  if (!(bookId > 0) || !(chapterId > 0)) return;
+  try {
+    await writeRaw(bookResumeKey(bookId), String(chapterId));
   } catch {
     // cache é best-effort
   }

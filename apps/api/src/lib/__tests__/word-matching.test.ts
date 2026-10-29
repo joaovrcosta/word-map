@@ -15,6 +15,7 @@ import {
   extractTextTokens,
   isTwoWordPhrase,
   isValidSelectionForSave,
+  iterateWordSpans,
   normalizeToken,
   splitTokenEdges,
   parseHighlightMarker,
@@ -74,6 +75,36 @@ describe("word-matching", () => {
     it("preserva hífen e apóstrofo internos", () => {
       expect(normalizeToken("well-known")).toBe("well-known");
       expect(normalizeToken("don't")).toBe("don't");
+    });
+  });
+
+  describe("iterateWordSpans", () => {
+    it("separa palavras ligadas por travessão tipográfico", () => {
+      expect(iterateWordSpans("school—ever")).toEqual([
+        { start: 0, end: 6, surface: "school" },
+        { start: 7, end: 11, surface: "ever" },
+      ]);
+      expect(iterateWordSpans("school–ever.")).toEqual([
+        { start: 0, end: 6, surface: "school" },
+        { start: 7, end: 12, surface: "ever." },
+      ]);
+    });
+
+    it("separa palavras ligadas por reticências", () => {
+      expect(iterateWordSpans("talk...less")).toEqual([
+        { start: 0, end: 4, surface: "talk" },
+        { start: 7, end: 11, surface: "less" },
+      ]);
+      expect(iterateWordSpans("talk…less")).toEqual([
+        { start: 0, end: 4, surface: "talk" },
+        { start: 5, end: 9, surface: "less" },
+      ]);
+    });
+
+    it("mantém hífen ASCII de compostos juntos", () => {
+      expect(iterateWordSpans("well-known")).toEqual([
+        { start: 0, end: 10, surface: "well-known" },
+      ]);
     });
   });
 

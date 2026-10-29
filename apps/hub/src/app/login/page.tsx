@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useRouter } from "next/navigation";
-import { api, type SessionUser } from "@/lib/api";
+import { api, writeAccessToken, type SessionUser } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -16,11 +16,12 @@ export default function LoginPage() {
     setPending(true);
     setError("");
     try {
-      const result = await api<{ success: boolean; user?: SessionUser; error?: string }>(
-        "POST",
-        "/auth/login",
-        { email, password }
-      );
+      const result = await api<{
+        success: boolean;
+        user?: SessionUser;
+        token?: string;
+        error?: string;
+      }>("POST", "/auth/login", { email, password });
       if (!result.success || !result.user) {
         setError(result.error || "Email ou senha inválidos");
         return;
@@ -31,6 +32,11 @@ export default function LoginPage() {
         );
         return;
       }
+      if (!result.token) {
+        setError("Login ok, mas a API não devolveu token. Tente de novo.");
+        return;
+      }
+      writeAccessToken(result.token);
       router.replace("/");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível entrar.");
