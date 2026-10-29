@@ -15,31 +15,11 @@ import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-ro
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { formatChapterContent } from "@word-map/shared";
 import { BookArt, bookAuthor } from "../../../src/features/books/cover";
-import { readBookResume } from "../../../src/features/reading";
+import { pickResumeChapter, readBookResume } from "../../../src/features/reading";
 import { useSession } from "../../../src/session";
 import { shell, tabBarContentInset, useTheme } from "../../../src/theme";
 import { type BookDetail, type ChapterDetail, type ChapterSummary } from "../../../src/types";
 import { ErrorText, Field, Heading, Loading, Muted, PrimaryButton } from "../../../src/ui";
-
-function resumeChapter(chapters: ChapterSummary[], resumeId: number | null) {
-  if (resumeId != null) {
-    const fromLocal = chapters.find((chapter) => chapter.id === resumeId);
-    if (fromLocal) return fromLocal;
-  }
-  let latest: ChapterSummary | null = null;
-  let latestTs = 0;
-  for (const chapter of chapters) {
-    if (!chapter.progressUpdatedAt) continue;
-    const ts = Date.parse(chapter.progressUpdatedAt);
-    if (!Number.isFinite(ts) || ts <= latestTs) continue;
-    latest = chapter;
-    latestTs = ts;
-  }
-  if (latest) return latest;
-  return (
-    chapters.find((chapter) => !chapter.reachedEndAt) ?? chapters[0] ?? null
-  );
-}
 
 type ChapterDraft = {
   id: number | null;
@@ -178,16 +158,21 @@ export default function BookDetailScreen() {
         method: book.inLibrary ? "DELETE" : "POST",
       });
       await load();
+      if (nextSaved) {
+        router.replace("/home?shelf=saved" as Href);
+        return;
+      }
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "Não foi possível atualizar a biblioteca";
       // Já estava salvo → trata como sucesso e sincroniza
       if (message.toLowerCase().includes("já está na sua biblioteca")) {
         setBook((current) => (current ? { ...current, inLibrary: true } : current));
         await load();
-      } else {
-        setBook((current) => (current ? { ...current, inLibrary: !nextSaved } : current));
-        setError(message);
+        router.replace("/home?shelf=saved" as Href);
+        return;
       }
+      setBook((current) => (current ? { ...current, inLibrary: !nextSaved } : current));
+      setError(message);
     } finally {
       setBusyLibrary(false);
     }
@@ -215,7 +200,7 @@ export default function BookDetailScreen() {
     }
     void (async () => {
       const resumeId = await readBookResume(bookId);
-      const target = resumeChapter(chapters, resumeId) ?? firstChapter;
+      const target = pickResumeChapter(chapters, resumeId) ?? firstChapter;
       if (!target) {
         setTab("chapters");
         return;
@@ -240,7 +225,10 @@ export default function BookDetailScreen() {
         <RoundIcon
           name="chevron-back"
           label="Voltar"
-          onPress={() => router.back()}
+          onPress={() => {
+            // Evita cair noutro livro empilhado no stack do tab books.
+            router.replace("/home" as Href);
+          }}
         />
         <Text style={{ color: shell.foreground, fontFamily: theme.fonts.bold, fontSize: 18 }}>
           Detalhes

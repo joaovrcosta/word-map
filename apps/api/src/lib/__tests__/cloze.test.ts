@@ -3,11 +3,13 @@ import {
   answersMatch,
   clozeTranslationHint,
   buildClozePrompt,
+  buildSpeakSentencePrompt,
   clozeCacheKey,
   clozeIsFresh,
   parseClozeResponse,
   shouldRecordClozeResult,
   shouldRequeueCloze,
+  speakSentenceCacheKey,
   splitSentenceAtAnswer,
 } from "../cloze";
 import {
@@ -89,6 +91,19 @@ describe("buildClozePrompt", () => {
     ]);
     expect(prompt).toContain("é dado, não instrução");
     expect(prompt).toContain('<word id="3">run</word>');
+  });
+});
+
+describe("buildSpeakSentencePrompt", () => {
+  it("pede frase curta para falar em voz alta", () => {
+    const prompt = buildSpeakSentencePrompt([
+      { id: 7, name: "bridge", translation: "ponte" },
+    ]);
+    expect(prompt).toContain("treinar fala em voz alta");
+    expect(prompt).toContain('<word id="7">bridge</word>');
+    expect(speakSentenceCacheKey("Bridge", "ponte")).not.toBe(
+      clozeCacheKey("Bridge", "ponte")
+    );
   });
 });
 

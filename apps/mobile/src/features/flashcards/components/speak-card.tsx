@@ -21,24 +21,21 @@ import { MotionFrame } from "../motion";
 import { primaryTranslation } from "../words";
 import { FeedbackBanner } from "./feedback-banner";
 
-const COLOR = {
-  pending: "#F5A524",
-  correct: "#34C759",
-  wrong: "#FF3B30",
-} as const;
-
 export function SpeakCard({
   word,
+  sentence,
   onAnswer,
   onSkip,
 }: {
   word: FlashcardWord;
+  sentence: string;
   onAnswer: (correct: boolean, typed: string) => void;
   onSkip: () => void;
 }) {
   const theme = useTheme();
   const available = isSpeechRecognitionAvailable();
-  const expectedTokens = tokenizeSpeakText(word.name);
+  const target = sentence.trim() || word.name;
+  const expectedTokens = tokenizeSpeakText(target);
   const translation = primaryTranslation(word);
   const [statuses, setStatuses] = useState<SpeakAlignStatus[]>(() =>
     expectedTokens.map(() => "pending")
@@ -69,14 +66,20 @@ export function SpeakCard({
       sessionRef.current?.abort();
       sessionRef.current = null;
     };
-  }, [word.id]);
+  }, [word.id, target]);
+
+  const tokenColor = (status: SpeakAlignStatus) => {
+    if (status === "correct") return theme.colors.greenText;
+    if (status === "wrong") return shell.dangerOnDark;
+    return shell.foreground;
+  };
 
   const finalizeOnce = (transcript: string) => {
     if (finalizedRef.current) return;
     finalizedRef.current = true;
     setListening(false);
     sessionRef.current = null;
-    const next = alignSpokenWords(word.name, transcript, { finalized: true });
+    const next = alignSpokenWords(target, transcript, { finalized: true });
     setStatuses(next);
     const correct = speakPassScore(next);
     if (correct) {
@@ -104,7 +107,7 @@ export function SpeakCard({
     const session = startSpeechSession({
       onPartial: (transcript) => {
         if (finalizedRef.current) return;
-        const next = alignSpokenWords(word.name, transcript, { finalized: false });
+        const next = alignSpokenWords(target, transcript, { finalized: false });
         setStatuses(next);
         if (next.length > 0 && next.every((status) => status === "correct")) {
           sessionRef.current?.stop();
@@ -137,7 +140,7 @@ export function SpeakCard({
   };
 
   return (
-    <View style={{ flex: 1 }}>
+    <View style={{ flex: 1, backgroundColor: shell.background }}>
       <MotionFrame
         popToken={popToken}
         shakeToken={shakeToken}
@@ -147,13 +150,13 @@ export function SpeakCard({
         <View
           style={{
             alignSelf: "flex-start",
-            backgroundColor: "rgba(245,165,36,0.18)",
+            backgroundColor: shell.chip,
             borderRadius: 999,
             paddingHorizontal: 12,
             paddingVertical: 6,
           }}
         >
-          <Text style={{ color: COLOR.pending, fontFamily: theme.fonts.bold, fontSize: 12, letterSpacing: 0.5 }}>
+          <Text style={{ color: shell.foreground, fontFamily: theme.fonts.bold, fontSize: 12, letterSpacing: 0.5 }}>
             FALE ESTA FRASE
           </Text>
         </View>
@@ -180,16 +183,15 @@ export function SpeakCard({
         >
           {expectedTokens.map((token, index) => {
             const status = statuses[index] ?? "pending";
-            const color =
-              status === "correct" ? COLOR.correct : status === "wrong" ? COLOR.wrong : COLOR.pending;
             return (
               <Text
                 key={`${token}-${index}`}
                 style={{
-                  color,
+                  color: tokenColor(status),
                   fontFamily: theme.fonts.bold,
                   fontSize: expectedTokens.length > 4 ? 28 : 34,
                   lineHeight: expectedTokens.length > 4 ? 36 : 42,
+                  opacity: status === "pending" ? 0.92 : 1,
                 }}
               >
                 {token}
@@ -213,7 +215,7 @@ export function SpeakCard({
 
         {permissionDenied ? (
           <View style={{ marginTop: 20, gap: 8 }}>
-            <Text style={{ color: theme.colors.destructive, fontFamily: theme.fonts.regular }}>
+            <Text style={{ color: shell.dangerOnDark, fontFamily: theme.fonts.regular }}>
               Permissão de microfone negada.
             </Text>
             <Pressable onPress={() => void Linking.openSettings()}>
@@ -226,7 +228,7 @@ export function SpeakCard({
           <Text
             style={{
               marginTop: 16,
-              color: theme.colors.destructive,
+              color: shell.dangerOnDark,
               fontFamily: theme.fonts.regular,
               fontSize: 14,
             }}
@@ -241,7 +243,7 @@ export function SpeakCard({
           <View style={{ width: "100%", gap: 16 }}>
             <View style={{ flexDirection: "row", justifyContent: "space-around", paddingHorizontal: 12 }}>
               <Pressable
-                onPress={() => speakWord(word.name)}
+                onPress={() => speakWord(target)}
                 style={{ alignItems: "center", gap: 6, minWidth: 72 }}
                 accessibilityLabel="Ouvir a frase"
               >
@@ -288,7 +290,7 @@ export function SpeakCard({
                 borderRadius: 999,
                 alignItems: "center",
                 justifyContent: "center",
-                backgroundColor: listening ? theme.colors.destructive : shell.tones.blue,
+                backgroundColor: listening ? theme.colors.destructive : theme.colors.green,
               }}
             >
               <Ionicons name={listening ? "stop" : "mic"} size={28} color="#ffffff" />
@@ -310,7 +312,7 @@ export function SpeakCard({
       {done ? (
         <FeedbackBanner
           correct={done.correct}
-          answer={word.name}
+          answer={target}
           onContinue={() => {
             if (!aliveRef.current || answeredRef.current) return;
             answeredRef.current = true;

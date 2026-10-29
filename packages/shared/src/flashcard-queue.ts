@@ -55,6 +55,8 @@ export type ClozeStep = {
 export type SpeakStep = {
   type: "speak";
   word: FlashcardWord;
+  /** Texto a falar (frase salva ou gerada por IA). */
+  sentence: string;
   retry?: boolean;
 };
 
@@ -62,6 +64,11 @@ export type ClozeSource = {
   wordId: number;
   sentence: string;
   answer: string;
+};
+
+export type SpeakSentenceSource = {
+  wordId: number;
+  sentence: string;
 };
 
 export type FlashcardQueueOptions = {
@@ -244,22 +251,30 @@ function phraseFollowUp(
   retry = false
 ): ListenStep | RecallStep | SpeakStep {
   if (speakEnabled) {
-    return { type: "speak", word, ...(retry ? { retry: true } : {}) };
+    return { type: "speak", word, sentence: word.name, ...(retry ? { retry: true } : {}) };
   }
   return listenOrRecall(word, words, random, retry);
 }
 
-/** Fila só de fala (frases). Sempre emite `speak` — nunca listen. */
+/**
+ * Fila só de fala: frases salvas usam o próprio nome;
+ * palavras soltas entram só com frase gerada (mapa `sentences`).
+ */
 export function buildSpeakQueue(
   words: FlashcardWord[],
-  _random: () => number = Math.random,
-  _options: FlashcardQueueOptions = {}
+  sentences: SpeakSentenceSource[] = []
 ): FlashcardStep[] {
-  const phrases = words.filter(isPhraseFlashcard);
+  const byId = new Map(sentences.map((item) => [item.wordId, item.sentence.trim()]));
   const steps: FlashcardStep[] = [];
-  for (const word of phrases) {
+  for (const word of words) {
     if (steps.length >= SESSION_CARDS) break;
-    steps.push({ type: "speak", word });
+    if (isPhraseFlashcard(word)) {
+      steps.push({ type: "speak", word, sentence: word.name });
+      continue;
+    }
+    const sentence = byId.get(word.id);
+    if (!sentence) continue;
+    steps.push({ type: "speak", word, sentence });
   }
   return steps;
 }

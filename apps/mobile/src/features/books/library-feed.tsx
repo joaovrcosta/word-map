@@ -1,13 +1,14 @@
 import { useCallback, useMemo, useState } from "react";
 import { Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
-import { FontAwesome5, Ionicons } from "@expo/vector-icons";
-import { type Href, router, useFocusEffect } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
+import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { formatNewsDate } from "../news/format";
 import type { NewsListItem } from "../news/types";
 import { useSession } from "../../session";
 import { useTheme } from "../../theme";
-import { countLabel, type BookListItem } from "../../types";
+import { countLabel, type BookDetail, type BookListItem } from "../../types";
 import { ErrorText, Field, Heading, Loading, Muted, PrimaryButton, Screen } from "../../ui";
+import { pickResumeChapter, readBookResume } from "../reading";
 import { StudyOffenseChip } from "../study/offense-chip";
 import { OffenseSheet } from "../study/offense-sheet";
 import { BookArt, bookAuthor } from "./cover";
@@ -30,9 +31,16 @@ type Rail = {
   shelf?: Shelf;
 };
 
+function asShelf(value: string | string[] | undefined): Shelf | null {
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (raw === "foryou" || raw === "store" || raw === "saved" || raw === "mine") return raw;
+  return null;
+}
+
 export function LibraryFeed() {
   const theme = useTheme();
   const { request, user } = useSession();
+  const params = useLocalSearchParams<{ shelf?: string }>();
   const isStaff = user?.role === "ADMIN" || user?.role === "MODERATOR";
   const [official, setOfficial] = useState<BookListItem[] | null>(null);
   const [mine, setMine] = useState<BookListItem[]>([]);
@@ -42,7 +50,7 @@ export function LibraryFeed() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [query, setQuery] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
-  const [shelf, setShelf] = useState<Shelf>("foryou");
+  const [shelf, setShelf] = useState<Shelf>(() => asShelf(params.shelf) ?? "foryou");
   const [creating, setCreating] = useState(false);
   const [offenseOpen, setOffenseOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
@@ -70,8 +78,10 @@ export function LibraryFeed() {
 
   useFocusEffect(
     useCallback(() => {
+      const nextShelf = asShelf(params.shelf);
+      if (nextShelf) setShelf(nextShelf);
       void load();
-    }, [load])
+    }, [load, params.shelf])
   );
 
   const openBook = async (book: BookListItem) => {
@@ -89,14 +99,39 @@ export function LibraryFeed() {
     }
   };
 
+  const continueReading = async (book: BookListItem) => {
+    setBusyId(book.id);
+    setError(null);
+    try {
+      if (book.isOfficial && !book.inLibrary && !isStaff) {
+        await request(`/books/${book.id}/library`, { method: "POST" });
+      }
+      const detail = await request<BookDetail | null>(`/books/${book.id}`);
+      const chapters = [...(detail?.chapters ?? [])].sort((a, b) => a.order - b.order);
+      const resumeId = await readBookResume(book.id);
+      const target = pickResumeChapter(chapters, resumeId) ?? chapters[0] ?? null;
+      if (!target) {
+        router.push(`/books/${book.id}` as Href);
+        return;
+      }
+      router.push(`/books/${book.id}/chapters/${target.id}` as Href);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível continuar a leitura");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
   const toggleLibrary = async (book: BookListItem) => {
     setBusyId(book.id);
     setError(null);
+    const savingBook = !book.inLibrary;
     try {
       await request(`/books/${book.id}/library`, {
         method: book.inLibrary ? "DELETE" : "POST",
       });
       await load();
+      if (savingBook) setShelf("saved");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível atualizar a biblioteca");
     } finally {
@@ -184,60 +219,30 @@ export function LibraryFeed() {
 
   return (
     <Screen scroll>
-      <View style={{ height: 48, justifyContent: "center" }}>
-        <View
-          pointerEvents="none"
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 12 }}>
+        <Text
           style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: 0,
-            bottom: 0,
-            alignItems: "center",
-            justifyContent: "center",
+            flex: 1,
+            color: theme.shell.foreground,
+            fontFamily: theme.fonts.serifItalic,
+            fontSize: 28,
+            lineHeight: 34,
           }}
+          numberOfLines={1}
         >
-          <Text
-            style={{
-              color: theme.shell.foreground,
-              fontFamily: theme.fonts.bold,
-              fontSize: 22,
-              letterSpacing: -0.4,
+          WordMap
+        </Text>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 2 }}>
+          <StudyOffenseChip compact onPress={() => setOffenseOpen(true)} />
+          <HeaderIconButton
+            name="search-outline"
+            label="Buscar"
+            onPress={() => {
+              setSearchOpen((open) => !open);
+              if (searchOpen) setQuery("");
             }}
-          >
-            Word Map
-          </Text>
-        </View>
-
-        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
-          <Pressable
-            onPress={() => router.push("/premium" as Href)}
-            accessibilityRole="button"
-            accessibilityLabel="Premium"
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 20,
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "#F5C518",
-            }}
-          >
-            <FontAwesome5 name="crown" size={16} color="#FFFFFF" solid />
-          </Pressable>
-
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-            <StudyOffenseChip compact onPress={() => setOffenseOpen(true)} />
-            <HeaderIconButton
-              name="search-outline"
-              label="Buscar"
-              onPress={() => {
-                setSearchOpen((open) => !open);
-                if (searchOpen) setQuery("");
-              }}
-            />
-            <HeaderIconButton name="add" label="Adicionar conteúdo" onPress={openCreate} />
-          </View>
+          />
+          <HeaderIconButton name="add" label="Adicionar conteúdo" onPress={openCreate} />
         </View>
       </View>
 
@@ -310,7 +315,11 @@ export function LibraryFeed() {
       {continueBook ? (
         <View style={{ marginTop: 22 }}>
           <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.bold, fontSize: 22 }}>Continuar</Text>
-          <ContinueCard book={continueBook} busy={busyId === continueBook.id} onOpen={() => void openBook(continueBook)} />
+          <ContinueCard
+            book={continueBook}
+            busy={busyId === continueBook.id}
+            onOpen={() => void continueReading(continueBook)}
+          />
         </View>
       ) : null}
 
@@ -337,9 +346,9 @@ export function LibraryFeed() {
             onSeeAll={
               section.shelf
                 ? () => {
-                    const next = section.shelf;
-                    if (next) setShelf(next);
-                  }
+                  const next = section.shelf;
+                  if (next) setShelf(next);
+                }
                 : undefined
             }
             onOpen={(book) => void openBook(book)}

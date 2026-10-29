@@ -8,6 +8,7 @@ import {
   buildSpeakQueue,
   challengeXpForStreak,
   isPhraseFlashcard,
+  isSingleWordName,
   recognitionRetry,
   selectPracticeWords,
   shouldRecordClozeResult,
@@ -15,6 +16,7 @@ import {
   type ClozeSource,
   type FlashcardStep,
   type FlashcardWord,
+  type SpeakSentenceSource,
 } from "@word-map/shared";
 import { ClozeCard } from "./components/cloze-card";
 import { ExitConfirm } from "./components/exit-confirm";
@@ -62,7 +64,7 @@ export function FlashcardDeck({
   vaultId?: number;
   onLeave: () => void;
   autostart?: boolean;
-  /** `speak` = só exercícios de fala com frases. */
+  /** `speak` = só exercícios de fala (frases salvas + frases IA). */
   mode?: "mixed" | "speak";
 }) {
   const theme = useTheme();
@@ -130,7 +132,7 @@ export function FlashcardDeck({
         );
         if (!alive) return;
         const mapped = flashcardWords.map(toWord);
-        setWords(mode === "speak" ? mapped.filter(isPhraseFlashcard) : mapped);
+        setWords(mapped);
       } catch {
         if (!alive) return;
         setWords([]);
@@ -196,6 +198,34 @@ export function FlashcardDeck({
           if (typeof wordId !== "number" || typeof sentence !== "string") continue;
           if (typeof answer !== "string" || !sentence.trim() || !answer.trim()) continue;
           saved.push({ wordId, sentence, answer });
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    return saved;
+  };
+
+  const requestSpeakSentences = async (wordIds: number[]): Promise<SpeakSentenceSource[]> => {
+    const unique = [...new Set(wordIds)];
+    const saved: SpeakSentenceSource[] = [];
+
+    for (let index = 0; index < unique.length; index += 20) {
+      const batch = unique.slice(index, index + 20);
+      try {
+        const data = await request<{ sentences?: unknown }>("/flashcards/speak-sentences", {
+          method: "POST",
+          body: JSON.stringify({ wordIds: batch }),
+        });
+        if (!Array.isArray(data.sentences)) continue;
+        for (const item of data.sentences) {
+          if (!item || typeof item !== "object") continue;
+          const wordId = (item as { wordId?: unknown }).wordId;
+          const sentence = (item as { sentence?: unknown }).sentence;
+          if (typeof wordId !== "number" || typeof sentence !== "string") continue;
+          if (!sentence.trim()) continue;
+          saved.push({ wordId, sentence: sentence.trim() });
         }
       } catch {
         continue;
@@ -290,9 +320,13 @@ export function FlashcardDeck({
         const pool = selectPracticeWords(words, new Date(), practiceAnyway);
         const source = pool.length > 0 ? pool : practiceAnyway ? words : [];
         if (source.length === 0) return;
-        queue = buildSpeakQueue(source, Math.random, { speakEnabled });
+        const needAi = source
+          .filter((word) => !isPhraseFlashcard(word) && isSingleWordName(word.name))
+          .map((word) => word.id);
+        const sentences = needAi.length > 0 ? await requestSpeakSentences(needAi) : [];
+        queue = buildSpeakQueue(source, sentences);
         if (queue.length === 0) {
-          setLoadError("Não há frases para treinar fala.");
+          setLoadError("Não há palavras ou frases para treinar fala.");
           return;
         }
       } else {
@@ -493,7 +527,7 @@ export function FlashcardDeck({
         </View>
       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 }}>
         <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 16, textAlign: "center" }}>
-          {mode === "speak" ? "Nenhuma frase para falar" : "Nenhuma palavra para estudar"}
+          {mode === "speak" ? "Nada para falar agora" : "Nenhuma palavra para estudar"}
         </Text>
         <Text
           style={{
@@ -505,7 +539,7 @@ export function FlashcardDeck({
           }}
         >
           {mode === "speak"
-            ? "Salve frases na leitura (seleção de várias palavras) para treinar fala."
+            ? "Salve palavras ou frases na leitura para treinar fala."
             : "Este vault não tem palavras para revisar agora."}
         </Text>
       </View>
@@ -725,6 +759,7 @@ export function FlashcardDeck({
         <SpeakCard
           key={`speak-${step.word.id}-${stepIndex}`}
           word={step.word}
+          sentence={step.sentence}
           onAnswer={(correct) => {
             if (!step.retry) noteChallenge(step.word, correct, "speak");
             finishStep(step.retry ? [] : [step.word.id], !correct && !step.retry ? [{ ...step, retry: true }] : []);

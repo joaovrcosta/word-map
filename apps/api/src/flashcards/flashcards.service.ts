@@ -17,13 +17,16 @@ import { getCurrentUser } from "../auth/current-user";
 import {
   CLOZE_BATCH_LIMIT,
   CLOZE_VARIANT,
+  SPEAK_SENTENCE_VARIANT,
   acceptClozeSentence,
   buildClozePrompt,
+  buildSpeakSentencePrompt,
   clozeCacheKey,
   clozeIsFresh,
   isSingleWordName,
   parseClozeResponse,
   primaryTranslation,
+  speakSentenceCacheKey,
 } from "../lib/cloze";
 import {
   REVIEW_MAX_TOKENS,
@@ -148,6 +151,99 @@ export async function generateClozes(wordIdsInput: unknown) {
   return { clozes: saved };
 }
 
+export async function generateSpeakSentences(wordIdsInput: unknown) {
+  const user = await getCurrentUser();
+  if (!user) fail(401, "Não autorizado");
+
+  if (!Array.isArray(wordIdsInput) || wordIdsInput.length > CLOZE_BATCH_LIMIT) {
+    fail(400, "Lista inválida");
+  }
+  const wordIds: number[] = [];
+  for (const item of wordIdsInput) {
+    if (typeof item !== "number" || !Number.isInteger(item) || item <= 0) {
+      fail(400, "Lista inválida");
+    }
+    wordIds.push(item);
+  }
+  const unique = [...new Set(wordIds)];
+  if (unique.length === 0) return { sentences: [] };
+
+  const words = await prisma.word.findMany({
+    where: { id: { in: unique }, vault: { userId: user.id } },
+    select: {
+      id: true,
+      name: true,
+      translations: true,
+      clozes: {
+        where: { variant: SPEAK_SENTENCE_VARIANT },
+        select: { cacheKey: true, sentence: true, answer: true },
+      },
+    },
+  });
+
+  if (words.length !== unique.length) fail(403, "Não autorizado");
+
+  const fresh: Array<{ wordId: number; sentence: string; answer: string }> = [];
+  const missing: Array<{ id: number; name: string; translation: string }> = [];
+
+  for (const word of words) {
+    if (!isSingleWordName(word.name)) continue;
+    const translation = primaryTranslation(word.translations);
+    const cacheKey = speakSentenceCacheKey(word.name, translation);
+    const stored = word.clozes[0];
+    if (clozeIsFresh(stored, cacheKey) && stored) {
+      fresh.push({
+        wordId: word.id,
+        sentence: stored.sentence,
+        answer: stored.answer,
+      });
+      continue;
+    }
+    missing.push({ id: word.id, name: word.name, translation });
+  }
+
+  if (missing.length === 0) return { sentences: fresh };
+
+  const quota = await consumeTutorQuota(user.id);
+  if (!quota.allowed) return { sentences: fresh };
+
+  let raw = "";
+  try {
+    const result = await createOpenAITutor().completeJson(buildSpeakSentencePrompt(missing));
+    if (result.blocked || result.truncated || !result.text) return { sentences: fresh };
+    raw = result.text;
+  } catch (error) {
+    console.error("Falha ao gerar frases de fala:", error);
+    await refundTutorQuota(user.id);
+    return { sentences: fresh };
+  }
+
+  const parsed = parseClozeResponse(raw);
+  if (!parsed.ok) return { sentences: fresh };
+
+  const byId = new Map(missing.map((word) => [word.id, word]));
+  const saved = [...fresh];
+  for (const item of parsed.items) {
+    const word = byId.get(item.wordId);
+    if (!word || !acceptClozeSentence(item.sentence, word.name)) continue;
+    const cacheKey = speakSentenceCacheKey(word.name, word.translation);
+    await prisma.wordCloze.upsert({
+      where: { wordId_variant: { wordId: word.id, variant: SPEAK_SENTENCE_VARIANT } },
+      create: {
+        wordId: word.id,
+        variant: SPEAK_SENTENCE_VARIANT,
+        sentence: item.sentence,
+        answer: word.name,
+        cacheKey,
+      },
+      update: { sentence: item.sentence, answer: word.name, cacheKey },
+    });
+    saved.push({ wordId: word.id, sentence: item.sentence, answer: word.name });
+  }
+
+  return { sentences: saved };
+}
+
 export async function reviewSession(itemsInput: unknown) {
   const user = await getCurrentUser();
   if (!user) fail(401, "Não autorizado");
@@ -246,6 +342,10 @@ export class FlashcardsService {
 
   clozes(wordIds: unknown) {
     return generateClozes(wordIds);
+  }
+
+  speakSentences(wordIds: unknown) {
+    return generateSpeakSentences(wordIds);
   }
 
   review(items: unknown) {

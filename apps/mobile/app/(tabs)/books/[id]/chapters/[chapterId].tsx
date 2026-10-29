@@ -15,7 +15,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import * as Haptics from "expo-haptics";
-import { router, useLocalSearchParams, useNavigation } from "expo-router";
+import { router, useLocalSearchParams, useNavigation, type Href } from "expo-router";
 import { BookArt, bookAuthor } from "../../../../../src/features/books/cover";
 import {
   chapterContentRevision,
@@ -736,7 +736,15 @@ export default function ChapterReaderScreen() {
         <StatusBar style={readerTheme.statusBarStyle === "light" ? "light" : "dark"} />
         <View style={{ flexDirection: "row", alignItems: "center", gap: 14 }}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => {
+              // Sempre volta ao detalhe DESTE livro (não a outro empilhado no histórico).
+              if (bookId > 0) {
+                router.replace(`/books/${bookId}` as Href);
+                return;
+              }
+              if (router.canGoBack()) router.back();
+              else router.replace("/home" as Href);
+            }}
             hitSlop={10}
             accessibilityRole="button"
             accessibilityLabel="Fechar"

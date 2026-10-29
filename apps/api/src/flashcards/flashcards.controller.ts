@@ -98,6 +98,11 @@ export class FlashcardsController {
     return this.flashcards.clozes(body.wordIds);
   }
 
+  @Post("speak-sentences")
+  speakSentences(@Body() body: ClozeDto) {
+    return this.flashcards.speakSentences(body.wordIds);
+  }
+
   @Post("review")
   review(@Body() body: ReviewDto) {
     return this.flashcards.review(body.items);

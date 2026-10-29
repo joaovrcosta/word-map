@@ -98,7 +98,7 @@ export default function TabsLayout() {
         name="flashcards"
         options={{
           title: "Treino",
-          tabBarIcon: ({ color, size }) => <Ionicons name="flash" size={size} color={color} />,
+          tabBarIcon: ({ color, size }) => <Ionicons name="barbell-outline" size={size} color={color} />,
         }}
       />
       <Tabs.Screen

@@ -565,7 +565,7 @@ export default function SearchScreen() {
                     void openVaultPicker({
                       name: dictionaryHit.word,
                       grammaticalClass: dictionaryHit.grammaticalClass,
-                      translations: dictionaryHit.definitions,
+                      translations: dictionaryHit.definitions.slice(0, 1),
                       translate: false,
                     })
                   }

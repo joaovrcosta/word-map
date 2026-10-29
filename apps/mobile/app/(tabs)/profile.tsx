@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from "react";
 import { type Href, router, useFocusEffect } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
+import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { grammarClassLabel, STUDY_GOAL_PRESETS } from "@word-map/shared";
 import { Modal, Pressable, Text, View } from "react-native";
 import { type RankingBoard } from "../../src/ranking";
@@ -376,6 +376,26 @@ export default function ProfileScreen() {
             {levelLabel}
           </Text>
         </View>
+        <Pressable
+          onPress={() => router.push("/premium" as Href)}
+          accessibilityRole="button"
+          accessibilityLabel="Premium"
+          style={{
+            marginTop: 14,
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 8,
+            paddingHorizontal: 14,
+            paddingVertical: 8,
+            borderRadius: 999,
+            backgroundColor: "#F5C518",
+          }}
+        >
+          <FontAwesome5 name="crown" size={14} color="#FFFFFF" solid />
+          <Text style={{ color: "#1A1A1A", fontFamily: theme.fonts.bold, fontSize: 13 }}>
+            Premium
+          </Text>
+        </Pressable>
       </View>
 
       <View style={{ marginTop: 22, height: 1, backgroundColor: theme.shell.line }} />

@@ -15,6 +15,7 @@ export { findSavedReadingWord, ReadingWordMenu, type FoundTextWord } from "./wor
 export { useReadingPreferences } from "./preferences";
 export {
   pickReadingProgress,
+  pickResumeChapter,
   readBookResume,
   readProgressCache,
   writeBookResume,

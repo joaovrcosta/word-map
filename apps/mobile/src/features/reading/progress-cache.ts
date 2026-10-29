@@ -121,6 +121,35 @@ export async function writeBookResume(bookId: number, chapterId: number): Promis
   }
 }
 
+type ResumeChapterCandidate = {
+  id: number;
+  reachedEndAt?: string | null;
+  progressUpdatedAt?: string | null;
+};
+
+/** Escolhe o capítulo para continuar: cache local → último progresso → próximo incompleto. */
+export function pickResumeChapter<T extends ResumeChapterCandidate>(
+  chapters: T[],
+  resumeId: number | null
+): T | null {
+  if (chapters.length === 0) return null;
+  if (resumeId != null) {
+    const fromLocal = chapters.find((chapter) => chapter.id === resumeId);
+    if (fromLocal) return fromLocal;
+  }
+  let latest: T | null = null;
+  let latestTs = 0;
+  for (const chapter of chapters) {
+    if (!chapter.progressUpdatedAt) continue;
+    const ts = Date.parse(chapter.progressUpdatedAt);
+    if (!Number.isFinite(ts) || ts <= latestTs) continue;
+    latest = chapter;
+    latestTs = ts;
+  }
+  if (latest) return latest;
+  return chapters.find((chapter) => !chapter.reachedEndAt) ?? chapters[0] ?? null;
+}
+
 /** Escolhe a âncora mais avançada entre cache local e API. */
 export function pickReadingProgress(
   local: CachedReadingProgress | null,

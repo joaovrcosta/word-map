@@ -7,7 +7,8 @@ import { useSession } from "../../session";
 import type { StudyToday } from "../../study";
 import { useTheme } from "../../theme";
 
-const ACCENT = "#7B6CFF";
+const ACCENT = "#ff9600";
+const FLAME = "#ff9600";
 const RING = 132;
 const STROKE = 10;
 const RADIUS = (RING - STROKE) / 2;
@@ -133,7 +134,7 @@ export function OffenseSheet({ visible, onClose, onSeeStats }: Props) {
               <Ionicons
                 name="flame"
                 size={42}
-                color={today?.completed ? "#ff9600" : theme.shell.muted}
+                color={progress > 0 || today?.completed ? FLAME : theme.shell.muted}
               />
             </View>
 
