@@ -166,16 +166,14 @@ async function getAccessibleBook(user: User, bookId: number) {
   const isOwner = book.ownerId === user.id;
   const inLibrary = await canReadOfficial(user, book.id);
 
-  // Livro próprio conta como “salvo”; oficial usa a biblioteca real (antes o owner
-  // forçava inLibrary=false e o bookmark ficava outline mesmo já salvo).
+  // Livro próprio conta como “salvo”; oficial: qualquer logado pode ler.
+  // inLibrary só reflete UserLibrary (coração / aba Salvos) — não forçar ao abrir.
   if (isOwner) {
     return { book, isOwner, inLibrary: book.isOfficial ? inLibrary : true };
   }
 
   if (book.isOfficial) {
-    if (inLibrary || isContentStaff(user.role)) {
-      return { book, isOwner: false, inLibrary };
-    }
+    return { book, isOwner: false, inLibrary };
   }
 
   throw new Error("Livro não encontrado");

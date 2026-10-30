@@ -41,7 +41,6 @@ export function LibraryFeed() {
   const theme = useTheme();
   const { request, user } = useSession();
   const params = useLocalSearchParams<{ shelf?: string }>();
-  const isStaff = user?.role === "ADMIN" || user?.role === "MODERATOR";
   const [official, setOfficial] = useState<BookListItem[] | null>(null);
   const [mine, setMine] = useState<BookListItem[]>([]);
   const [library, setLibrary] = useState<BookListItem[]>([]);
@@ -98,9 +97,6 @@ export function LibraryFeed() {
     setBusyId(book.id);
     setError(null);
     try {
-      if (book.isOfficial && !book.inLibrary && !isStaff) {
-        await request(`/books/${book.id}/library`, { method: "POST" });
-      }
       router.push(`/books/${book.id}` as Href);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Não foi possível abrir o livro");
@@ -113,9 +109,6 @@ export function LibraryFeed() {
     setBusyId(book.id);
     setError(null);
     try {
-      if (book.isOfficial && !book.inLibrary && !isStaff) {
-        await request(`/books/${book.id}/library`, { method: "POST" });
-      }
       const detail = await request<BookDetail | null>(`/books/${book.id}`);
       const chapters = [...(detail?.chapters ?? [])].sort((a, b) => a.order - b.order);
       const resumeId = user?.id != null ? await readBookResume(user.id, book.id) : null;
