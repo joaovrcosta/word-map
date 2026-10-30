@@ -45,7 +45,8 @@ export function StudyOffenseChip({ onPress, compact = false }: Props) {
   const progress = Math.min(1, (today?.seconds ?? 0) / goalSeconds);
   const done = Boolean(today?.completed) || progress >= 1;
   const inProgress = !done && progress > 0;
-  const flameColor = done || inProgress ? RING_ACTIVE : theme.shell.muted;
+  /** Chama só acende quando a meta do dia fecha; o anel mostra o progresso. */
+  const flameColor = done ? RING_ACTIVE : theme.shell.muted;
 
   if (compact) {
     return (

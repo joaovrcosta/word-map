@@ -134,7 +134,7 @@ export function OffenseSheet({ visible, onClose, onSeeStats }: Props) {
               <Ionicons
                 name="flame"
                 size={42}
-                color={progress > 0 || today?.completed ? FLAME : theme.shell.muted}
+                color={today?.completed || progress >= 1 ? FLAME : theme.shell.muted}
               />
             </View>
 
