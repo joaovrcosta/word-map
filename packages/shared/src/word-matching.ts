@@ -141,6 +141,31 @@ export function isTwoWordPhrase(text: string): boolean {
   return splitTwoWordPhrase(text) !== null;
 }
 
+/** Partículas comuns de phrasal verb (sem lemmatizer — ok no client). */
+export const PHRASAL_PARTICLES = new Set([
+  "about",
+  "around",
+  "away",
+  "back",
+  "by",
+  "down",
+  "in",
+  "into",
+  "off",
+  "on",
+  "out",
+  "over",
+  "through",
+  "up",
+]);
+
+/** Heurística: duas palavras e a segunda é partícula (ex.: pick up). */
+export function looksLikePhrasalVerb(text: string): boolean {
+  const parts = splitTwoWordPhrase(text);
+  if (!parts) return false;
+  return PHRASAL_PARTICLES.has(parts[1]);
+}
+
 export function extractTextTokens(content: string): string[] {
   const matches = content.match(TOKEN_REGEX) ?? [];
   return matches.map((token) => normalizeToken(token)).filter(Boolean);

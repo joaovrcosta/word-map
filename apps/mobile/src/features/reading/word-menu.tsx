@@ -32,6 +32,7 @@ import {
   grammarClassBySlug,
   grammarClassLabel,
   isPhraseName,
+  looksLikePhrasalVerb,
   MAX_FOLLOW_UP_QUESTION,
   MAX_FOLLOW_UP_SENTENCE,
   MAX_FOLLOW_UPS_PER_EXPLANATION,
@@ -499,6 +500,7 @@ export function ReadingWordMenu({
   const [customMeaning, setCustomMeaning] = useState("");
   const [notes, setNotes] = useState(saved?.notes ?? "");
   const phraseSelection = isPhraseName(clean);
+  const phrasalSelection = looksLikePhrasalVerb(clean);
   const defaultVaultId = (() => {
     if (saved) return String(saved.vaultId);
     if (phraseSelection) {
@@ -768,20 +770,23 @@ export function ReadingWordMenu({
     };
   }, [context, request]);
 
-  const suggestedClass = phraseSelection
-    ? "frase"
-    : normalizeGrammaticalClass(
-        localSaved?.grammaticalClass || wordInfo?.meanings?.[0]?.partOfSpeech
-      );
+  const suggestedClass = phrasalSelection
+    ? "phrasal-verb"
+    : phraseSelection
+      ? "frase"
+      : normalizeGrammaticalClass(
+          localSaved?.grammaticalClass || wordInfo?.meanings?.[0]?.partOfSpeech
+        );
 
   const partOfSpeechBadges = useMemo(() => {
     if (localSaved?.grammaticalClass) return [localSaved.grammaticalClass];
+    if (phrasalSelection) return ["phrasal-verb"];
     const parts =
       wordInfo?.meanings
         ?.map((item) => item.partOfSpeech)
         .filter((part): part is string => Boolean(part)) ?? [];
     return [...new Set(parts)].slice(0, 3);
-  }, [localSaved?.grammaticalClass, wordInfo]);
+  }, [localSaved?.grammaticalClass, phrasalSelection, wordInfo]);
 
   const availableMeanings = candidateMeanings.filter((item) => !hasMeaning(selectedMeanings, item));
   const dropdownMeaning = selectedMeanings[0] ?? bestShortTranslation(availableMeanings);
@@ -1739,13 +1744,25 @@ function MeaningRow({
 }) {
   const theme = useTheme();
   return (
-    <View style={styles.meaningRow}>
-      <Text style={[styles.meaning, { fontFamily: theme.fonts.regular }]}>{label}</Text>
+    <View style={[styles.meaningRow, styles.meaningCard]}>
+      <Text style={[styles.meaning, { fontFamily: theme.fonts.medium }]}>{label}</Text>
       <View style={styles.meaningAction}>
         {saved ? (
-          <Ionicons name="checkmark" size={16} color={theme.colors.green} />
+          <View style={[styles.iconChip, { width: 32, height: 32, borderRadius: 16, backgroundColor: "#3F3F42" }]}>
+            <Ionicons name="checkmark" size={16} color={theme.colors.green} />
+          </View>
         ) : (
-          <IconButton label={`Salvar ${label}`} name="add" color={shell.muted} disabled={disabled} onPress={onAdd} />
+          <Pressable
+            accessibilityLabel={`Salvar ${label}`}
+            disabled={disabled}
+            onPress={onAdd}
+            style={[
+              styles.iconChip,
+              { width: 32, height: 32, borderRadius: 16, backgroundColor: "#3F3F42", opacity: disabled ? 0.35 : 1 },
+            ]}
+          >
+            <Ionicons name="add" size={18} color={shell.foreground} />
+          </Pressable>
         )}
       </View>
     </View>
@@ -2060,6 +2077,14 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: shell.line,
+  },
+  meaningCard: {
+    backgroundColor: PANEL_CARD,
+    borderRadius: 20,
+    borderTopWidth: 0,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 10,
   },
   meaning: { flex: 1, color: shell.foreground, fontSize: 15, lineHeight: 22 },
   inputRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12 },

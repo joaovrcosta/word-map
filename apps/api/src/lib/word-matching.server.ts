@@ -6,6 +6,7 @@ import {
   extractTextTokenStream,
   normalizePhrase,
   normalizeToken,
+  PHRASAL_PARTICLES,
   splitTwoWordPhrase,
 } from "@word-map/shared/word-matching";
 import {
@@ -15,24 +16,9 @@ import {
 } from "@word-map/shared/dictionary";
 import { translateToPortugueseServer } from "./translate.server";
 
-const TOKEN_REGEX = /\b[a-z]+(?:'[a-z]+)?(?:-[a-z]+)*\b/gi;
+export { PHRASAL_PARTICLES } from "@word-map/shared/word-matching";
 
-export const PHRASAL_PARTICLES = new Set([
-  "about",
-  "around",
-  "away",
-  "back",
-  "by",
-  "down",
-  "in",
-  "into",
-  "off",
-  "on",
-  "out",
-  "over",
-  "through",
-  "up",
-]);
+const TOKEN_REGEX = /\b[a-z]+(?:'[a-z]+)?(?:-[a-z]+)*\b/gi;
 
 interface WinkLemmatizer {
   noun(word: string): string;
