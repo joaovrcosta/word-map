@@ -1,13 +1,29 @@
 import * as Speech from "expo-speech";
+import {
+  timedWords,
+  wordAtChar,
+  wordAtElapsed,
+  type SpokenRange,
+} from "@word-map/shared";
 
 const WORD_SPEECH_RATE = 0.88;
+const WORD_CLOCK_MS = 80;
 
 let speakToken = 0;
 let voicePromise: Promise<string | null> | null = null;
 const speakerVoices = new Map<string, string | null>();
+let wordClock: ReturnType<typeof setInterval> | null = null;
+
+function clearWordClock() {
+  if (wordClock) {
+    clearInterval(wordClock);
+    wordClock = null;
+  }
+}
 
 export function stopSpeech() {
   speakToken += 1;
+  clearWordClock();
   Speech.stop();
 }
 
@@ -96,6 +112,7 @@ function pitchForSpeaker(speaker?: string | null) {
 
 export function speakWord(word: string, options?: { voiceId?: string | null }) {
   const mine = ++speakToken;
+  clearWordClock();
   Speech.stop();
   void (async () => {
     const voice = await resolveVoice(options?.voiceId);
@@ -109,34 +126,78 @@ export function speakWord(word: string, options?: { voiceId?: string | null }) {
   })();
 }
 
+export type SpeakPassageOptions = {
+  speaker?: string | null;
+  rate?: number;
+  voiceId?: string | null;
+  /** Range da palavra atual no texto passado a speakPassage (trim only). */
+  onWord?: (range: SpokenRange | null) => void;
+};
+
 export function speakPassage(
   text: string,
   onEnd?: () => void,
-  options?: { speaker?: string | null; rate?: number; voiceId?: string | null }
+  options?: SpeakPassageOptions
 ) {
-  const spoken = text.replace(/\s+/g, " ").trim();
+  // Trim só nas pontas — sem colapsar whitespace, para charIndex bater com a página.
+  const spoken = text.trim();
   const mine = ++speakToken;
+  clearWordClock();
   Speech.stop();
+  options?.onWord?.(null);
   if (!spoken) {
     onEnd?.();
     return;
   }
+
+  const rate = options?.rate ?? 0.92;
+  const words = timedWords(spoken, rate);
   let settled = false;
+  let gotBoundary = false;
+  let startedAt = 0;
+
+  const publish = (range: SpokenRange | null) => {
+    if (speakToken !== mine) return;
+    options?.onWord?.(range);
+  };
+
   const finish = () => {
     if (settled || speakToken !== mine) return;
     settled = true;
+    clearWordClock();
+    publish(null);
     onEnd?.();
   };
+
   void (async () => {
     const voice = await resolveVoice(options?.voiceId, options?.speaker);
     if (speakToken !== mine) return;
     setTimeout(() => {
       if (speakToken !== mine) return;
+      startedAt = Date.now();
+
+      if (options?.onWord && words.length > 0) {
+        const first = words[0];
+        if (first) publish({ start: first.start, end: first.end });
+        wordClock = setInterval(() => {
+          if (speakToken !== mine || gotBoundary) return;
+          const word = wordAtElapsed(words, Date.now() - startedAt);
+          if (word) publish({ start: word.start, end: word.end });
+        }, WORD_CLOCK_MS);
+      }
+
       Speech.speak(spoken, {
         language: "en-US",
-        rate: options?.rate ?? 0.92,
+        rate,
         pitch: pitchForSpeaker(options?.speaker),
         voice: voice ?? undefined,
+        onBoundary: (event) => {
+          if (speakToken !== mine || typeof event.charIndex !== "number") return;
+          const word = wordAtChar(words, event.charIndex);
+          if (!word) return;
+          gotBoundary = true;
+          publish({ start: word.start, end: word.end });
+        },
         onDone: finish,
         onStopped: finish,
         onError: finish,

@@ -27,6 +27,7 @@ import {
   paginateReading,
   resolvePageByContentOffset,
   type ReadingPage,
+  type SpokenRange,
 } from "@word-map/shared";
 import {
   EMPTY_FOUND,
@@ -128,6 +129,7 @@ export default function ChapterReaderScreen() {
   const [wordsOpen, setWordsOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [listening, setListening] = useState(false);
+  const [spokenRange, setSpokenRange] = useState<SpokenRange | null>(null);
   const [vaults, setVaults] = useState<Vault[]>([]);
   const [editing, setEditing] = useState(false);
   const [pendingAutoSave, setPendingAutoSave] = useState<string | null>(null);
@@ -455,6 +457,7 @@ export default function ChapterReaderScreen() {
       openedAt.current = Date.now();
       keepListening.current = false;
       setListening(false);
+      setSpokenRange(null);
       setRangeIndexes(null);
       setRangeAnchor(null);
 
@@ -565,12 +568,16 @@ export default function ChapterReaderScreen() {
     if (!text.trim()) {
       keepListening.current = false;
       setListening(false);
+      setSpokenRange(null);
       return;
     }
+    const lead = text.length - text.trimStart().length;
     setListening(true);
+    setSpokenRange(null);
     speakPassage(
       text,
       () => {
+        setSpokenRange(null);
         if (!keepListening.current) {
           setListening(false);
           return;
@@ -586,7 +593,20 @@ export default function ChapterReaderScreen() {
         syncPage(next, false, true);
         scrollRef.current?.scrollTo({ x: next * frame, animated: true });
       },
-      { rate: prefs.speechRate, voiceId: prefs.voiceId }
+      {
+        rate: prefs.speechRate,
+        voiceId: prefs.voiceId,
+        onWord: (range) => {
+          if (!keepListening.current || !range) {
+            setSpokenRange(null);
+            return;
+          }
+          const mapped = { start: range.start + lead, end: range.end + lead };
+          setSpokenRange((prev) =>
+            prev && prev.start === mapped.start && prev.end === mapped.end ? prev : mapped
+          );
+        },
+      }
     );
   }, [prefs.speechRate, prefs.voiceId, syncPage]);
 
@@ -601,6 +621,7 @@ export default function ChapterReaderScreen() {
       keepListening.current = false;
       stopSpeech();
       setListening(false);
+      setSpokenRange(null);
       return;
     }
     if (!(pages[pageIndex]?.text ?? "").trim()) return;
@@ -625,6 +646,7 @@ export default function ChapterReaderScreen() {
     keepListening.current = false;
     stopSpeech();
     setListening(false);
+    setSpokenRange(null);
   }, [pageIndex, playCurrentPage]);
 
   const dismissFromScroll = () => {
@@ -660,6 +682,7 @@ export default function ChapterReaderScreen() {
     keepListening.current = false;
     stopSpeech();
     setListening(false);
+    setSpokenRange(null);
     setSelection(null);
     setRangeIndexes(null);
     setRangeAnchor(null);
@@ -825,6 +848,7 @@ export default function ChapterReaderScreen() {
                   keepListening.current = false;
                   stopSpeech();
                   setListening(false);
+                  setSpokenRange(null);
                 }}
                 scrollEventThrottle={16}
                 style={{ width, flex: 1 }}
@@ -862,6 +886,7 @@ export default function ChapterReaderScreen() {
                             index === pageIndex ? (selection?.occurrence ?? null) : null
                           }
                           rangeIndexes={index === pageIndex ? rangeIndexes : null}
+                          spokenRange={index === pageIndex ? spokenRange : null}
                           onSelectWord={selectWord}
                           onLongPressWord={beginRange}
                           onToggleRangeWord={toggleRange}

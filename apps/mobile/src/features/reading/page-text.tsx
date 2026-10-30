@@ -12,9 +12,13 @@ import {
   normalizePhrase,
   normalizeToken,
   splitTokenEdges,
+  type SpokenRange,
 } from "@word-map/shared";
 import { useTheme } from "../../theme";
 import { useReaderTheme } from "./reader-theme";
+
+const SPOKEN_UNDERLINE = "#24c875";
+const SPOKEN_WASH = "rgba(36, 200, 117, 0.22)";
 
 /** Subset mínimo para highlights (evita import circular com word-menu). */
 export type PageFoundWord = { word: string };
@@ -130,6 +134,7 @@ export type ReadingPageTextProps = {
   selectedClean: string | null;
   selectedOccurrence: number | null;
   rangeIndexes: number[] | null;
+  spokenRange?: SpokenRange | null;
   onSelectWord: (clean: string, occurrence: number, anchor: WordAnchor) => void;
   onLongPressWord: (clean: string, occurrence: number, anchor: WordAnchor, tokenIndex: number) => void;
   onToggleRangeWord: (tokenIndex: number, clean: string, occurrence: number, anchor: WordAnchor) => void;
@@ -144,6 +149,7 @@ export const ReadingPageText = memo(function ReadingPageText({
   selectedClean,
   selectedOccurrence,
   rangeIndexes,
+  spokenRange = null,
   onSelectWord,
   onLongPressWord,
   onToggleRangeWord,
@@ -248,6 +254,9 @@ export const ReadingPageText = memo(function ReadingPageText({
               : "start"
           : "solo";
       const bridge = nextJoined && next ? text.slice(item.end, next.start) : "";
+      const spoken = Boolean(
+        spokenRange && item.start < spokenRange.end && item.end > spokenRange.start
+      );
       nextNodes.push(
         <WordToken
           key={`word-${item.index}`}
@@ -256,6 +265,7 @@ export const ReadingPageText = memo(function ReadingPageText({
           inVault={item.inVault}
           selected={selected}
           selectRole={rangeRole}
+          spoken={spoken}
           similar={
             !ranging &&
             selectedClean === item.clean &&
@@ -290,6 +300,7 @@ export const ReadingPageText = memo(function ReadingPageText({
     selectedClean,
     selectedOccurrence,
     rangeIndexes,
+    spokenRange,
     onSelectWord,
     onLongPressWord,
     onToggleRangeWord,
@@ -315,6 +326,7 @@ export type PageSlotProps = {
   selectedClean: string | null;
   selectedOccurrence: number | null;
   rangeIndexes: number[] | null;
+  spokenRange?: SpokenRange | null;
   onSelectWord: ReadingPageTextProps["onSelectWord"];
   onLongPressWord: ReadingPageTextProps["onLongPressWord"];
   onToggleRangeWord: ReadingPageTextProps["onToggleRangeWord"];
@@ -331,6 +343,7 @@ export const PageSlot = memo(function PageSlot({
   selectedClean,
   selectedOccurrence,
   rangeIndexes,
+  spokenRange = null,
   onSelectWord,
   onLongPressWord,
   onToggleRangeWord,
@@ -387,6 +400,7 @@ export const PageSlot = memo(function PageSlot({
           selectedClean={selectedClean}
           selectedOccurrence={selectedOccurrence}
           rangeIndexes={rangeIndexes}
+          spokenRange={spokenRange}
           onSelectWord={onSelectWord}
           onLongPressWord={onLongPressWord}
           onToggleRangeWord={onToggleRangeWord}
@@ -470,6 +484,7 @@ const WordToken = memo(function WordToken({
   selectRole,
   similar,
   inVault,
+  spoken = false,
   delayLongPress,
   onPress,
   onLongPress,
@@ -480,6 +495,7 @@ const WordToken = memo(function WordToken({
   selectRole: SelectRole;
   similar: boolean;
   inVault: boolean;
+  spoken?: boolean;
   delayLongPress: number;
   onPress: (anchor: WordAnchor) => void;
   onLongPress: (anchor: WordAnchor) => void;
@@ -520,6 +536,16 @@ const WordToken = memo(function WordToken({
     });
   };
 
+  const bg = selected
+    ? reader.highlight.selectedBg
+    : similar
+      ? reader.highlight.similarBg
+      : inVault
+        ? reader.highlight.vaultBg
+        : spoken
+          ? SPOKEN_WASH
+          : "transparent";
+
   return (
     <Text
       suppressHighlighting
@@ -558,17 +584,14 @@ const WordToken = memo(function WordToken({
             : inVault
               ? reader.highlight.vaultFg
               : reader.foreground,
-          backgroundColor: selected
-            ? reader.highlight.selectedBg
-            : similar
-              ? reader.highlight.similarBg
-              : inVault
-                ? reader.highlight.vaultBg
-                : "transparent",
+          backgroundColor: bg,
           overflow: "hidden",
           paddingLeft: padLeft,
           paddingRight: padRight,
           paddingVertical: needsPad ? 1 : 0,
+          textDecorationLine: spoken ? "underline" : "none",
+          textDecorationColor: SPOKEN_UNDERLINE,
+          textDecorationStyle: "solid",
           ...radii,
         }}
       >

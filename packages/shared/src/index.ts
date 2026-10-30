@@ -11,5 +11,6 @@ export * from "./grammar-guide";
 export * from "./translate-config";
 export * from "./dictionary";
 export * from "./speak-align";
+export * from "./spoken-word";
 export * from "./tutor-follow-up";
 export * from "./study-goal";
