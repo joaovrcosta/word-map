@@ -57,6 +57,12 @@ const LEVEL_TEXT = [shell.foreground, shell.foreground, shell.onPastel, shell.fo
 const GLOW_EDGE = "rgba(201, 242, 196, 0.42)";
 const GLOW_MID = "rgba(155, 232, 184, 0.18)";
 const GLOW_BAND = 32;
+/** Secundário legível no painel escuro (shell.muted fica fraco em corpo de texto). */
+const PANEL_SECONDARY = "#C7C7CC";
+const PANEL_PLACEHOLDER = "#AEAEB2";
+/** Card elevado: shell.surface (#1C1C1E) quase some no fundo (#121212). */
+const PANEL_CARD = "#2C2C2E";
+const PANEL_CARD_SOFT = "#252528";
 
 function celebrateSave() {
   if (Platform.OS !== "web") {
@@ -1172,13 +1178,13 @@ export function ReadingWordMenu({
           <View style={styles.followBox}>
             {!followOpen ? (
               <Pressable onPress={() => setFollowOpen(true)} hitSlop={6}>
-                <Text style={[styles.followGate, { color: shell.muted, fontFamily: theme.fonts.medium }]}>
+                <Text style={[styles.followGate, { color: PANEL_SECONDARY, fontFamily: theme.fonts.medium }]}>
                   Não entendi ainda
                 </Text>
               </Pressable>
             ) : (
               <>
-                <Text style={[styles.followTitle, { color: shell.muted, fontFamily: theme.fonts.semibold }]}>
+                <Text style={[styles.followTitle, { color: PANEL_SECONDARY, fontFamily: theme.fonts.semibold }]}>
                   Ainda com dúvida? · {followUps.length}/{MAX_FOLLOW_UPS_PER_EXPLANATION}
                 </Text>
                 {followUps.map((turn, index) => (
@@ -1195,7 +1201,7 @@ export function ReadingWordMenu({
                       value={followQuestion}
                       onChangeText={(value) => setFollowQuestion(value.slice(0, MAX_FOLLOW_UP_QUESTION))}
                       placeholder="Pergunte sobre esta explicação"
-                      placeholderTextColor={shell.muted}
+                      placeholderTextColor={PANEL_PLACEHOLDER}
                       editable={!followBusy}
                       autoFocus
                       onFocus={scrollInputIntoView}
@@ -1225,7 +1231,7 @@ export function ReadingWordMenu({
                     </Pressable>
                   </View>
                 ) : (
-                  <Text style={[styles.followLimit, { color: shell.muted, fontFamily: theme.fonts.regular }]}>
+                  <Text style={[styles.followLimit, { color: PANEL_SECONDARY, fontFamily: theme.fonts.regular }]}>
                     Limite de 2 perguntas nesta explicação
                   </Text>
                 )}
@@ -1484,7 +1490,7 @@ export function ReadingWordMenu({
                     onFocus={scrollInputIntoView}
                     onSubmitEditing={() => void handleAddMeaning(customMeaning)}
                     placeholder={sheet ? "Digite um novo significado aqui" : "Novo significado"}
-                    placeholderTextColor={shell.muted}
+                    placeholderTextColor={PANEL_PLACEHOLDER}
                     style={[styles.input, sheet && styles.inputBox, { fontFamily: theme.fonts.regular }]}
                   />
                   <Pressable
@@ -1618,7 +1624,12 @@ export function ReadingWordMenu({
                             style={styles.popularRow}
                           >
                             <Text style={[styles.popularText, { fontFamily: theme.fonts.medium }]}>{item}</Text>
-                            <View style={[styles.iconChip, { width: 32, height: 32, borderRadius: 16 }]}>
+                            <View
+                              style={[
+                                styles.iconChip,
+                                { width: 32, height: 32, borderRadius: 16, backgroundColor: "#3F3F42" },
+                              ]}
+                            >
                               <Ionicons name="add" size={18} color={shell.foreground} />
                             </View>
                           </Pressable>
@@ -1678,7 +1689,7 @@ export function ReadingWordMenu({
                       onFocus={scrollInputIntoView}
                       onBlur={() => void handleNotesBlur()}
                       placeholder="Adicionar anotação aqui"
-                      placeholderTextColor={shell.muted}
+                      placeholderTextColor={PANEL_PLACEHOLDER}
                       multiline
                       style={[
                         styles.notes,
@@ -1964,7 +1975,7 @@ const styles = StyleSheet.create({
     borderRadius: 21,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: shell.chip,
+    backgroundColor: "#3A3A3C",
   },
   inputBox: {
     height: 52,
@@ -1972,20 +1983,20 @@ const styles = StyleSheet.create({
     borderBottomWidth: 0,
     borderColor: "transparent",
     borderRadius: 20,
-    backgroundColor: shell.surface,
+    backgroundColor: PANEL_CARD,
     paddingHorizontal: 16,
   },
   phraseWrap: { gap: 10, marginTop: 12 },
   phraseChip: {
     alignSelf: "flex-start",
-    backgroundColor: shell.chip,
+    backgroundColor: PANEL_CARD,
     borderRadius: 999,
     paddingHorizontal: 14,
     paddingVertical: 10,
   },
   phraseChipText: { color: shell.chipText, fontSize: 14 },
   phraseCard: {
-    backgroundColor: shell.surface,
+    backgroundColor: PANEL_CARD,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -2033,14 +2044,14 @@ const styles = StyleSheet.create({
     backgroundColor: shell.chipActive,
   },
   grammar: {
-    backgroundColor: shell.surface,
+    backgroundColor: PANEL_CARD,
     borderRadius: 20,
     padding: 16,
     marginBottom: 8,
     gap: 6,
   },
   grammarTitle: { color: shell.foreground, fontSize: 17 },
-  grammarText: { color: shell.muted, fontSize: 14, lineHeight: 20 },
+  grammarText: { color: PANEL_SECONDARY, fontSize: 14, lineHeight: 20 },
   grammarExample: { color: shell.foreground, fontSize: 14, marginTop: 4 },
   meaningRow: {
     flexDirection: "row",
@@ -2061,7 +2072,7 @@ const styles = StyleSheet.create({
     borderBottomColor: shell.line,
     paddingHorizontal: 2,
   },
-  hint: { color: shell.muted, fontSize: 13, marginTop: 8, lineHeight: 18 },
+  hint: { color: PANEL_SECONDARY, fontSize: 13, marginTop: 8, lineHeight: 18 },
   error: { color: shell.dangerOnDark, fontSize: 13, marginTop: 8 },
   section: { color: shell.foreground, fontSize: 18, marginTop: 20 },
   savedRow: {
@@ -2080,7 +2091,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: shell.surface,
+    backgroundColor: PANEL_CARD,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 14,
@@ -2091,7 +2102,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: 8,
-    backgroundColor: shell.surface,
+    backgroundColor: PANEL_CARD,
     borderRadius: 20,
     paddingHorizontal: 16,
     paddingVertical: 18,
@@ -2105,19 +2116,19 @@ const styles = StyleSheet.create({
   skeletonBar: {
     height: 14,
     borderRadius: 7,
-    backgroundColor: shell.chip,
+    backgroundColor: PANEL_CARD_SOFT,
   },
   skeletonChip: {
     width: 32,
     height: 32,
     borderRadius: 16,
     marginLeft: "auto",
-    backgroundColor: shell.chip,
+    backgroundColor: PANEL_CARD_SOFT,
   },
-  phrase: { color: shell.muted, fontSize: 13, lineHeight: 20, marginTop: 6 },
+  phrase: { color: shell.foreground, fontSize: 14, lineHeight: 21, marginTop: 6 },
   originMeaning: { color: shell.foreground, fontSize: 14, lineHeight: 20, marginTop: 6 },
   origin: {
-    backgroundColor: shell.surface,
+    backgroundColor: PANEL_CARD,
     borderLeftWidth: 8,
     borderLeftColor: shell.tones.cream,
     borderRadius: 20,
@@ -2132,7 +2143,7 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     borderColor: "transparent",
     borderRadius: 20,
-    backgroundColor: shell.surface,
+    backgroundColor: PANEL_CARD,
     color: shell.foreground,
     fontSize: 15,
     padding: 16,
@@ -2170,7 +2181,7 @@ const styles = StyleSheet.create({
   contextBox: {
     borderWidth: 0,
     borderColor: "transparent",
-    backgroundColor: shell.surface,
+    backgroundColor: PANEL_CARD,
     borderRadius: 20,
     padding: 16,
   },

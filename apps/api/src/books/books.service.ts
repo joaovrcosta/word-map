@@ -9,7 +9,7 @@ import {
   deleteChapter,
   getBookById,
   getChapterById,
-  getContinueReadingBook,
+  getContinueReadingBooks,
   getReadingProgress,
   listLibraryBooks,
   listMyBooks,
@@ -63,7 +63,7 @@ export class BooksService {
   }
 
   continueReading() {
-    return getContinueReadingBook();
+    return getContinueReadingBooks();
   }
 
   addLibrary(bookId: number) {

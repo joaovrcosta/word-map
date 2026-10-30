@@ -381,13 +381,16 @@ export async function listLibraryBooks(): Promise<BookListItem[]> {
   }
 }
 
-/** Livro com progresso de leitura mais recente deste usuário, ou null. */
-export async function getContinueReadingBook(): Promise<BookListItem | null> {
+const CONTINUE_BOOKS_LIMIT = 3;
+
+/** Até 3 livros com progresso mais recente deste usuário (únicos, por updatedAt). */
+export async function getContinueReadingBooks(): Promise<BookListItem[]> {
   try {
     const user = await requireUser();
-    const latest = await prisma.readingProgress.findFirst({
+    const rows = await prisma.readingProgress.findMany({
       where: { userId: user.id },
       orderBy: { updatedAt: "desc" },
+      take: 40,
       select: {
         chapter: {
           select: {
@@ -398,14 +401,34 @@ export async function getContinueReadingBook(): Promise<BookListItem | null> {
         },
       },
     });
-    const book = latest?.chapter.book;
-    if (!book) return null;
 
-    const library = await prisma.userLibrary.findUnique({
-      where: { userId_bookId: { userId: user.id, bookId: book.id } },
-      select: { id: true },
+    const seen = new Set<number>();
+    const books: Array<{
+      id: number;
+      title: string;
+      description: string | null;
+      coverUrl: string | null;
+      isOfficial: boolean;
+      ownerId: number;
+      createdAt: Date;
+      updatedAt: Date;
+      _count: { chapters: number };
+    }> = [];
+    for (const row of rows) {
+      const book = row.chapter.book;
+      if (seen.has(book.id)) continue;
+      seen.add(book.id);
+      books.push(book);
+      if (books.length >= CONTINUE_BOOKS_LIMIT) break;
+    }
+    if (books.length === 0) return [];
+
+    const library = await prisma.userLibrary.findMany({
+      where: { userId: user.id, bookId: { in: books.map((book) => book.id) } },
+      select: { bookId: true },
     });
-    return toListItem(book, Boolean(library));
+    const inLibraryIds = new Set(library.map((entry) => entry.bookId));
+    return books.map((book) => toListItem(book, inLibraryIds.has(book.id)));
   } catch (error) {
     wrapError(error);
   }
@@ -807,6 +830,7 @@ export async function saveReadingProgress(
         pageIndex,
         paragraphIndex,
         contentOffset,
+        updatedAt: new Date(),
         ...(reachedEndAt && !existing?.reachedEndAt
           ? { reachedEndAt }
           : {}),

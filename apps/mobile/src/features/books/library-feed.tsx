@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { Image, Modal, Pressable, ScrollView, Text, TextInput, View } from "react-native";
+import { Image, Modal, Pressable, ScrollView, Text, TextInput, useWindowDimensions, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { formatNewsDate } from "../news/format";
@@ -45,7 +45,7 @@ export function LibraryFeed() {
   const [official, setOfficial] = useState<BookListItem[] | null>(null);
   const [mine, setMine] = useState<BookListItem[]>([]);
   const [library, setLibrary] = useState<BookListItem[]>([]);
-  const [continueBook, setContinueBook] = useState<BookListItem | null>(null);
+  const [continueBooks, setContinueBooks] = useState<BookListItem[]>([]);
   const [news, setNews] = useState<NewsListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -60,18 +60,24 @@ export function LibraryFeed() {
 
   const load = useCallback(async () => {
     try {
-      const [officialBooks, myBooks, libraryBooks, continueReadingBook, newsArticles] =
+      const [officialBooks, myBooks, libraryBooks, continueReadingBooks, newsArticles] =
         await Promise.all([
           request<BookListItem[]>("/books/official"),
           request<BookListItem[]>("/books/mine"),
           request<BookListItem[]>("/books/library"),
-          request<BookListItem | null>("/books/continue").catch(() => null),
+          request<BookListItem[]>("/books/continue").catch(() => [] as BookListItem[]),
           request<NewsListItem[]>("/news").catch(() => [] as NewsListItem[]),
         ]);
       setOfficial(officialBooks);
       setMine(myBooks);
       setLibrary(libraryBooks);
-      setContinueBook(continueReadingBook);
+      setContinueBooks(
+        Array.isArray(continueReadingBooks)
+          ? continueReadingBooks
+              .filter((book) => book && typeof book.id === "number")
+              .slice(0, 3)
+          : []
+      );
       setNews(newsArticles);
       setError(null);
     } catch (cause) {
@@ -314,15 +320,12 @@ export function LibraryFeed() {
 
       {error ? <ErrorText>{error}</ErrorText> : null}
 
-      {continueBook ? (
-        <View style={{ marginTop: 22 }}>
-          <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.bold, fontSize: 22 }}>Continuar</Text>
-          <ContinueCard
-            book={continueBook}
-            busy={busyId === continueBook.id}
-            onOpen={() => void continueReading(continueBook)}
-          />
-        </View>
+      {continueBooks.length > 0 ? (
+        <ContinueCarousel
+          books={continueBooks}
+          busyId={busyId}
+          onOpen={(book) => void continueReading(book)}
+        />
       ) : null}
 
       {shelf === "foryou" && !query.trim() && news.length > 0 ? (
@@ -411,7 +414,71 @@ export function LibraryFeed() {
   );
 }
 
-function ContinueCard({ book, busy, onOpen }: { book: BookListItem; busy: boolean; onOpen: () => void }) {
+const CONTINUE_PEEK = 28;
+const CONTINUE_GAP = 12;
+const CONTINUE_SCREEN_PAD = 20;
+
+function ContinueCarousel({
+  books,
+  busyId,
+  onOpen,
+}: {
+  books: BookListItem[];
+  busyId: number | null;
+  onOpen: (book: BookListItem) => void;
+}) {
+  const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const cardWidth =
+    books.length === 1
+      ? width - CONTINUE_SCREEN_PAD * 2
+      : width - CONTINUE_SCREEN_PAD * 2 - CONTINUE_PEEK;
+
+  return (
+    <View style={{ marginTop: 22 }}>
+      <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.bold, fontSize: 22 }}>Continuar</Text>
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator={false}
+        decelerationRate="fast"
+        snapToInterval={cardWidth + CONTINUE_GAP}
+        snapToAlignment="start"
+        disableIntervalMomentum
+        style={{ marginHorizontal: -CONTINUE_SCREEN_PAD, marginTop: 12 }}
+        contentContainerStyle={{
+          paddingHorizontal: CONTINUE_SCREEN_PAD,
+          paddingRight: CONTINUE_SCREEN_PAD,
+        }}
+      >
+        {books.map((book, index) => (
+          <ContinueCard
+            key={book.id}
+            book={book}
+            busy={busyId === book.id}
+            width={cardWidth}
+            marginRight={index === books.length - 1 ? 0 : CONTINUE_GAP}
+            onOpen={() => onOpen(book)}
+          />
+        ))}
+      </ScrollView>
+    </View>
+  );
+}
+
+function ContinueCard({
+  book,
+  busy,
+  width,
+  marginRight,
+  onOpen,
+}: {
+  book: BookListItem;
+  busy: boolean;
+  width: number;
+  marginRight: number;
+  onOpen: () => void;
+}) {
   const theme = useTheme();
   const author = bookAuthor(book.title);
   const subtitle = author ?? countLabel(book.chapterCount, "capítulo", "capítulos");
@@ -423,7 +490,8 @@ function ContinueCard({ book, busy, onOpen }: { book: BookListItem; busy: boolea
       accessibilityRole="button"
       accessibilityLabel={`Continuar ${book.title}`}
       style={{
-        marginTop: 12,
+        width,
+        marginRight,
         flexDirection: "row",
         alignItems: "center",
         gap: 12,
@@ -481,6 +549,12 @@ function NewsRail({
   onOpen: (article: NewsListItem) => void;
 }) {
   const theme = useTheme();
+  const { width } = useWindowDimensions();
+  const cardWidth =
+    articles.length === 1
+      ? width - CONTINUE_SCREEN_PAD * 2
+      : width - CONTINUE_SCREEN_PAD * 2 - CONTINUE_PEEK;
+
   return (
     <View style={{ marginTop: 26 }}>
       <Pressable
@@ -494,19 +568,38 @@ function NewsRail({
         </Text>
         <Ionicons name="chevron-forward" size={20} color={theme.shell.muted} />
       </Pressable>
-      <View style={{ marginTop: 14, gap: 16 }}>
-        {articles.map((article) => (
+      <ScrollView
+        horizontal
+        nestedScrollEnabled
+        showsHorizontalScrollIndicator={false}
+        decelerationRate="fast"
+        snapToInterval={cardWidth + CONTINUE_GAP}
+        snapToAlignment="start"
+        disableIntervalMomentum
+        style={{ marginHorizontal: -CONTINUE_SCREEN_PAD, marginTop: 14 }}
+        contentContainerStyle={{ paddingHorizontal: CONTINUE_SCREEN_PAD }}
+      >
+        {articles.map((article, index) => (
           <Pressable
             key={article.id}
             onPress={() => onOpen(article)}
             accessibilityRole="button"
             accessibilityLabel={article.title}
-            style={{ flexDirection: "row", gap: 14, alignItems: "flex-start" }}
+            style={{
+              width: cardWidth,
+              marginRight: index === articles.length - 1 ? 0 : CONTINUE_GAP,
+              flexDirection: "row",
+              gap: 14,
+              alignItems: "flex-start",
+              padding: 12,
+              borderRadius: 16,
+              backgroundColor: theme.shell.surface,
+            }}
           >
             {article.imageUrl ? (
               <Image
                 source={{ uri: article.imageUrl }}
-                style={{ width: 88, height: 88, borderRadius: 4 }}
+                style={{ width: 88, height: 88, borderRadius: 8 }}
                 resizeMode="cover"
               />
             ) : (
@@ -514,10 +607,8 @@ function NewsRail({
                 style={{
                   width: 88,
                   height: 88,
-                  borderRadius: 4,
-                  backgroundColor: theme.shell.surface,
-                  borderWidth: 1,
-                  borderColor: theme.shell.line,
+                  borderRadius: 8,
+                  backgroundColor: theme.shell.chip,
                   alignItems: "center",
                   justifyContent: "center",
                 }}
@@ -554,7 +645,7 @@ function NewsRail({
             </View>
           </Pressable>
         ))}
-      </View>
+      </ScrollView>
     </View>
   );
 }
