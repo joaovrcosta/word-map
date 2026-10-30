@@ -35,7 +35,7 @@ export default function BookDetailScreen() {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height: windowHeight, width: windowWidth } = useWindowDimensions();
-  const { request } = useSession();
+  const { request, user } = useSession();
   const params = useLocalSearchParams<{ id: string }>();
   const bookId = Number(params.id);
   const sheetMaxHeight = Math.round(windowHeight * 0.86);
@@ -199,7 +199,7 @@ export default function BookDetailScreen() {
       return;
     }
     void (async () => {
-      const resumeId = await readBookResume(bookId);
+      const resumeId = user?.id != null ? await readBookResume(user.id, bookId) : null;
       const target = pickResumeChapter(chapters, resumeId) ?? firstChapter;
       if (!target) {
         setTab("chapters");

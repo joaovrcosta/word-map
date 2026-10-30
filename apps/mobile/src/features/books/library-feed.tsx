@@ -45,6 +45,7 @@ export function LibraryFeed() {
   const [official, setOfficial] = useState<BookListItem[] | null>(null);
   const [mine, setMine] = useState<BookListItem[]>([]);
   const [library, setLibrary] = useState<BookListItem[]>([]);
+  const [continueBook, setContinueBook] = useState<BookListItem | null>(null);
   const [news, setNews] = useState<NewsListItem[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<number | null>(null);
@@ -59,15 +60,18 @@ export function LibraryFeed() {
 
   const load = useCallback(async () => {
     try {
-      const [officialBooks, myBooks, libraryBooks, newsArticles] = await Promise.all([
-        request<BookListItem[]>("/books/official"),
-        request<BookListItem[]>("/books/mine"),
-        request<BookListItem[]>("/books/library"),
-        request<NewsListItem[]>("/news").catch(() => [] as NewsListItem[]),
-      ]);
+      const [officialBooks, myBooks, libraryBooks, continueReadingBook, newsArticles] =
+        await Promise.all([
+          request<BookListItem[]>("/books/official"),
+          request<BookListItem[]>("/books/mine"),
+          request<BookListItem[]>("/books/library"),
+          request<BookListItem | null>("/books/continue").catch(() => null),
+          request<NewsListItem[]>("/news").catch(() => [] as NewsListItem[]),
+        ]);
       setOfficial(officialBooks);
       setMine(myBooks);
       setLibrary(libraryBooks);
+      setContinueBook(continueReadingBook);
       setNews(newsArticles);
       setError(null);
     } catch (cause) {
@@ -108,7 +112,7 @@ export function LibraryFeed() {
       }
       const detail = await request<BookDetail | null>(`/books/${book.id}`);
       const chapters = [...(detail?.chapters ?? [])].sort((a, b) => a.order - b.order);
-      const resumeId = await readBookResume(book.id);
+      const resumeId = user?.id != null ? await readBookResume(user.id, book.id) : null;
       const target = pickResumeChapter(chapters, resumeId) ?? chapters[0] ?? null;
       if (!target) {
         router.push(`/books/${book.id}` as Href);
@@ -185,8 +189,6 @@ export function LibraryFeed() {
     (book: BookListItem) => book.title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()),
     [query]
   );
-
-  const continueBook = library[0] ?? official?.[0] ?? mine[0] ?? null;
 
   const rails = useMemo((): Rail[] => {
     const officialBooks = (official ?? []).filter(matches);

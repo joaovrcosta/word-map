@@ -381,6 +381,36 @@ export async function listLibraryBooks(): Promise<BookListItem[]> {
   }
 }
 
+/** Livro com progresso de leitura mais recente deste usuário, ou null. */
+export async function getContinueReadingBook(): Promise<BookListItem | null> {
+  try {
+    const user = await requireUser();
+    const latest = await prisma.readingProgress.findFirst({
+      where: { userId: user.id },
+      orderBy: { updatedAt: "desc" },
+      select: {
+        chapter: {
+          select: {
+            book: {
+              include: { _count: { select: { chapters: true } } },
+            },
+          },
+        },
+      },
+    });
+    const book = latest?.chapter.book;
+    if (!book) return null;
+
+    const library = await prisma.userLibrary.findUnique({
+      where: { userId_bookId: { userId: user.id, bookId: book.id } },
+      select: { id: true },
+    });
+    return toListItem(book, Boolean(library));
+  } catch (error) {
+    wrapError(error);
+  }
+}
+
 export async function addBookToLibrary(bookId: number) {
   try {
     const user = await requireUser();

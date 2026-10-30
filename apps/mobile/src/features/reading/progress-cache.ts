@@ -12,12 +12,12 @@ export type CachedReadingProgress = {
   updatedAt: number;
 };
 
-function storageKey(chapterId: number) {
-  return `${STORAGE_PREFIX}${chapterId}`;
+function storageKey(userId: number, chapterId: number) {
+  return `${STORAGE_PREFIX}${userId}:${chapterId}`;
 }
 
-function bookResumeKey(bookId: number) {
-  return `${BOOK_RESUME_PREFIX}${bookId}`;
+function bookResumeKey(userId: number, bookId: number) {
+  return `${BOOK_RESUME_PREFIX}${userId}:${bookId}`;
 }
 
 async function readRaw(key: string): Promise<string | null> {
@@ -66,16 +66,19 @@ function parseCached(raw: string | null, chapterId: number): CachedReadingProgre
 }
 
 export async function readProgressCache(
+  userId: number,
   chapterId: number
 ): Promise<CachedReadingProgress | null> {
+  if (!(userId > 0)) return null;
   try {
-    return parseCached(await readRaw(storageKey(chapterId)), chapterId);
+    return parseCached(await readRaw(storageKey(userId, chapterId)), chapterId);
   } catch {
     return null;
   }
 }
 
 export async function writeProgressCache(
+  userId: number,
   chapterId: number,
   progress: {
     pageIndex: number;
@@ -83,6 +86,7 @@ export async function writeProgressCache(
     contentOffset: number | null;
   }
 ): Promise<void> {
+  if (!(userId > 0)) return;
   const payload: CachedReadingProgress = {
     chapterId,
     pageIndex: Math.max(0, Math.floor(progress.pageIndex)),
@@ -94,16 +98,17 @@ export async function writeProgressCache(
     updatedAt: Date.now(),
   };
   try {
-    await writeRaw(storageKey(chapterId), JSON.stringify(payload));
+    await writeRaw(storageKey(userId, chapterId), JSON.stringify(payload));
   } catch {
     // cache é best-effort
   }
 }
 
-/** Último capítulo aberto neste livro (resume local). */
-export async function readBookResume(bookId: number): Promise<number | null> {
+/** Último capítulo aberto neste livro (resume local, por usuário). */
+export async function readBookResume(userId: number, bookId: number): Promise<number | null> {
+  if (!(userId > 0)) return null;
   try {
-    const raw = await readRaw(bookResumeKey(bookId));
+    const raw = await readRaw(bookResumeKey(userId, bookId));
     if (!raw) return null;
     const chapterId = Number(raw);
     return Number.isFinite(chapterId) && chapterId > 0 ? chapterId : null;
@@ -112,10 +117,14 @@ export async function readBookResume(bookId: number): Promise<number | null> {
   }
 }
 
-export async function writeBookResume(bookId: number, chapterId: number): Promise<void> {
-  if (!(bookId > 0) || !(chapterId > 0)) return;
+export async function writeBookResume(
+  userId: number,
+  bookId: number,
+  chapterId: number
+): Promise<void> {
+  if (!(userId > 0) || !(bookId > 0) || !(chapterId > 0)) return;
   try {
-    await writeRaw(bookResumeKey(bookId), String(chapterId));
+    await writeRaw(bookResumeKey(userId, bookId), String(chapterId));
   } catch {
     // cache é best-effort
   }

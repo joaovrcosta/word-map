@@ -101,7 +101,8 @@ export default function ChapterReaderScreen() {
   const readerTheme = useResolvedReaderTheme(prefs?.theme ?? "dark");
   const readerStyles = useMemo(() => makeReaderStyles(readerTheme), [readerTheme]);
   const { height: windowHeight } = useWindowDimensions();
-  const { request } = useSession();
+  const { request, user } = useSession();
+  const userId = user?.id ?? 0;
   const requestRef = useRef(request);
   requestRef.current = request;
   const navigation = useNavigation();
@@ -184,7 +185,7 @@ export default function ChapterReaderScreen() {
       anchorRef.current = { contentOffset };
       const payload = { pageIndex: idx, paragraphIndex, contentOffset };
 
-      void writeProgressCache(chapterId, payload);
+      void writeProgressCache(userId, chapterId, payload);
 
       if (saveInFlightRef.current) {
         saveQueuedRef.current = payload;
@@ -214,7 +215,7 @@ export default function ChapterReaderScreen() {
         saveInFlightRef.current = false;
       }
     },
-    [chapterId]
+    [chapterId, userId]
   );
   const saveProgressRef = useRef(saveProgress);
   saveProgressRef.current = saveProgress;
@@ -308,7 +309,7 @@ export default function ChapterReaderScreen() {
       try {
         const [detail, localProgress, remoteProgress] = await Promise.all([
           requestRef.current<ChapterDetail | null>(`/chapters/${chapterId}`),
-          readProgressCache(chapterId),
+          readProgressCache(userId, chapterId),
           requestRef.current<ReadingPosition | null>(`/chapters/${chapterId}/progress`).catch(
             () => null
           ),
@@ -327,7 +328,7 @@ export default function ChapterReaderScreen() {
         const nextPages = paginateReading(detail.content);
         const picked = pickReadingProgress(localProgress, remoteProgress);
         if (picked.source === "remote" && remoteProgress) {
-          void writeProgressCache(chapterId, {
+          void writeProgressCache(userId, chapterId, {
             pageIndex: picked.pageIndex,
             paragraphIndex: picked.paragraphIndex,
             contentOffset: picked.contentOffset,
@@ -348,7 +349,7 @@ export default function ChapterReaderScreen() {
         setChapter(detail);
         setLoading(false);
         setReaderReady(true);
-        void writeBookResume(detail.bookId || bookId, chapterId);
+        void writeBookResume(userId, detail.bookId || bookId, chapterId);
         // Marca este capítulo como o último lido (mesmo sem virar página).
         movedRef.current = true;
         void saveProgressRef.current(true);
@@ -363,7 +364,7 @@ export default function ChapterReaderScreen() {
       cancelled = true;
       wordsRequestId.current += 1;
     };
-  }, [bookId, chapterId, prefsReady, jumpToPage]);
+  }, [bookId, chapterId, prefsReady, jumpToPage, userId]);
 
   const reloadWords = useCallback(
     async (requestId?: number) => {

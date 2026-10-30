@@ -96,6 +96,11 @@ export class BooksController {
     return this.books.library();
   }
 
+  @Get("continue")
+  continueReading() {
+    return this.books.continueReading();
+  }
+
   @Post("official")
   createOfficial(@Body() body: BookDto) {
     return this.books.createOfficial(body.title, body.description, body.coverUrl);
