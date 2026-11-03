@@ -40,10 +40,14 @@ export function GoogleContinueButton({
   disabled,
   onCredential,
   onError,
+  lastUsed = false,
+  variant = "light",
 }: {
   disabled?: boolean;
   onCredential: (credential: string) => void;
   onError: (message: string) => void;
+  lastUsed?: boolean;
+  variant?: "light" | "dark";
 }) {
   const theme = useTheme();
   const onCredentialRef = useRef(onCredential);
@@ -131,16 +135,32 @@ export function GoogleContinueButton({
     void promptAsync();
   };
 
+  const light = variant === "light";
+  const label = lastUsed ? "Continuar com Google (último usado)" : "Continuar com Google";
+
   return (
     <View style={{ position: "relative" }}>
       <Pressable
         disabled={disabled || (Platform.OS !== "web" && !request)}
         onPress={Platform.OS === "web" ? undefined : startNative}
-        style={[styles.button, { backgroundColor: theme.shell.tabBar, borderColor: theme.shell.line }]}
+        style={[
+          styles.button,
+          light
+            ? { backgroundColor: "#E8E8E8" }
+            : { backgroundColor: theme.shell.tabBar, borderWidth: 1.5, borderColor: theme.shell.line },
+        ]}
       >
-        <Ionicons name="logo-google" size={18} color={theme.shell.foreground} />
-        <Text style={[styles.label, { color: theme.shell.foreground, fontFamily: theme.fonts.bold }]}>
-          Continuar com Google
+        <Ionicons name="logo-google" size={18} color={light ? "#111111" : theme.shell.foreground} />
+        <Text
+          style={[
+            styles.label,
+            {
+              color: light ? "#111111" : theme.shell.foreground,
+              fontFamily: theme.fonts.bold,
+            },
+          ]}
+        >
+          {label}
         </Text>
       </Pressable>
       {Platform.OS === "web" ? (
@@ -156,13 +176,13 @@ export function GoogleContinueButton({
 
 const styles = {
   button: {
-    height: 56,
-    borderRadius: 16,
-    borderWidth: 1.5,
+    height: 54,
+    borderRadius: 14,
     flexDirection: "row" as const,
     alignItems: "center" as const,
     justifyContent: "center" as const,
     gap: 10,
+    paddingHorizontal: 16,
   },
   label: { fontSize: 16 },
   webHit: {

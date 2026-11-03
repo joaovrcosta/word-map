@@ -1,20 +1,22 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
-  FlatList,
-  Image,
+  Animated,
   KeyboardAvoidingView,
   Modal,
   Platform,
   Pressable,
   ScrollView,
+  StyleSheet,
   Text,
+  TextInput,
   View,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { brand } from "@word-map/design-tokens";
 import { normalizeGrammaticalClass, type DictionaryEntry } from "@word-map/shared";
 import { useSession } from "../../../src/session";
@@ -27,9 +29,35 @@ import {
   type Word,
 } from "../../../src/types";
 import { ReadingWordMenu, type SavedReadingWord } from "../../../src/features/reading/word-menu";
-import { ErrorText, Field, Heading, Loading, Muted, PrimaryButton, Screen } from "../../../src/ui";
+import { AddWordSearchSheet } from "../../../src/features/vaults/add-word-search-sheet";
+import { LearningProgressLink } from "../../../src/features/vaults/learning-progress";
+import { ErrorText, Field, Loading, Muted, Screen } from "../../../src/ui";
 
-const novaWordIcon = require("../../../assets/icons/nova-word.png");
+const VAULT_ACCENTS = ["#4B7BFF", "#9B5CFF", "#FF4B6A", "#24c875", "#FF9600", "#00C2A8"] as const;
+
+function vaultAccent(id: number) {
+  return VAULT_ACCENTS[Math.abs(id) % VAULT_ACCENTS.length] ?? VAULT_ACCENTS[0];
+}
+
+function mixHex(hex: string, toward: number, amount: number) {
+  const raw = hex.replace("#", "");
+  const r = parseInt(raw.slice(0, 2), 16);
+  const g = parseInt(raw.slice(2, 4), 16);
+  const b = parseInt(raw.slice(4, 6), 16);
+  const mix = (channel: number) =>
+    Math.round(channel + (toward - channel) * Math.min(1, Math.max(0, amount)));
+  const to = (channel: number) => mix(channel).toString(16).padStart(2, "0");
+  return `#${to(r)}${to(g)}${to(b)}`;
+}
+
+function accentSoft(hex: string, alpha: number) {
+  const raw = hex.replace("#", "");
+  const r = parseInt(raw.slice(0, 2), 16);
+  const g = parseInt(raw.slice(2, 4), 16);
+  const b = parseInt(raw.slice(4, 6), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
 const LEVELS = [brand.level1, brand.level2, brand.level3, brand.level4];
 
 type Draft = {
@@ -81,20 +109,30 @@ export default function VaultDetailScreen() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [opened, setOpened] = useState<Word | null>(null);
   const [query, setQuery] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [sortAsc, setSortAsc] = useState(true);
   const [saving, setSaving] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [suggestError, setSuggestError] = useState<string | null>(null);
+  const [addSearchOpen, setAddSearchOpen] = useState(false);
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   const words = useMemo(() => {
     if (!vault) return [];
     const term = query.trim().toLowerCase();
-    if (!term) return vault.words;
-    return vault.words.filter(
-      (word) =>
-        word.name.toLowerCase().includes(term) ||
-        word.translations.some((item) => item.toLowerCase().includes(term))
-    );
-  }, [vault, query]);
+    let list = vault.words;
+    if (term) {
+      list = list.filter(
+        (word) =>
+          word.name.toLowerCase().includes(term) ||
+          word.translations.some((item) => item.toLowerCase().includes(term))
+      );
+    }
+    return [...list].sort((left, right) => {
+      const cmp = left.name.localeCompare(right.name, "pt");
+      return sortAsc ? cmp : -cmp;
+    });
+  }, [vault, query, sortAsc]);
 
   const load = useCallback(async () => {
     try {
@@ -176,9 +214,9 @@ export default function VaultDetailScreen() {
     setDraft(next);
   };
 
-  const suggestWithAi = async () => {
-    const word = draft?.name.trim();
-    if (!draft || !word || suggesting) return;
+  const suggestForWord = async (wordInput: string) => {
+    const word = wordInput.trim();
+    if (!word || suggesting) return;
     setSuggesting(true);
     setSuggestError(null);
     try {
@@ -222,217 +260,349 @@ export default function VaultDetailScreen() {
     }
   };
 
+  const suggestWithAi = async () => {
+    if (!draft) return;
+    await suggestForWord(draft.name);
+  };
+
   if (!vault && !missing && !error) return <Loading />;
 
   const wordCount = vault?.words.length ?? 0;
-  const wordLabel = wordCount === 1 ? "palavra" : "palavras";
+
+  const accent = vault ? vaultAccent(vault.id) : "#9B5CFF";
+  const coverLight = mixHex(accent, 255, 0.22);
+  const coverMid = mixHex(accent, 255, 0.06);
+  const actionBg = accentSoft(accent, 0.32);
+  // Cores OPACAS: capa escurecendo até o cinza da plataforma (#121212).
+  const screenBase = theme.shell.background;
+  const baseChannel = 0x12;
+  const heroColors = [0.25, 0.33, 0.45, 0.6, 0.76, 0.9, 1].map((amount) =>
+    mixHex(accent, baseChannel, amount)
+  ) as [string, string, ...string[]];
+  const heroLocations = [0, 0.15, 0.3, 0.5, 0.7, 0.88, 1] as const;
+
+  if (!vault) {
+    return (
+      <Screen backgroundColor={screenBase}>
+        {error ? <ErrorText>{error}</ErrorText> : null}
+        {missing ? <Muted>Este vault não está mais disponível.</Muted> : null}
+      </Screen>
+    );
+  }
+
+  const topBarHeight = 44;
+  const gradientExtra = insets.top + topBarHeight;
+
+  const playlistHeader = (
+    <View style={{ paddingBottom: 8 }}>
+      <View style={{ height: gradientExtra }} />
+      <View style={{ paddingHorizontal: 20 }}>
+        <View style={{ alignItems: "center", marginTop: 4, marginBottom: 16 }}>
+          <LinearGradient
+            colors={[coverLight, coverMid, accent]}
+            start={{ x: 0.15, y: 0 }}
+            end={{ x: 0.85, y: 1 }}
+            style={{
+              width: 168,
+              height: 168,
+              borderRadius: 22,
+              alignItems: "center",
+              justifyContent: "center",
+              shadowColor: "#000",
+              shadowOpacity: 0.35,
+              shadowRadius: 18,
+              shadowOffset: { width: 0, height: 10 },
+              elevation: 8,
+            }}
+          >
+            <Ionicons name="bookmark-outline" size={58} color="rgba(255,255,255,0.92)" />
+          </LinearGradient>
+        </View>
+
+        <Text
+          numberOfLines={2}
+          style={{ color: "#FFFFFF", fontFamily: theme.fonts.bold, fontSize: 24, lineHeight: 30 }}
+        >
+          {vault.name}
+        </Text>
+
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 14, marginTop: 8 }}>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Ionicons name="albums" size={14} color="rgba(255,255,255,0.85)" />
+            <Text style={{ color: "rgba(255,255,255,0.85)", fontFamily: theme.fonts.semibold, fontSize: 12 }}>
+              Word Map
+            </Text>
+          </View>
+          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+            <Ionicons name="lock-closed" size={12} color="rgba(255,255,255,0.85)" />
+            <Text style={{ color: "rgba(255,255,255,0.85)", fontFamily: theme.fonts.semibold, fontSize: 12 }}>
+              Privado
+            </Text>
+          </View>
+        </View>
+
+        <Text
+          style={{
+            marginTop: 10,
+            marginBottom: 12,
+            color: "rgba(255,255,255,0.65)",
+            fontFamily: theme.fonts.regular,
+            fontSize: 14,
+            lineHeight: 20,
+          }}
+        >
+          {wordCount === 0
+            ? "Ainda não tem palavras. Adicione a primeira para começar."
+            : `Todas as palavras que você salvou neste vault.`}
+        </Text>
+
+        <LearningProgressLink words={vault.words} accent={accent} />
+
+        <View style={{ flexDirection: "row", gap: 10, marginTop: 18 }}>
+          <Pressable
+            disabled={wordCount === 0}
+            onPress={() => router.push(`/flashcards/${vault.id}` as Href)}
+            style={{
+              flex: 1,
+              height: 48,
+              borderRadius: 14,
+              backgroundColor: actionBg,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              opacity: wordCount === 0 ? 0.45 : 1,
+            }}
+          >
+            <Ionicons name="copy-outline" size={18} color="#FFFFFF" />
+            <Text style={{ color: "#FFFFFF", fontFamily: theme.fonts.bold, fontSize: 14 }}>Revisar</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setAddSearchOpen(true)}
+            style={{
+              flex: 1,
+              height: 48,
+              borderRadius: 14,
+              backgroundColor: actionBg,
+              flexDirection: "row",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+            }}
+          >
+            <Ionicons name="add-circle-outline" size={18} color="#FFFFFF" />
+            <Text style={{ color: "#FFFFFF", fontFamily: theme.fonts.bold, fontSize: 14 }}>Nova palavra</Text>
+          </Pressable>
+        </View>
+
+        {searchOpen ? (
+          <TextInput
+            autoFocus
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Pesquisar palavra"
+            placeholderTextColor="rgba(255,255,255,0.35)"
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={{
+              marginTop: 16,
+              height: 44,
+              borderRadius: 12,
+              paddingHorizontal: 14,
+              color: "#FFFFFF",
+              backgroundColor: "rgba(0,0,0,0.28)",
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.12)",
+              fontFamily: theme.fonts.regular,
+              fontSize: 15,
+            }}
+          />
+        ) : null}
+
+        {wordCount > 0 ? (
+          <Text
+            style={{
+              marginTop: 22,
+              marginBottom: 4,
+              color: "#FFFFFF",
+              fontFamily: theme.fonts.bold,
+              fontSize: 18,
+            }}
+          >
+            Minhas {wordCount} {wordCount === 1 ? "palavra" : "palavras"}
+          </Text>
+        ) : null}
+      </View>
+    </View>
+  );
 
   return (
-    <Screen>
-      <Pressable onPress={() => router.back()} hitSlop={8}>
-        <Text style={{ color: theme.colors.greenText, fontFamily: theme.fonts.semibold, marginBottom: 8 }}>
-          Voltar
-        </Text>
-      </Pressable>
-
-      {error ? <ErrorText>{error}</ErrorText> : null}
-      {missing ? <Muted>Este vault não está mais disponível.</Muted> : null}
-
-      {vault && wordCount === 0 ? (
-        <View style={{ flex: 1, justifyContent: "center" }}>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 16, marginBottom: 8 }}>
-            <View style={{ flex: 1 }}>
-              <Heading>Praticar palavras</Heading>
-              <Muted>
-                {vault.name} ainda não tem palavras. Adicione a primeira para começar a praticar.
-              </Muted>
-            </View>
-            <Image source={novaWordIcon} style={{ width: 88, height: 88 }} resizeMode="contain" />
-          </View>
-          <PrimaryButton label="Nova palavra" onPress={() => openDraft(blankDraft())} />
-        </View>
-      ) : null}
-
-      {vault && wordCount > 0 ? (
-        <FlatList
-          data={words}
-          keyExtractor={(item) => String(item.id)}
+    <View style={{ flex: 1, backgroundColor: screenBase }}>
+      <Animated.View
+        pointerEvents="none"
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: 560 + insets.top,
+          transform: [{ translateY: Animated.multiply(scrollY, -1) }],
+        }}
+      >
+        <LinearGradient
+          colors={heroColors}
+          locations={heroLocations as unknown as [number, number, ...number[]]}
           style={{ flex: 1 }}
-          keyboardShouldPersistTaps="handled"
-          ListHeaderComponent={
-            <View style={{ paddingBottom: 8 }}>
-              <View style={{ flexDirection: "row", alignItems: "flex-start", gap: 14 }}>
-                <View style={{ flex: 1, paddingTop: 4 }}>
-                  <Text
-                    style={{
-                      color: theme.shell.foreground,
-                      fontFamily: theme.fonts.bold,
-                      fontSize: 28,
-                      lineHeight: 34,
-                    }}
-                  >
-                    Praticar palavras
-                  </Text>
-                  <Text
-                    style={{
-                      marginTop: 10,
-                      color: theme.shell.muted,
-                      fontFamily: theme.fonts.regular,
-                      fontSize: 16,
-                      lineHeight: 24,
-                    }}
-                  >
-                    Você tem{" "}
-                    <Text style={{ color: theme.shell.mascot.accent, fontFamily: theme.fonts.bold }}>
-                      {wordCount} {wordLabel}
-                    </Text>{" "}
-                    em “{vault.name}”. Vamos começar?
-                  </Text>
-                </View>
-                <Image source={novaWordIcon} style={{ width: 92, height: 92 }} resizeMode="contain" />
-              </View>
+        />
+      </Animated.View>
 
+      <Animated.FlatList
+        data={words}
+        keyExtractor={(item) => String(item.id)}
+        style={{ flex: 1, backgroundColor: "transparent" }}
+        contentContainerStyle={{
+          paddingBottom: Math.max(insets.bottom, 24) + 16,
+          backgroundColor: "transparent",
+        }}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], {
+          useNativeDriver: true,
+        })}
+        scrollEventThrottle={16}
+        keyboardShouldPersistTaps="handled"
+        ListHeaderComponent={
+          <>
+            {error ? (
+              <View style={{ paddingHorizontal: 20, marginBottom: 8 }}>
+                <ErrorText>{error}</ErrorText>
+              </View>
+            ) : null}
+            {playlistHeader}
+          </>
+        }
+        ListEmptyComponent={
+          wordCount === 0 ? null : (
+            <Text
+              style={{
+                paddingHorizontal: 20,
+                color: "rgba(255,255,255,0.5)",
+                fontFamily: theme.fonts.medium,
+              }}
+            >
+              Nenhuma palavra encontrada.
+            </Text>
+          )
+        }
+        renderItem={({ item }: { item: Word }) => {
+          const level = Math.min(4, Math.max(1, item.confidence || 1));
+          const translation = item.translations.filter(Boolean).join(", ");
+          return (
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 14,
+                borderBottomWidth: StyleSheet.hairlineWidth,
+                borderBottomColor: "rgba(255,255,255,0.1)",
+                paddingVertical: 14,
+                paddingHorizontal: 20,
+                backgroundColor: "transparent",
+              }}
+            >
               <Pressable
-                accessibilityRole="button"
-                onPress={() => router.push(`/flashcards/${vault.id}` as Href)}
+                accessibilityLabel={`Ouvir ${item.name}`}
+                onPress={() => speakWord(item.name)}
+                hitSlop={8}
                 style={{
-                  marginTop: 16,
+                  width: 40,
+                  height: 40,
+                  borderRadius: 20,
                   alignItems: "center",
                   justifyContent: "center",
-                  paddingVertical: 16,
-                  borderRadius: 20,
-                  backgroundColor: theme.shell.tones.green,
+                  backgroundColor: "rgba(255,255,255,0.08)",
                 }}
               >
+                <Ionicons name="volume-medium" size={22} color="#24c875" />
+              </Pressable>
+              <Pressable onPress={() => setOpened(item)} style={{ flex: 1 }}>
+                <Text style={{ color: "#FFFFFF", fontFamily: theme.fonts.bold, fontSize: 17 }}>
+                  {item.name}
+                </Text>
                 <Text
                   style={{
-                    color: theme.shell.onPastel,
-                    fontFamily: theme.fonts.bold,
-                    fontSize: 17,
+                    color: "rgba(255,255,255,0.5)",
+                    fontFamily: theme.fonts.regular,
+                    marginTop: 3,
+                    fontSize: 14,
                   }}
                 >
-                  {`Praticar ${wordCount} ${wordLabel}`}
+                  {translation || classLabel(item.grammaticalClass)}
                 </Text>
               </Pressable>
-
-              <Field
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Pesquisar palavra"
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-
               <View
                 style={{
-                  marginTop: 22,
-                  marginBottom: 4,
-                  flexDirection: "row",
+                  width: 28,
+                  height: 28,
+                  borderRadius: 14,
                   alignItems: "center",
-                  justifyContent: "space-between",
-                  gap: 12,
+                  justifyContent: "center",
+                  backgroundColor: LEVELS[level - 1],
                 }}
               >
                 <Text
                   style={{
-                    flex: 1,
-                    color: theme.shell.foreground,
+                    color: level === 3 ? "#3c3c3c" : "#ffffff",
                     fontFamily: theme.fonts.bold,
-                    fontSize: 20,
+                    fontSize: 13,
                   }}
                 >
-                  Minhas {wordCount} {wordCount === 1 ? "Palavra" : "Palavras"}
+                  {level}
                 </Text>
-                <Pressable
-                  accessibilityLabel="Nova palavra"
-                  onPress={() => openDraft(blankDraft())}
-                  hitSlop={8}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: theme.shell.chip,
-                  }}
-                >
-                  <Ionicons name="add" size={24} color={theme.shell.foreground} />
-                </Pressable>
               </View>
             </View>
-          }
-          ListEmptyComponent={
-            <Muted>Nenhuma palavra encontrada.</Muted>
-          }
-          renderItem={({ item }) => {
-            const level = Math.min(4, Math.max(1, item.confidence || 1));
-            const translation = item.translations.filter(Boolean).join(", ");
-            return (
-              <View
-                style={{
-                  flexDirection: "row",
-                  alignItems: "center",
-                  gap: 14,
-                  borderBottomWidth: 1,
-                  borderBottomColor: theme.shell.line,
-                  paddingVertical: 16,
-                }}
-              >
-                <Pressable
-                  accessibilityLabel={`Ouvir ${item.name}`}
-                  onPress={() => speakWord(item.name)}
-                  hitSlop={8}
-                  style={{
-                    width: 40,
-                    height: 40,
-                    borderRadius: 20,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: theme.shell.chip,
-                  }}
-                >
-                  <Ionicons name="volume-medium" size={22} color={theme.colors.green} />
-                </Pressable>
-                <Pressable onPress={() => setOpened(item)} style={{ flex: 1 }}>
-                  <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.bold, fontSize: 18 }}>
-                    {item.name}
-                  </Text>
-                  <Text
-                    style={{
-                      color: theme.shell.muted,
-                      fontFamily: theme.fonts.regular,
-                      marginTop: 3,
-                      fontSize: 14,
-                    }}
-                  >
-                    {translation || classLabel(item.grammaticalClass)}
-                  </Text>
-                </Pressable>
-                <View
-                  style={{
-                    width: 28,
-                    height: 28,
-                    borderRadius: 14,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: LEVELS[level - 1],
-                  }}
-                >
-                  <Text
-                    style={{
-                      color: level === 3 ? "#3c3c3c" : "#ffffff",
-                      fontFamily: theme.fonts.bold,
-                      fontSize: 13,
-                    }}
-                  >
-                    {level}
-                  </Text>
-                </View>
-              </View>
-            );
+          );
+        }}
+      />
+
+      <SafeAreaView
+        pointerEvents="box-none"
+        edges={["top"]}
+        style={{ position: "absolute", top: 0, left: 0, right: 0, zIndex: 20 }}
+      >
+        <View
+          pointerEvents="box-none"
+          style={{
+            height: topBarHeight,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "space-between",
+            paddingHorizontal: 12,
           }}
-        />
-      ) : null}
+        >
+          <Pressable
+            onPress={() => router.back()}
+            hitSlop={8}
+            style={{ width: 40, height: 40, justifyContent: "center", alignItems: "center" }}
+          >
+            <Ionicons name="chevron-back" size={28} color="#FFFFFF" />
+          </Pressable>
+          <View style={{ flexDirection: "row", gap: 2 }}>
+            <Pressable
+              onPress={() => setSearchOpen((open) => !open)}
+              hitSlop={8}
+              style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}
+            >
+              <Ionicons name="search" size={20} color="#FFFFFF" />
+            </Pressable>
+            <Pressable
+              onPress={() => setSortAsc((value) => !value)}
+              hitSlop={8}
+              style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}
+            >
+              <Ionicons name="swap-vertical" size={20} color="#FFFFFF" />
+            </Pressable>
+          </View>
+        </View>
+      </SafeAreaView>
 
       {vault && opened ? (
         <ReadingWordMenu
@@ -450,6 +620,14 @@ export default function VaultDetailScreen() {
           onChanged={load}
         />
       ) : null}
+
+      <AddWordSearchSheet
+        visible={addSearchOpen}
+        onClose={() => setAddSearchOpen(false)}
+        preferredVaultId={vault?.id}
+        onChanged={load}
+      />
+
       <Modal animationType="slide" transparent visible={draft != null} onRequestClose={() => setDraft(null)}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
@@ -735,6 +913,6 @@ export default function VaultDetailScreen() {
           </Pressable>
         </KeyboardAvoidingView>
       </Modal>
-    </Screen>
+    </View>
   );
 }

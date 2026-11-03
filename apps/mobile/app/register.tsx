@@ -54,61 +54,57 @@ export default function RegisterScreen() {
   };
 
   return (
-    <AuthShell
-      showBack
-      onBack={() => router.back()}
-      bubble={
-        <Text style={styles.bubbleText}>
-          Escolha um <Text style={styles.bubbleAccent}>@</Text> e comece seu mapa de palavras.
-        </Text>
-      }
-    >
-      <Text style={styles.hero}>Criar conta</Text>
-      <Text style={styles.heroSub}>Leva só um minuto.</Text>
+    <AuthShell showBack onBack={() => router.back()}>
+      <Text style={styles.title}>Criar conta</Text>
+      <Text style={styles.subtitle}>Leva só um minuto.</Text>
 
       <TextInput
         autoCapitalize="words"
         autoComplete="name"
         placeholder="Nome"
-        placeholderTextColor={theme.shell.muted}
+        placeholderTextColor="rgba(255,255,255,0.35)"
         value={name}
         onChangeText={setName}
-        style={styles.input}
+        style={styles.underlineInput}
       />
       <TextInput
         autoCapitalize="none"
         autoComplete="email"
         keyboardType="email-address"
         placeholder="Email"
-        placeholderTextColor={theme.shell.muted}
+        placeholderTextColor="rgba(255,255,255,0.35)"
         value={email}
         onChangeText={setEmail}
-        style={styles.input}
+        style={styles.underlineInput}
       />
       <TextInput
         autoCapitalize="none"
         autoCorrect={false}
         maxLength={20}
         placeholder="@usuario"
-        placeholderTextColor={theme.shell.muted}
+        placeholderTextColor="rgba(255,255,255,0.35)"
         value={username}
         onChangeText={(value) => setUsername(value.replace(/^@+/, "").replace(/\s/g, ""))}
-        style={styles.input}
+        style={styles.underlineInput}
       />
       <TextInput
         secureTextEntry
         autoComplete="new-password"
         placeholder="Senha (mín. 6 caracteres)"
-        placeholderTextColor={theme.shell.muted}
+        placeholderTextColor="rgba(255,255,255,0.35)"
         value={password}
         onChangeText={setPassword}
-        style={styles.input}
+        style={styles.underlineInput}
       />
 
       {error ? <Text style={styles.error}>{error}</Text> : null}
 
-      <Pressable disabled={submitting} onPress={() => void submit()} style={styles.primaryButton}>
-        <Text style={styles.primaryLabel}>{submitting ? "Criando..." : "Criar conta"}</Text>
+      <Pressable
+        disabled={submitting}
+        onPress={() => void submit()}
+        style={[styles.lightButton, { marginTop: 16 }]}
+      >
+        <Text style={styles.lightLabel}>{submitting ? "Criando..." : "Criar conta"}</Text>
       </Pressable>
 
       <Text style={styles.legal}>
