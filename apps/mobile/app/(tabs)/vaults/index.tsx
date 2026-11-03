@@ -5,6 +5,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  Switch,
   Text,
   TextInput,
   View,
@@ -108,7 +109,9 @@ export default function VaultListScreen() {
   const { request } = useSession();
   const [vaults, setVaults] = useState<Vault[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [editor, setEditor] = useState<{ id: number | null; name: string } | null>(null);
+  const [editor, setEditor] = useState<{ id: number | null; name: string; isPublic: boolean } | null>(
+    null
+  );
   const [saving, setSaving] = useState(false);
   const [filter, setFilter] = useState<Filter>("all");
   const [query, setQuery] = useState("");
@@ -159,12 +162,12 @@ export default function VaultListScreen() {
       if (editor.id == null) {
         await request("/vaults", {
           method: "POST",
-          body: JSON.stringify({ name: editor.name.trim() }),
+          body: JSON.stringify({ name: editor.name.trim(), isPublic: editor.isPublic }),
         });
       } else {
         await request(`/vaults/${editor.id}`, {
           method: "PATCH",
-          body: JSON.stringify({ name: editor.name.trim() }),
+          body: JSON.stringify({ name: editor.name.trim(), isPublic: editor.isPublic }),
         });
       }
       setEditor(null);
@@ -285,7 +288,10 @@ export default function VaultListScreen() {
               : "Nenhum vault neste filtro."}
           </Text>
           {vaults.length === 0 ? (
-            <PrimaryButton label="Criar vault" onPress={() => setEditor({ id: null, name: "" })} />
+            <PrimaryButton
+              label="Criar vault"
+              onPress={() => setEditor({ id: null, name: "", isPublic: false })}
+            />
           ) : null}
         </View>
       ) : (
@@ -304,8 +310,13 @@ export default function VaultListScreen() {
                 onLongPress={() => {
                   Alert.alert(item.name, undefined, [
                     {
-                      text: "Renomear",
-                      onPress: () => setEditor({ id: item.id, name: item.name }),
+                      text: "Editar",
+                      onPress: () =>
+                        setEditor({
+                          id: item.id,
+                          name: item.name,
+                          isPublic: Boolean(item.isPublic),
+                        }),
                     },
                     {
                       text: "Excluir",
@@ -341,7 +352,22 @@ export default function VaultListScreen() {
                     >
                       {countLabel(total, "palavra", "palavras")}
                     </Text>
-                    <Ionicons name="lock-closed" size={12} color="rgba(255,255,255,0.35)" />
+                    <Ionicons
+                      name={item.isPublic ? "globe-outline" : "lock-closed"}
+                      size={12}
+                      color="rgba(255,255,255,0.35)"
+                    />
+                    {item.isPublic ? (
+                      <Text
+                        style={{
+                          color: "rgba(255,255,255,0.35)",
+                          fontFamily: theme.fonts.medium,
+                          fontSize: 12,
+                        }}
+                      >
+                        Público
+                      </Text>
+                    ) : null}
                   </View>
                 </View>
                 <Pressable
@@ -359,7 +385,7 @@ export default function VaultListScreen() {
 
       <Pressable
         accessibilityLabel="Novo vault"
-        onPress={() => setEditor({ id: null, name: "" })}
+        onPress={() => setEditor({ id: null, name: "", isPublic: false })}
         style={{
           position: "absolute",
           right: 20,
@@ -390,13 +416,51 @@ export default function VaultListScreen() {
               borderColor: "rgba(255,255,255,0.12)",
             }}
           >
-            <Heading>{editor?.id == null ? "Novo vault" : "Renomear"}</Heading>
+            <Heading>{editor?.id == null ? "Novo vault" : "Editar vault"}</Heading>
             <Field
               autoFocus
               value={editor?.name ?? ""}
               onChangeText={(name) => setEditor((current) => (current ? { ...current, name } : current))}
               placeholder="Nome do vault"
             />
+            <Pressable
+              onPress={() =>
+                setEditor((current) =>
+                  current ? { ...current, isPublic: !current.isPublic } : current
+                )
+              }
+              style={{
+                marginTop: 14,
+                marginBottom: 6,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ color: "#FFFFFF", fontFamily: theme.fonts.semibold, fontSize: 15 }}>
+                  Vault público
+                </Text>
+                <Text
+                  style={{
+                    color: "rgba(255,255,255,0.5)",
+                    fontFamily: theme.fonts.regular,
+                    fontSize: 12,
+                    marginTop: 2,
+                  }}
+                >
+                  Aparece na busca de outras pessoas
+                </Text>
+              </View>
+              <Switch
+                value={Boolean(editor?.isPublic)}
+                onValueChange={(isPublic) =>
+                  setEditor((current) => (current ? { ...current, isPublic } : current))
+                }
+                trackColor={{ false: "rgba(255,255,255,0.18)", true: "rgba(36,200,117,0.45)" }}
+                thumbColor={editor?.isPublic ? "#24c875" : "#f4f3f4"}
+              />
+            </Pressable>
             <PrimaryButton
               label={saving ? "Salvando..." : "Salvar"}
               disabled={saving || !editor?.name.trim()}

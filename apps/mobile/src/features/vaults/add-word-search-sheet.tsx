@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   useWindowDimensions,
@@ -23,6 +24,8 @@ import { useSession } from "../../session";
 import { useTheme } from "../../theme";
 import { classLabel, type Vault, type Word } from "../../types";
 import { ErrorText } from "../../ui";
+
+type SearchScope = "words" | "decks";
 
 const RECENT_KEY = "word-map.vault-word-search-recent";
 const MAX_RECENT = 12;
@@ -41,8 +44,30 @@ const SEARCH_IDEAS = [
 
 type VaultHit = {
   word: Word;
-  vault: { id: number; name: string };
+  vault: {
+    id: number;
+    name: string;
+    userId?: number;
+    isPublic?: boolean;
+    owner?: { id: number; name: string; username: string | null };
+  };
+  isOwner?: boolean;
 };
+
+type PublicVaultHit = {
+  id: number;
+  name: string;
+  isPublic: true;
+  wordCount: number;
+  owner: { id: number; name: string; username: string | null };
+};
+
+function ownerLabel(owner?: { name: string; username: string | null } | null) {
+  if (!owner) return "alguém";
+  const username = owner.username?.trim();
+  if (username) return `@${username}`;
+  return owner.name.trim() || "alguém";
+}
 
 type DictionaryHit = {
   word: string;
@@ -116,7 +141,11 @@ export function AddWordSearchSheet({
   const [actionOk, setActionOk] = useState<string | null>(null);
   const [creatingVault, setCreatingVault] = useState(false);
   const [newVaultName, setNewVaultName] = useState("");
+  const [newVaultPublic, setNewVaultPublic] = useState(false);
   const [creating, setCreating] = useState(false);
+  const [searchScope, setSearchScope] = useState<SearchScope>("words");
+  const includePublicVaults = searchScope === "decks";
+  const [publicVaultHits, setPublicVaultHits] = useState<PublicVaultHit[]>([]);
 
   const sheetDragY = useRef(new Animated.Value(0)).current;
   const searchSheetY = useRef(new Animated.Value(0)).current;
@@ -286,7 +315,9 @@ export function AddWordSearchSheet({
     setQuery("");
     setDebounced("");
     setVaultHits([]);
+    setPublicVaultHits([]);
     setDictionaryHits([]);
+    setSearchScope("words");
     setError(null);
     setOpened(null);
     setPending(null);
@@ -320,6 +351,7 @@ export function AddWordSearchSheet({
     if (!visible) return;
     if (!debounced) {
       setVaultHits([]);
+      setPublicVaultHits([]);
       setDictionaryHits([]);
       setSavedNames(new Set());
       setSearching(false);
@@ -379,15 +411,30 @@ export function AddWordSearchSheet({
 
     (async () => {
       try {
-        const [searchRows, directEntry] = await Promise.all([
-          request<VaultHit[]>(`/words/search?q=${encodeURIComponent(debounced)}`).catch(() => []),
+        const publicQuery = includePublicVaults ? "&includePublic=1" : "";
+        const [searchRows, publicVaultRows, directEntry] = await Promise.all([
+          request<VaultHit[]>(
+            `/words/search?q=${encodeURIComponent(debounced)}${publicQuery}`
+          ).catch(() => []),
+          includePublicVaults
+            ? request<PublicVaultHit[]>(
+                `/vaults/public?q=${encodeURIComponent(debounced)}`
+              ).catch(() => [])
+            : Promise.resolve([] as PublicVaultHit[]),
           lookupDictionary(debounced),
         ]);
         if (cancelled) return;
 
         const rows = Array.isArray(searchRows) ? searchRows : [];
         setVaultHits(rows);
-        setSavedNames(new Set(rows.map((hit) => hit.word.name.trim().toLowerCase())));
+        setPublicVaultHits(Array.isArray(publicVaultRows) ? publicVaultRows : []);
+        setSavedNames(
+          new Set(
+            rows
+              .filter((hit) => hit.isOwner !== false)
+              .map((hit) => hit.word.name.trim().toLowerCase())
+          )
+        );
 
         const exactDirect =
           directEntry?.word && sameTerm(directEntry.word, debounced) ? directEntry : null;
@@ -450,7 +497,7 @@ export function AddWordSearchSheet({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- remember só no debounce, não re-dispara busca
-  }, [debounced, request, searchTick, visible]);
+  }, [debounced, includePublicVaults, request, searchTick, visible]);
 
   useEffect(() => {
     if (preferredVaultId == null) {
@@ -590,6 +637,7 @@ export function AddWordSearchSheet({
     setActionOk(null);
     setCreatingVault(false);
     setNewVaultName("");
+    setNewVaultPublic(false);
   };
 
   dismissSheetRef.current = closePicker;
@@ -602,9 +650,10 @@ export function AddWordSearchSheet({
     try {
       await request<Vault>("/vaults", {
         method: "POST",
-        body: JSON.stringify({ name }),
+        body: JSON.stringify({ name, isPublic: newVaultPublic }),
       });
       setNewVaultName("");
+      setNewVaultPublic(false);
       setCreatingVault(false);
       await loadVaults();
       setActionOk(`Vault “${name}” criado.`);
@@ -682,7 +731,15 @@ export function AddWordSearchSheet({
     }
   };
 
-  const exactVaultHit = vaultHits.some(
+  const ownVaultHits = useMemo(
+    () => vaultHits.filter((hit) => hit.isOwner !== false),
+    [vaultHits]
+  );
+  const publicWordHits = useMemo(
+    () => vaultHits.filter((hit) => hit.isOwner === false),
+    [vaultHits]
+  );
+  const exactVaultHit = ownVaultHits.some(
     (hit) => hit.word.name.trim().toLowerCase() === debounced.toLowerCase()
   );
   const dictionaryExact = dictionaryHits.some(
@@ -750,6 +807,34 @@ export function AddWordSearchSheet({
             </LinearGradient>
           </View>
 
+          <View style={styles.segmentRow}>
+            {(
+              [
+                { id: "words" as const, label: "Palavras" },
+                { id: "decks" as const, label: "Decks" },
+              ] as const
+            ).map((item) => {
+              const active = searchScope === item.id;
+              return (
+                <Pressable
+                  key={item.id}
+                  onPress={() => setSearchScope(item.id)}
+                  style={[styles.segment, active ? styles.segmentActive : null]}
+                >
+                  <Text
+                    style={[
+                      styles.segmentLabel,
+                      { fontFamily: theme.fonts.semibold },
+                      active ? styles.segmentLabelActive : null,
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+
           {error ? (
             <View style={{ paddingHorizontal: 18, marginTop: 10 }}>
               <ErrorText>{error}</ErrorText>
@@ -762,6 +847,12 @@ export function AddWordSearchSheet({
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 12 }}
             >
+              {searchScope === "decks" ? (
+                <Text style={[styles.emptyRecent, { fontFamily: theme.fonts.regular, marginTop: 22 }]}>
+                  Busque decks públicos de outras pessoas pelo nome.
+                </Text>
+              ) : (
+                <>
               <Text style={[styles.sectionTitle, { fontFamily: theme.fonts.bold }]}>Ideias de busca</Text>
               <ScrollView
                 horizontal
@@ -817,6 +908,8 @@ export function AddWordSearchSheet({
                   </View>
                 ))
               )}
+                </>
+              )}
             </ScrollView>
           ) : searching ? (
             <View style={styles.empty}>
@@ -831,12 +924,12 @@ export function AddWordSearchSheet({
               contentContainerStyle={{ paddingHorizontal: 18, paddingBottom: 24 }}
               keyboardShouldPersistTaps="handled"
             >
-              {vaultHits.length > 0 ? (
+              {searchScope === "words" && ownVaultHits.length > 0 ? (
                 <View style={{ marginTop: 10 }}>
                   <Text style={[styles.resultSection, { fontFamily: theme.fonts.semibold }]}>
-                    Nos seus vaults · {vaultHits.length}
+                    Nos seus vaults · {ownVaultHits.length}
                   </Text>
-                  {vaultHits.map((hit) => (
+                  {ownVaultHits.map((hit) => (
                     <ResultRow
                       key={`${hit.vault.id}-${hit.word.id}`}
                       title={hit.word.name}
@@ -863,7 +956,75 @@ export function AddWordSearchSheet({
                 </View>
               ) : null}
 
-              {dictionaryHits.length > 0 ? (
+              {includePublicVaults && publicVaultHits.length > 0 ? (
+                <View style={{ marginTop: 10 }}>
+                  <Text style={[styles.resultSection, { fontFamily: theme.fonts.semibold }]}>
+                    Vaults públicos · {publicVaultHits.length}
+                  </Text>
+                  {publicVaultHits.map((vault) => (
+                    <View key={vault.id} style={styles.publicVaultRow}>
+                      <View style={[styles.resultIcon, { backgroundColor: "rgba(75,123,255,0.18)" }]}>
+                        <Ionicons name="people-outline" size={20} color="#4B7BFF" />
+                      </View>
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <Text
+                          numberOfLines={1}
+                          style={{ color: "#FFFFFF", fontFamily: theme.fonts.semibold, fontSize: 16 }}
+                        >
+                          {vault.name}
+                        </Text>
+                        <Text
+                          numberOfLines={1}
+                          style={{
+                            color: "rgba(255,255,255,0.5)",
+                            fontFamily: theme.fonts.regular,
+                            fontSize: 13,
+                            marginTop: 2,
+                          }}
+                        >
+                          {ownerLabel(vault.owner)} · {vault.wordCount}{" "}
+                          {vault.wordCount === 1 ? "palavra" : "palavras"}
+                        </Text>
+                      </View>
+                      <Ionicons name="globe-outline" size={18} color="rgba(255,255,255,0.45)" />
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+
+              {includePublicVaults && publicWordHits.length > 0 ? (
+                <View style={{ marginTop: 10 }}>
+                  <Text style={[styles.resultSection, { fontFamily: theme.fonts.semibold }]}>
+                    Em vaults públicos · {publicWordHits.length}
+                  </Text>
+                  {publicWordHits.map((hit) => (
+                    <ResultRow
+                      key={`public-${hit.vault.id}-${hit.word.id}`}
+                      title={hit.word.name}
+                      subtitle={`${classLabel(hit.word.grammaticalClass)} · ${hit.vault.name} · ${ownerLabel(hit.vault.owner)}`}
+                      detail={hit.word.translations.join(", ")}
+                      icon="globe-outline"
+                      saved={isSaved(hit.word.name)}
+                      onPress={() =>
+                        setOpened({
+                          clean: hit.word.name,
+                          saved: null,
+                        })
+                      }
+                      onAdd={() =>
+                        handleAddWord({
+                          name: hit.word.name,
+                          grammaticalClass: hit.word.grammaticalClass || "substantivo",
+                          translations: hit.word.translations,
+                          translate: false,
+                        })
+                      }
+                    />
+                  ))}
+                </View>
+              ) : null}
+
+              {searchScope === "words" && dictionaryHits.length > 0 ? (
                 <View style={{ marginTop: 10 }}>
                   <Text style={[styles.resultSection, { fontFamily: theme.fonts.semibold }]}>
                     Dicionário · {dictionaryHits.length}
@@ -877,7 +1038,7 @@ export function AddWordSearchSheet({
                       icon="globe-outline"
                       saved={isSaved(dictionaryHit.word)}
                       onPress={() => {
-                        const hit = vaultHits.find(
+                        const hit = ownVaultHits.find(
                           (item) =>
                             item.word.name.trim().toLowerCase() === dictionaryHit.word.trim().toLowerCase()
                         );
@@ -899,7 +1060,7 @@ export function AddWordSearchSheet({
                 </View>
               ) : null}
 
-              {showManual ? (
+              {searchScope === "words" && showManual ? (
                 <View style={{ marginTop: 10 }}>
                   <Text style={[styles.resultSection, { fontFamily: theme.fonts.semibold }]}>
                     {dictionaryHits.length > 0 ? "Ou salvar o que você digitou" : "Salvar termo"}
@@ -919,7 +1080,7 @@ export function AddWordSearchSheet({
                     icon="create-outline"
                     saved={isSaved(debounced)}
                     onPress={() => {
-                      const hit = vaultHits.find(
+                      const hit = ownVaultHits.find(
                         (item) => item.word.name.trim().toLowerCase() === debounced.toLowerCase()
                       );
                       setOpened({
@@ -939,10 +1100,23 @@ export function AddWordSearchSheet({
                 </View>
               ) : null}
 
-              {!vaultHits.length && !dictionaryHits.length && !showManual ? (
+              {searchScope === "words" &&
+              !ownVaultHits.length &&
+              !dictionaryHits.length &&
+              !showManual ? (
                 <View style={styles.empty}>
                   <Text style={{ color: "rgba(255,255,255,0.5)", fontFamily: theme.fonts.regular }}>
                     {`Nenhum resultado para “${debounced}”.`}
+                  </Text>
+                </View>
+              ) : null}
+
+              {searchScope === "decks" &&
+              !publicVaultHits.length &&
+              !publicWordHits.length ? (
+                <View style={styles.empty}>
+                  <Text style={{ color: "rgba(255,255,255,0.5)", fontFamily: theme.fonts.regular }}>
+                    {`Nenhum deck público para “${debounced}”.`}
                   </Text>
                 </View>
               ) : null}
@@ -1024,35 +1198,72 @@ export function AddWordSearchSheet({
               </View>
 
               {creatingVault ? (
-                <View
-                  style={[styles.createRow, { backgroundColor: theme.shell.chip, borderColor: theme.shell.line }]}
-                >
-                  <TextInput
-                    value={newVaultName}
-                    onChangeText={setNewVaultName}
-                    placeholder="Nome do novo vault"
-                    placeholderTextColor={theme.shell.muted}
-                    autoFocus
-                    autoCapitalize="sentences"
-                    style={[
-                      styles.vaultSearchInput,
-                      { color: theme.shell.foreground, fontFamily: theme.fonts.regular },
-                    ]}
-                    onSubmitEditing={() => void createVault()}
-                  />
-                  <Pressable
-                    accessibilityLabel="Salvar vault"
-                    disabled={creating || !newVaultName.trim()}
-                    onPress={() => void createVault()}
-                    style={{ opacity: creating || !newVaultName.trim() ? 0.45 : 1 }}
+                <View style={{ gap: 10, marginBottom: 8 }}>
+                  <View
+                    style={[styles.createRow, { backgroundColor: theme.shell.chip, borderColor: theme.shell.line }]}
                   >
-                    {creating ? (
-                      <ActivityIndicator color={theme.colors.green} />
-                    ) : (
-                      <Text style={{ color: theme.colors.green, fontFamily: theme.fonts.bold, fontSize: 14 }}>
-                        Criar
+                    <TextInput
+                      value={newVaultName}
+                      onChangeText={setNewVaultName}
+                      placeholder="Nome do novo vault"
+                      placeholderTextColor={theme.shell.muted}
+                      autoFocus
+                      autoCapitalize="sentences"
+                      style={[
+                        styles.vaultSearchInput,
+                        { color: theme.shell.foreground, fontFamily: theme.fonts.regular },
+                      ]}
+                      onSubmitEditing={() => void createVault()}
+                    />
+                    <Pressable
+                      accessibilityLabel="Salvar vault"
+                      disabled={creating || !newVaultName.trim()}
+                      onPress={() => void createVault()}
+                      style={{ opacity: creating || !newVaultName.trim() ? 0.45 : 1 }}
+                    >
+                      {creating ? (
+                        <ActivityIndicator color={theme.colors.green} />
+                      ) : (
+                        <Text style={{ color: theme.colors.green, fontFamily: theme.fonts.bold, fontSize: 14 }}>
+                          Criar
+                        </Text>
+                      )}
+                    </Pressable>
+                  </View>
+                  <Pressable
+                    onPress={() => setNewVaultPublic((value) => !value)}
+                    style={[
+                      styles.createPublicRow,
+                      { backgroundColor: theme.shell.chip, borderColor: theme.shell.line },
+                    ]}
+                  >
+                    <View style={{ flex: 1, minWidth: 0, paddingRight: 10 }}>
+                      <Text
+                        style={{
+                          color: theme.shell.foreground,
+                          fontFamily: theme.fonts.semibold,
+                          fontSize: 14,
+                        }}
+                      >
+                        Vault público
                       </Text>
-                    )}
+                      <Text
+                        style={{
+                          color: theme.shell.muted,
+                          fontFamily: theme.fonts.regular,
+                          fontSize: 12,
+                          marginTop: 2,
+                        }}
+                      >
+                        Outras pessoas podem encontrar este vault na busca
+                      </Text>
+                    </View>
+                    <Switch
+                      value={newVaultPublic}
+                      onValueChange={setNewVaultPublic}
+                      trackColor={{ false: "rgba(255,255,255,0.18)", true: "rgba(36,200,117,0.45)" }}
+                      thumbColor={newVaultPublic ? theme.colors.green : "#f4f3f4"}
+                    />
                   </Pressable>
                 </View>
               ) : null}
@@ -1275,6 +1486,47 @@ const styles = StyleSheet.create({
     height: 4,
     borderRadius: 2,
     backgroundColor: "rgba(255,255,255,0.28)",
+  },
+  segmentRow: {
+    marginTop: 14,
+    marginHorizontal: 18,
+    flexDirection: "row",
+    gap: 8,
+  },
+  segment: {
+    flex: 1,
+    height: 40,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#2A2A2C",
+  },
+  segmentActive: {
+    backgroundColor: "#E8E8EA",
+  },
+  segmentLabel: {
+    color: "#FFFFFF",
+    fontSize: 15,
+  },
+  segmentLabelActive: {
+    color: "#111111",
+  },
+  publicVaultRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 10,
+    backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  createPublicRow: {
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
   },
   searchBorder: {
     borderRadius: 999,

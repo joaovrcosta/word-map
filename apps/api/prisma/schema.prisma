@@ -85,6 +85,7 @@ model StudyDay {
 model Vault {
   id        Int      @id @default(autoincrement())
   name      String
+  isPublic  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
   userId    Int

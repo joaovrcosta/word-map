@@ -12,6 +12,7 @@ export type Word = {
 export type Vault = {
   id: number;
   name: string;
+  isPublic?: boolean;
   words: Word[];
 };
 

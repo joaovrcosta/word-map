@@ -147,8 +147,15 @@ export class WordsController {
   constructor(private readonly words: WordsService) {}
 
   @Get("search")
-  search(@Query("q") q = "") {
-    return this.words.search(q);
+  search(
+    @Query("q") q = "",
+    @Query("includePublic") includePublic?: string
+  ) {
+    const publicFlag =
+      includePublic === "1" ||
+      includePublic === "true" ||
+      includePublic === "yes";
+    return this.words.search(q, { includePublic: publicFlag });
   }
 
   @Get("by-book")

@@ -17,6 +17,7 @@ import { recordWordLevel } from "./word-levels";
 export interface Vault {
   id: number;
   name: string;
+  isPublic: boolean;
   createdAt: Date;
   updatedAt: Date;
   userId: number;
@@ -62,11 +63,30 @@ export interface SearchResult {
   vault: {
     id: number;
     name: string;
+    isPublic: boolean;
     createdAt: Date;
     updatedAt: Date;
     userId: number;
+    owner?: {
+      id: number;
+      name: string;
+      username: string | null;
+    };
   };
+  isOwner: boolean;
 }
+
+export type PublicVaultResult = {
+  id: number;
+  name: string;
+  isPublic: true;
+  wordCount: number;
+  owner: {
+    id: number;
+    name: string;
+    username: string | null;
+  };
+};
 
 const DEFAULT_PHRASES_VAULT_NAME = "Minhas frases";
 
@@ -131,7 +151,10 @@ export async function getVaults(): Promise<Vault[]> {
 }
 
 // Criar novo vault
-export async function createVault(name: string): Promise<Vault> {
+export async function createVault(
+  name: string,
+  options?: { isPublic?: boolean }
+): Promise<Vault> {
   try {
     if (!name || typeof name !== "string" || name.trim().length === 0) {
       throw new Error("Nome do vault é obrigatório");
@@ -147,6 +170,7 @@ export async function createVault(name: string): Promise<Vault> {
       data: {
         name: name.trim(),
         userId: user.id,
+        isPublic: Boolean(options?.isPublic),
       },
       include: {
         words: true,
@@ -379,9 +403,10 @@ export async function createWord(data: CreateWordData): Promise<Word> {
   }
 }
 
-// Buscar palavra em todos os vaults
+// Buscar palavra nos vaults do usuário (e opcionalmente em vaults públicos de outros)
 export async function searchWordInVaults(
-  searchTerm: string
+  searchTerm: string,
+  options?: { includePublic?: boolean }
 ): Promise<SearchResult[]> {
   try {
     if (!searchTerm || searchTerm.trim().length === 0) {
@@ -389,6 +414,7 @@ export async function searchWordInVaults(
     }
 
     const trimmedSearch = searchTerm.trim().toLowerCase();
+    const includePublic = Boolean(options?.includePublic);
 
     // Verificar se o usuário está autenticado
     const user = await getCurrentUser();
@@ -396,12 +422,15 @@ export async function searchWordInVaults(
       throw new Error("Usuário não autenticado");
     }
 
-    // Buscar palavras que contenham o termo de pesquisa apenas dos vaults do usuário
     const words = await prisma.word.findMany({
       where: {
-        vault: {
-          userId: user.id, // Filtrar apenas palavras dos vaults do usuário atual
-        },
+        vault: includePublic
+          ? {
+              OR: [{ userId: user.id }, { isPublic: true }],
+            }
+          : {
+              userId: user.id,
+            },
         OR: [
           {
             name: {
@@ -427,36 +456,119 @@ export async function searchWordInVaults(
           select: {
             id: true,
             name: true,
+            isPublic: true,
             createdAt: true,
             updatedAt: true,
             userId: true,
+            user: {
+              select: {
+                id: true,
+                name: true,
+                username: true,
+              },
+            },
           },
         },
       },
+      take: 60,
     });
 
-    // Formatar resultado
-    const results: SearchResult[] = words.map((word) => ({
-      word: {
-        id: word.id,
-        name: word.name,
-        grammaticalClass: word.grammaticalClass,
-        category: word.category,
-        translations: word.translations,
-        notes: word.notes ?? null,
-        confidence: word.confidence,
-        isSaved: word.isSaved,
-        frequency: word.frequency,
-        vaultId: word.vaultId, // Adicionar vaultId ao resultado
-        createdAt: word.createdAt,
-      },
-      vault: word.vault,
-    }));
+    const results: SearchResult[] = words.map((word) => {
+      const isOwner = word.vault.userId === user.id;
+      return {
+        word: {
+          id: word.id,
+          name: word.name,
+          grammaticalClass: word.grammaticalClass,
+          category: word.category,
+          translations: word.translations,
+          notes: word.notes ?? null,
+          confidence: word.confidence,
+          isSaved: word.isSaved,
+          frequency: word.frequency,
+          vaultId: word.vaultId,
+          createdAt: word.createdAt,
+        },
+        vault: {
+          id: word.vault.id,
+          name: word.vault.name,
+          isPublic: word.vault.isPublic,
+          createdAt: word.vault.createdAt,
+          updatedAt: word.vault.updatedAt,
+          userId: word.vault.userId,
+          owner: isOwner
+            ? undefined
+            : {
+                id: word.vault.user.id,
+                name: word.vault.user.name,
+                username: word.vault.user.username,
+              },
+        },
+        isOwner,
+      };
+    });
 
     return results;
   } catch (error) {
     console.error("Erro ao buscar palavra:", error);
     throw new Error("Erro ao buscar palavra");
+  }
+}
+
+/** Lista vaults públicos de outras pessoas (por nome). */
+export async function searchPublicVaults(
+  searchTerm: string
+): Promise<PublicVaultResult[]> {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      throw new Error("Usuário não autenticado");
+    }
+
+    const trimmed = searchTerm.trim();
+    if (!trimmed) return [];
+
+    const vaults = await prisma.vault.findMany({
+      where: {
+        isPublic: true,
+        userId: { not: user.id },
+        name: {
+          contains: trimmed,
+          mode: "insensitive",
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        user: {
+          select: {
+            id: true,
+            name: true,
+            username: true,
+          },
+        },
+        _count: {
+          select: { words: true },
+        },
+      },
+      orderBy: { updatedAt: "desc" },
+      take: 30,
+    });
+
+    return vaults.map((vault) => ({
+      id: vault.id,
+      name: vault.name,
+      isPublic: true as const,
+      wordCount: vault._count.words,
+      owner: {
+        id: vault.user.id,
+        name: vault.user.name,
+        username: vault.user.username,
+      },
+    }));
+  } catch (error) {
+    console.error("Erro ao buscar vaults públicos:", error);
+    throw new Error("Erro ao buscar vaults públicos");
   }
 }
 
@@ -1557,7 +1669,8 @@ export async function previewPhrasalCanonical(
 // Editar nome do vault
 export async function updateVaultName(
   vaultId: number,
-  newName: string
+  newName: string,
+  options?: { isPublic?: boolean }
 ): Promise<Vault> {
   try {
     console.log("=== INÍCIO updateVaultName ===");
@@ -1594,6 +1707,7 @@ export async function updateVaultName(
       where: { id: vaultId },
       data: {
         name: newName.trim(),
+        ...(typeof options?.isPublic === "boolean" ? { isPublic: options.isPublic } : {}),
         updatedAt: new Date(),
       },
       include: {

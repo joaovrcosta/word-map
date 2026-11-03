@@ -241,10 +241,10 @@ export default function VaultDetailScreen() {
       setDraft((current) =>
         current
           ? {
-              ...current,
-              translation: translation || current.translation,
-              grammaticalClass: entry ? grammaticalClass : current.grammaticalClass,
-            }
+            ...current,
+            translation: translation || current.translation,
+            grammaticalClass: entry ? grammaticalClass : current.grammaticalClass,
+          }
           : current
       );
 
@@ -334,9 +334,13 @@ export default function VaultDetailScreen() {
             </Text>
           </View>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-            <Ionicons name="lock-closed" size={12} color="rgba(255,255,255,0.85)" />
+            <Ionicons
+              name={vault.isPublic ? "globe-outline" : "lock-closed"}
+              size={12}
+              color="rgba(255,255,255,0.85)"
+            />
             <Text style={{ color: "rgba(255,255,255,0.85)", fontFamily: theme.fonts.semibold, fontSize: 12 }}>
-              Privado
+              {vault.isPublic ? "Público" : "Privado"}
             </Text>
           </View>
         </View>

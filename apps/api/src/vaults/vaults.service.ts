@@ -6,6 +6,7 @@ import {
   exportVaultWords,
   getVaults,
   importWordsToVault,
+  searchPublicVaults,
   updateVaultName,
 } from "../domain/actions";
 
@@ -29,16 +30,20 @@ export class VaultsService {
     return getVaults();
   }
 
-  createVault(name: string) {
-    return createVault(name);
+  searchPublicVaults(term: string) {
+    return searchPublicVaults(term);
+  }
+
+  createVault(name: string, options?: { isPublic?: boolean }) {
+    return createVault(name, options);
   }
 
   deleteVault(vaultId: number) {
     return deleteVault(vaultId);
   }
 
-  updateVaultName(vaultId: number, name: string) {
-    return updateVaultName(vaultId, name);
+  updateVaultName(vaultId: number, name: string, options?: { isPublic?: boolean }) {
+    return updateVaultName(vaultId, name, options);
   }
 
   exportVaultWords(vaultId: number) {

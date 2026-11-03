@@ -7,18 +7,27 @@ import {
   ParseIntPipe,
   Patch,
   Post,
+  Query,
 } from "@nestjs/common";
-import { IsString } from "class-validator";
+import { IsBoolean, IsOptional, IsString } from "class-validator";
 import { VaultsService } from "./vaults.service";
 
 class CreateVaultDto {
   @IsString()
   name!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isPublic?: boolean;
 }
 
 class UpdateVaultDto {
   @IsString()
   name!: string;
+
+  @IsOptional()
+  @IsBoolean()
+  isPublic?: boolean;
 }
 
 class ImportVaultDto {
@@ -35,9 +44,14 @@ export class VaultsController {
     return this.vaults.getVaults();
   }
 
+  @Get("public")
+  searchPublic(@Query("q") q = "") {
+    return this.vaults.searchPublicVaults(q);
+  }
+
   @Post()
   create(@Body() body: CreateVaultDto) {
-    return this.vaults.createVault(body.name);
+    return this.vaults.createVault(body.name, { isPublic: body.isPublic });
   }
 
   @Patch(":id")
@@ -45,7 +59,7 @@ export class VaultsController {
     @Param("id", ParseIntPipe) id: number,
     @Body() body: UpdateVaultDto
   ) {
-    return this.vaults.updateVaultName(id, body.name);
+    return this.vaults.updateVaultName(id, body.name, { isPublic: body.isPublic });
   }
 
   @Delete(":id")

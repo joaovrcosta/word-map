@@ -44,8 +44,8 @@ export class WordsService {
     return createWord(data);
   }
 
-  search(term: string) {
-    return searchWordInVaults(term);
+  search(term: string, options?: { includePublic?: boolean }) {
+    return searchWordInVaults(term, options);
   }
 
   exists(wordName: string, vaultId: number) {
