@@ -13,6 +13,7 @@ export type Vault = {
   id: number;
   name: string;
   isPublic?: boolean;
+  likeCount?: number;
   words: Word[];
 };
 

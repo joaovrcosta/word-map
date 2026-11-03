@@ -17,7 +17,8 @@ import { recordWordLevel } from "./word-levels";
 export interface Vault {
   id: number;
   name: string;
-  isPublic: boolean;
+  isPublic?: boolean;
+  likeCount?: number;
   createdAt: Date;
   updatedAt: Date;
   userId: number;
@@ -81,6 +82,9 @@ export type PublicVaultResult = {
   name: string;
   isPublic: true;
   wordCount: number;
+  likeCount: number;
+  likedByMe: boolean;
+  isOwner: boolean;
   owner: {
     id: number;
     name: string;
@@ -137,13 +141,19 @@ export async function getVaults(): Promise<Vault[]> {
             createdAt: "desc", // Mais recentes primeiro
           },
         },
+        _count: {
+          select: { likes: true },
+        },
       },
       orderBy: {
         createdAt: "desc",
       },
     });
 
-    return vaults;
+    return vaults.map(({ _count, ...vault }) => ({
+      ...vault,
+      likeCount: _count.likes,
+    }));
   } catch (error) {
     console.error("Erro ao buscar vaults:", error);
     throw new Error("Erro ao buscar vaults");
@@ -515,7 +525,7 @@ export async function searchWordInVaults(
   }
 }
 
-/** Lista vaults públicos de outras pessoas (por nome). */
+/** Lista vaults públicos pelo nome (inclui os seus e os de outras pessoas). */
 export async function searchPublicVaults(
   searchTerm: string
 ): Promise<PublicVaultResult[]> {
@@ -531,7 +541,6 @@ export async function searchPublicVaults(
     const vaults = await prisma.vault.findMany({
       where: {
         isPublic: true,
-        userId: { not: user.id },
         name: {
           contains: trimmed,
           mode: "insensitive",
@@ -540,6 +549,7 @@ export async function searchPublicVaults(
       select: {
         id: true,
         name: true,
+        userId: true,
         user: {
           select: {
             id: true,
@@ -547,29 +557,143 @@ export async function searchPublicVaults(
             username: true,
           },
         },
+        likes: {
+          where: { userId: user.id },
+          select: { id: true },
+          take: 1,
+        },
         _count: {
-          select: { words: true },
+          select: { words: true, likes: true },
         },
       },
-      orderBy: { updatedAt: "desc" },
+      orderBy: [
+        { likes: { _count: "desc" } },
+        { words: { _count: "desc" } },
+        { updatedAt: "desc" },
+      ],
       take: 30,
     });
 
-    return vaults.map((vault) => ({
-      id: vault.id,
-      name: vault.name,
-      isPublic: true as const,
-      wordCount: vault._count.words,
-      owner: {
-        id: vault.user.id,
-        name: vault.user.name,
-        username: vault.user.username,
-      },
-    }));
+    return vaults.map((vault) => {
+      const isOwner = vault.userId === user.id;
+      return {
+        id: vault.id,
+        name: vault.name,
+        isPublic: true as const,
+        wordCount: vault._count.words,
+        likeCount: vault._count.likes,
+        likedByMe: vault.likes.length > 0,
+        isOwner,
+        owner: {
+          id: vault.user.id,
+          name: vault.user.name,
+          username: vault.user.username,
+        },
+      };
+    });
   } catch (error) {
     console.error("Erro ao buscar vaults públicos:", error);
     throw new Error("Erro ao buscar vaults públicos");
   }
+}
+
+/** Alterna like em um vault público. */
+export async function toggleVaultLike(vaultId: number): Promise<{
+  liked: boolean;
+  likeCount: number;
+}> {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error("Usuário não autenticado");
+  }
+
+  const vault = await prisma.vault.findFirst({
+    where: { id: vaultId, isPublic: true },
+    select: { id: true },
+  });
+  if (!vault) {
+    throw new Error("Vault público não encontrado");
+  }
+
+  const existing = await prisma.vaultLike.findUnique({
+    where: {
+      userId_vaultId: {
+        userId: user.id,
+        vaultId,
+      },
+    },
+  });
+
+  if (existing) {
+    await prisma.vaultLike.delete({ where: { id: existing.id } });
+  } else {
+    await prisma.vaultLike.create({
+      data: {
+        userId: user.id,
+        vaultId,
+      },
+    });
+  }
+
+  const likeCount = await prisma.vaultLike.count({ where: { vaultId } });
+  return { liked: !existing, likeCount };
+}
+
+/** Copia um vault público (e suas palavras) para a conta do usuário. */
+export async function savePublicVault(vaultId: number): Promise<Vault> {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error("Usuário não autenticado");
+  }
+
+  const source = await prisma.vault.findFirst({
+    where: { id: vaultId, isPublic: true },
+    include: {
+      words: {
+        select: {
+          name: true,
+          grammaticalClass: true,
+          category: true,
+          translations: true,
+          notes: true,
+        },
+      },
+    },
+  });
+
+  if (!source) {
+    throw new Error("Vault público não encontrado");
+  }
+  if (source.userId === user.id) {
+    throw new Error("Este vault já é seu");
+  }
+
+  const newVault = await prisma.vault.create({
+    data: {
+      name: source.name,
+      userId: user.id,
+      isPublic: false,
+      words: {
+        create: source.words.map((word) => ({
+          name: word.name,
+          grammaticalClass: word.grammaticalClass,
+          category: word.category,
+          translations: word.translations,
+          notes: word.notes,
+          confidence: 1,
+          isSaved: true,
+        })),
+      },
+    },
+    include: {
+      words: true,
+    },
+  });
+
+  revalidatePath("/home");
+  revalidatePath("/home/vault");
+
+  return newVault;
 }
 
 // Verificar se uma palavra já existe em um vault
@@ -1702,7 +1826,7 @@ export async function updateVaultName(
       throw new Error("Vault não encontrado ou não pertence ao usuário");
     }
 
-    // Atualizar o nome do vault
+    // Atualizar nome e, se enviado, a visibilidade pública
     const updatedVault = await prisma.vault.update({
       where: { id: vaultId },
       data: {

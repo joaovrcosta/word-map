@@ -9,6 +9,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View,
@@ -31,7 +32,7 @@ import {
 import { ReadingWordMenu, type SavedReadingWord } from "../../../src/features/reading/word-menu";
 import { AddWordSearchSheet } from "../../../src/features/vaults/add-word-search-sheet";
 import { LearningProgressLink } from "../../../src/features/vaults/learning-progress";
-import { ErrorText, Field, Loading, Muted, Screen } from "../../../src/ui";
+import { ErrorText, Field, Heading, Loading, Muted, PrimaryButton, Screen } from "../../../src/ui";
 
 const VAULT_ACCENTS = ["#4B7BFF", "#9B5CFF", "#FF4B6A", "#24c875", "#FF9600", "#00C2A8"] as const;
 
@@ -115,6 +116,8 @@ export default function VaultDetailScreen() {
   const [suggesting, setSuggesting] = useState(false);
   const [suggestError, setSuggestError] = useState<string | null>(null);
   const [addSearchOpen, setAddSearchOpen] = useState(false);
+  const [vaultEditor, setVaultEditor] = useState<{ name: string; isPublic: boolean } | null>(null);
+  const [savingVault, setSavingVault] = useState(false);
   const scrollY = useRef(new Animated.Value(0)).current;
 
   const words = useMemo(() => {
@@ -265,6 +268,39 @@ export default function VaultDetailScreen() {
     await suggestForWord(draft.name);
   };
 
+  const openVaultEditor = () => {
+    if (!vault) return;
+    setVaultEditor({ name: vault.name, isPublic: Boolean(vault.isPublic) });
+  };
+
+  const saveVaultMeta = async () => {
+    if (!vault || !vaultEditor || !vaultEditor.name.trim() || savingVault) return;
+    setSavingVault(true);
+    setError(null);
+    try {
+      const nextName = vaultEditor.name.trim();
+      const nextPublic = vaultEditor.isPublic;
+      const updated = await request<Vault>(`/vaults/${vault.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          name: nextName,
+          isPublic: nextPublic,
+        }),
+      });
+      setVault({
+        ...vault,
+        name: updated?.name ?? nextName,
+        isPublic: typeof updated?.isPublic === "boolean" ? updated.isPublic : nextPublic,
+      });
+      setVaultEditor(null);
+      await load();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível salvar o vault");
+    } finally {
+      setSavingVault(false);
+    }
+  };
+
   if (!vault && !missing && !error) return <Loading />;
 
   const wordCount = vault?.words.length ?? 0;
@@ -333,16 +369,27 @@ export default function VaultDetailScreen() {
               Word Map
             </Text>
           </View>
-          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+          <Pressable
+            accessibilityLabel="Editar privacidade do vault"
+            onPress={openVaultEditor}
+            hitSlop={8}
+            style={{ flexDirection: "row", alignItems: "center", gap: 6 }}
+          >
             <Ionicons
               name={vault.isPublic ? "globe-outline" : "lock-closed"}
               size={12}
-              color="rgba(255,255,255,0.85)"
+              color={vault.isPublic ? theme.colors.green : "rgba(255,255,255,0.85)"}
             />
-            <Text style={{ color: "rgba(255,255,255,0.85)", fontFamily: theme.fonts.semibold, fontSize: 12 }}>
+            <Text
+              style={{
+                color: vault.isPublic ? theme.colors.green : "rgba(255,255,255,0.85)",
+                fontFamily: theme.fonts.semibold,
+                fontSize: 12,
+              }}
+            >
               {vault.isPublic ? "Público" : "Privado"}
             </Text>
-          </View>
+          </Pressable>
         </View>
 
         <Text
@@ -591,6 +638,14 @@ export default function VaultDetailScreen() {
           </Pressable>
           <View style={{ flexDirection: "row", gap: 2 }}>
             <Pressable
+              accessibilityLabel="Editar vault"
+              onPress={openVaultEditor}
+              hitSlop={8}
+              style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}
+            >
+              <Ionicons name="create-outline" size={20} color="#FFFFFF" />
+            </Pressable>
+            <Pressable
               onPress={() => setSearchOpen((open) => !open)}
               hitSlop={8}
               style={{ width: 40, height: 40, alignItems: "center", justifyContent: "center" }}
@@ -631,6 +686,86 @@ export default function VaultDetailScreen() {
         preferredVaultId={vault?.id}
         onChanged={load}
       />
+
+      <Modal
+        animationType="fade"
+        transparent
+        visible={vaultEditor != null}
+        onRequestClose={() => setVaultEditor(null)}
+      >
+        <View style={{ flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.55)" }}>
+          <View
+            style={{
+              backgroundColor: "#1C1C1E",
+              borderRadius: 18,
+              padding: 20,
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.12)",
+            }}
+          >
+            <Heading>Editar vault</Heading>
+            <Field
+              autoFocus
+              value={vaultEditor?.name ?? ""}
+              onChangeText={(name) =>
+                setVaultEditor((current) => (current ? { ...current, name } : current))
+              }
+              placeholder="Nome do vault"
+            />
+            <Pressable
+              onPress={() =>
+                setVaultEditor((current) =>
+                  current ? { ...current, isPublic: !current.isPublic } : current
+                )
+              }
+              style={{
+                marginTop: 14,
+                marginBottom: 6,
+                flexDirection: "row",
+                alignItems: "center",
+                gap: 12,
+              }}
+            >
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <Text style={{ color: "#FFFFFF", fontFamily: theme.fonts.semibold, fontSize: 15 }}>
+                  Vault público
+                </Text>
+                <Text
+                  style={{
+                    color: "rgba(255,255,255,0.5)",
+                    fontFamily: theme.fonts.regular,
+                    fontSize: 12,
+                    marginTop: 2,
+                  }}
+                >
+                  Aparece na busca de outras pessoas
+                </Text>
+              </View>
+              <Switch
+                value={Boolean(vaultEditor?.isPublic)}
+                onValueChange={(isPublic) =>
+                  setVaultEditor((current) => (current ? { ...current, isPublic } : current))
+                }
+                trackColor={{ false: "rgba(255,255,255,0.18)", true: "rgba(36,200,117,0.45)" }}
+                thumbColor={vaultEditor?.isPublic ? "#24c875" : "#f4f3f4"}
+              />
+            </Pressable>
+            <PrimaryButton
+              label={savingVault ? "Salvando..." : "Salvar"}
+              disabled={savingVault || !vaultEditor?.name.trim()}
+              onPress={() => void saveVaultMeta()}
+            />
+            <Pressable
+              onPress={() => setVaultEditor(null)}
+              style={{ alignItems: "center", marginTop: 14 }}
+            >
+              <Text style={{ color: "rgba(255,255,255,0.55)", fontFamily: theme.fonts.semibold }}>
+                Cancelar
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      </Modal>
 
       <Modal animationType="slide" transparent visible={draft != null} onRequestClose={() => setDraft(null)}>
         <KeyboardAvoidingView

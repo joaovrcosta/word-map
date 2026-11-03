@@ -6,7 +6,9 @@ import {
   exportVaultWords,
   getVaults,
   importWordsToVault,
+  savePublicVault,
   searchPublicVaults,
+  toggleVaultLike,
   updateVaultName,
 } from "../domain/actions";
 
@@ -44,6 +46,14 @@ export class VaultsService {
 
   updateVaultName(vaultId: number, name: string, options?: { isPublic?: boolean }) {
     return updateVaultName(vaultId, name, options);
+  }
+
+  toggleLike(vaultId: number) {
+    return toggleVaultLike(vaultId);
+  }
+
+  savePublic(vaultId: number) {
+    return savePublicVault(vaultId);
   }
 
   exportVaultWords(vaultId: number) {

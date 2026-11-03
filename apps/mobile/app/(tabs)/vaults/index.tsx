@@ -352,15 +352,29 @@ export default function VaultListScreen() {
                     >
                       {countLabel(total, "palavra", "palavras")}
                     </Text>
+                    {item.isPublic ? (
+                      <>
+                        <Ionicons name="heart" size={12} color="#FF2D95" />
+                        <Text
+                          style={{
+                            color: "rgba(255,255,255,0.55)",
+                            fontFamily: theme.fonts.medium,
+                            fontSize: 13,
+                          }}
+                        >
+                          {item.likeCount ?? 0}
+                        </Text>
+                      </>
+                    ) : null}
                     <Ionicons
                       name={item.isPublic ? "globe-outline" : "lock-closed"}
                       size={12}
-                      color="rgba(255,255,255,0.35)"
+                      color={item.isPublic ? theme.colors.green : "rgba(255,255,255,0.35)"}
                     />
                     {item.isPublic ? (
                       <Text
                         style={{
-                          color: "rgba(255,255,255,0.35)",
+                          color: theme.colors.green,
                           fontFamily: theme.fonts.medium,
                           fontSize: 12,
                         }}

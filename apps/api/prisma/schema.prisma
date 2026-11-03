@@ -49,6 +49,7 @@ model User {
   storyAttempts    StoryAttempt[]
   storyCompletions StoryCompletion[]
   studyDays        StudyDay[]
+  vaultLikes       VaultLike[]
 }
 
 model UserSettings {
@@ -91,6 +92,19 @@ model Vault {
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
   words     Word[]   @relation("VaultWords")
+  likes     VaultLike[]
+}
+
+model VaultLike {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  vaultId   Int
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vault     Vault    @relation(fields: [vaultId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, vaultId])
+  @@index([vaultId])
 }
 
 model Word {

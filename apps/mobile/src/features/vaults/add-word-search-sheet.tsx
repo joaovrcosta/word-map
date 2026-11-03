@@ -17,6 +17,7 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { type Href, router } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { normalizeGrammaticalClass, type DictionaryEntry } from "@word-map/shared";
 import { ReadingWordMenu, type SavedReadingWord } from "../reading/word-menu";
@@ -59,6 +60,9 @@ type PublicVaultHit = {
   name: string;
   isPublic: true;
   wordCount: number;
+  likeCount?: number;
+  likedByMe?: boolean;
+  isOwner?: boolean;
   owner: { id: number; name: string; username: string | null };
 };
 
@@ -146,6 +150,8 @@ export function AddWordSearchSheet({
   const [searchScope, setSearchScope] = useState<SearchScope>("words");
   const includePublicVaults = searchScope === "decks";
   const [publicVaultHits, setPublicVaultHits] = useState<PublicVaultHit[]>([]);
+  const [publicVaultBusyId, setPublicVaultBusyId] = useState<number | null>(null);
+  const [publicVaultActionOk, setPublicVaultActionOk] = useState<string | null>(null);
 
   const sheetDragY = useRef(new Animated.Value(0)).current;
   const searchSheetY = useRef(new Animated.Value(0)).current;
@@ -731,10 +737,60 @@ export function AddWordSearchSheet({
     }
   };
 
-  const ownVaultHits = useMemo(
-    () => vaultHits.filter((hit) => hit.isOwner !== false),
-    [vaultHits]
-  );
+  const togglePublicVaultLike = async (vaultId: number) => {
+    if (publicVaultBusyId != null) return;
+    setPublicVaultBusyId(vaultId);
+    setPublicVaultActionOk(null);
+    setError(null);
+    try {
+      const result = await request<{ liked: boolean; likeCount: number }>(`/vaults/${vaultId}/like`, {
+        method: "POST",
+      });
+      setPublicVaultHits((current) =>
+        current
+          .map((item) =>
+            item.id === vaultId
+              ? { ...item, likedByMe: result.liked, likeCount: result.likeCount }
+              : item
+          )
+          .sort((left, right) => {
+            const likeDiff = (right.likeCount ?? 0) - (left.likeCount ?? 0);
+            if (likeDiff !== 0) return likeDiff;
+            return (right.wordCount ?? 0) - (left.wordCount ?? 0);
+          })
+      );
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível curtir o vault.");
+    } finally {
+      setPublicVaultBusyId(null);
+    }
+  };
+
+  const savePublicVaultToAccount = async (vault: PublicVaultHit) => {
+    if (vault.isOwner || publicVaultBusyId != null) return;
+    setPublicVaultBusyId(vault.id);
+    setPublicVaultActionOk(null);
+    setError(null);
+    try {
+      const created = await request<Vault>(`/vaults/${vault.id}/save`, { method: "POST" });
+      await loadVaults();
+      onChanged?.();
+      setPublicVaultActionOk(`“${created.name}” salvo nos seus vaults.`);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Não foi possível salvar o vault.");
+    } finally {
+      setPublicVaultBusyId(null);
+    }
+  };
+
+  const ownVaultHits = useMemo(() => {
+    const mine = vaultHits.filter((hit) => hit.isOwner !== false);
+    // De dentro de um vault: só mostra se já está neste vault (não lista outros).
+    if (preferredVaultId != null) {
+      return mine.filter((hit) => hit.vault.id === preferredVaultId);
+    }
+    return mine;
+  }, [vaultHits, preferredVaultId]);
   const publicWordHits = useMemo(
     () => vaultHits.filter((hit) => hit.isOwner === false),
     [vaultHits]
@@ -849,7 +905,7 @@ export function AddWordSearchSheet({
             >
               {searchScope === "decks" ? (
                 <Text style={[styles.emptyRecent, { fontFamily: theme.fonts.regular, marginTop: 22 }]}>
-                  Busque decks públicos de outras pessoas pelo nome.
+                  Busque decks públicos pelo nome — os seus e os de outras pessoas.
                 </Text>
               ) : (
                 <>
@@ -927,7 +983,9 @@ export function AddWordSearchSheet({
               {searchScope === "words" && ownVaultHits.length > 0 ? (
                 <View style={{ marginTop: 10 }}>
                   <Text style={[styles.resultSection, { fontFamily: theme.fonts.semibold }]}>
-                    Nos seus vaults · {ownVaultHits.length}
+                    {preferredVaultId != null
+                      ? `Já neste vault · ${ownVaultHits.length}`
+                      : `Nos seus vaults · ${ownVaultHits.length}`}
                   </Text>
                   {ownVaultHits.map((hit) => (
                     <ResultRow
@@ -956,39 +1014,116 @@ export function AddWordSearchSheet({
                 </View>
               ) : null}
 
+              {includePublicVaults && publicVaultActionOk ? (
+                <Text
+                  style={{
+                    color: theme.colors.green,
+                    fontFamily: theme.fonts.medium,
+                    fontSize: 13,
+                    marginTop: 10,
+                  }}
+                >
+                  {publicVaultActionOk}
+                </Text>
+              ) : null}
+
               {includePublicVaults && publicVaultHits.length > 0 ? (
                 <View style={{ marginTop: 10 }}>
                   <Text style={[styles.resultSection, { fontFamily: theme.fonts.semibold }]}>
-                    Vaults públicos · {publicVaultHits.length}
+                    Decks públicos · {publicVaultHits.length}
                   </Text>
-                  {publicVaultHits.map((vault) => (
-                    <View key={vault.id} style={styles.publicVaultRow}>
-                      <View style={[styles.resultIcon, { backgroundColor: "rgba(75,123,255,0.18)" }]}>
-                        <Ionicons name="people-outline" size={20} color="#4B7BFF" />
-                      </View>
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text
-                          numberOfLines={1}
-                          style={{ color: "#FFFFFF", fontFamily: theme.fonts.semibold, fontSize: 16 }}
-                        >
-                          {vault.name}
-                        </Text>
-                        <Text
-                          numberOfLines={1}
-                          style={{
-                            color: "rgba(255,255,255,0.5)",
-                            fontFamily: theme.fonts.regular,
-                            fontSize: 13,
-                            marginTop: 2,
-                          }}
-                        >
-                          {ownerLabel(vault.owner)} · {vault.wordCount}{" "}
-                          {vault.wordCount === 1 ? "palavra" : "palavras"}
-                        </Text>
-                      </View>
-                      <Ionicons name="globe-outline" size={18} color="rgba(255,255,255,0.45)" />
-                    </View>
-                  ))}
+                  {publicVaultHits.map((vault) => {
+                    const busy = publicVaultBusyId === vault.id;
+                    return (
+                      <Pressable
+                        key={vault.id}
+                        style={styles.publicVaultRow}
+                        onPress={() => {
+                          if (!vault.isOwner) return;
+                          onClose();
+                          router.push(`/vaults/${vault.id}` as Href);
+                        }}
+                      >
+                        <View style={[styles.resultIcon, { backgroundColor: "rgba(75,123,255,0.18)" }]}>
+                          <Ionicons
+                            name={vault.isOwner ? "folder-outline" : "people-outline"}
+                            size={20}
+                            color="#4B7BFF"
+                          />
+                        </View>
+                        <View style={{ flex: 1, minWidth: 0 }}>
+                          <Text
+                            numberOfLines={1}
+                            style={{ color: "#FFFFFF", fontFamily: theme.fonts.semibold, fontSize: 16 }}
+                          >
+                            {vault.name}
+                          </Text>
+                          <Text
+                            numberOfLines={1}
+                            style={{
+                              color: "rgba(255,255,255,0.5)",
+                              fontFamily: theme.fonts.regular,
+                              fontSize: 13,
+                              marginTop: 2,
+                            }}
+                          >
+                            {vault.isOwner ? "Seu deck" : ownerLabel(vault.owner)} · {vault.wordCount}{" "}
+                            {vault.wordCount === 1 ? "palavra" : "palavras"}
+                          </Text>
+                        </View>
+                        <View style={styles.publicVaultActions}>
+                          <Pressable
+                            accessibilityLabel={vault.likedByMe ? "Remover curtida" : "Curtir vault"}
+                            hitSlop={8}
+                            disabled={publicVaultBusyId != null}
+                            onPress={(event) => {
+                              event.stopPropagation?.();
+                              void togglePublicVaultLike(vault.id);
+                            }}
+                            style={styles.publicVaultActionBtn}
+                          >
+                            {busy ? (
+                              <ActivityIndicator size="small" color="#FF2D95" />
+                            ) : (
+                              <>
+                                <Ionicons
+                                  name={vault.likedByMe ? "heart" : "heart-outline"}
+                                  size={18}
+                                  color={vault.likedByMe ? "#FF2D95" : "rgba(255,255,255,0.7)"}
+                                />
+                                <Text
+                                  style={{
+                                    color: vault.likedByMe ? "#FF2D95" : "rgba(255,255,255,0.55)",
+                                    fontFamily: theme.fonts.medium,
+                                    fontSize: 12,
+                                    marginLeft: 4,
+                                  }}
+                                >
+                                  {vault.likeCount ?? 0}
+                                </Text>
+                              </>
+                            )}
+                          </Pressable>
+                          {!vault.isOwner ? (
+                            <Pressable
+                              accessibilityLabel="Salvar vault na minha conta"
+                              hitSlop={8}
+                              disabled={publicVaultBusyId != null}
+                              onPress={(event) => {
+                                event.stopPropagation?.();
+                                void savePublicVaultToAccount(vault);
+                              }}
+                              style={styles.publicVaultActionBtn}
+                            >
+                              <Ionicons name="download-outline" size={18} color={theme.colors.green} />
+                            </Pressable>
+                          ) : (
+                            <Ionicons name="globe-outline" size={18} color={theme.colors.green} />
+                          )}
+                        </View>
+                      </Pressable>
+                    );
+                  })}
                 </View>
               ) : null}
 
@@ -1519,6 +1654,20 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 10,
     backgroundColor: "rgba(255,255,255,0.04)",
+  },
+  publicVaultActions: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  publicVaultActionBtn: {
+    minWidth: 36,
+    height: 36,
+    paddingHorizontal: 6,
+    borderRadius: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
   },
   createPublicRow: {
     borderRadius: 14,
