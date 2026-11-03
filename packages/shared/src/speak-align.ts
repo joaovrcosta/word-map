@@ -117,6 +117,14 @@ function editDistance(left: string, right: string): number {
   return grid[rows - 1]![cols - 1]!;
 }
 
+function pluralNearMatch(a: string, b: string): boolean {
+  if (a + "s" === b || b + "s" === a) return true;
+  if (a + "es" === b || b + "es" === a) return true;
+  if (a.endsWith("y") && a.slice(0, -1) + "ies" === b) return true;
+  if (b.endsWith("y") && b.slice(0, -1) + "ies" === a) return true;
+  return false;
+}
+
 export function tokensMatch(left: string, right: string): boolean {
   const a = normalizeSpeakToken(left);
   const b = normalizeSpeakToken(right);
@@ -124,6 +132,7 @@ export function tokensMatch(left: string, right: string): boolean {
   if (a === b) return true;
   if (SYNONYMS[a] === b || SYNONYMS[b] === a) return true;
   if (NUMBER_WORDS[a] === b || NUMBER_WORDS[b] === a) return true;
+  if (pluralNearMatch(a, b)) return true;
   if (a.length >= 5 && b.length >= 5 && editDistance(a, b) <= 1) return true;
   return false;
 }
@@ -244,15 +253,26 @@ export function alignSpokenWords(
   return statuses;
 }
 
+/** Em produção: ≥70% das palavras certas conta como aprovado (parcial). */
+export const SPEAK_PASS_RATIO = 0.7;
+
 export function speakAllowedErrors(expectedCount: number): number {
-  if (expectedCount < 5) return 0;
-  return Math.max(1, Math.floor(expectedCount * 0.15));
+  if (expectedCount <= 0) return 0;
+  return Math.max(0, expectedCount - Math.ceil(expectedCount * SPEAK_PASS_RATIO));
+}
+
+export function speakCorrectRatio(statuses: SpeakAlignStatus[]): number {
+  const n = statuses.length;
+  if (n === 0) return 0;
+  return statuses.filter((status) => status === "correct").length / n;
 }
 
 export function speakPassScore(statuses: SpeakAlignStatus[]): boolean {
-  const n = statuses.length;
-  if (n === 0) return false;
-  const correct = statuses.filter((status) => status === "correct").length;
-  const errors = n - correct;
-  return errors <= speakAllowedErrors(n);
+  return speakCorrectRatio(statuses) >= SPEAK_PASS_RATIO;
+}
+
+/** Aprovado, mas sem acertar 100% das palavras. */
+export function speakIsPartial(statuses: SpeakAlignStatus[]): boolean {
+  const ratio = speakCorrectRatio(statuses);
+  return ratio >= SPEAK_PASS_RATIO && ratio < 1;
 }

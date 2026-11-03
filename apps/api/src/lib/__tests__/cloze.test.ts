@@ -62,6 +62,17 @@ describe("answersMatch", () => {
     expect(answersMatch("ran", "run")).toBe(false);
     expect(answersMatch("don't!", "don't")).toBe(true);
   });
+
+  it("aceita singular/plural e um typo leve", () => {
+    expect(answersMatch("village", "villages")).toBe(true);
+    expect(answersMatch("villages", "village")).toBe(true);
+    expect(answersMatch("city", "cities")).toBe(true);
+    expect(answersMatch("box", "boxes")).toBe(true);
+    expect(answersMatch("medicne", "medicine")).toBe(true);
+    expect(answersMatch("medice", "medicine")).toBe(false);
+    expect(answersMatch("medic", "medicine")).toBe(false);
+    expect(answersMatch("milk", "region")).toBe(false);
+  });
 });
 
 describe("tentativas do completar", () => {

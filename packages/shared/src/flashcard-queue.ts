@@ -170,24 +170,49 @@ export function sessionScore(word: FlashcardWord, now: Date | number = Date.now(
   return (5 - clampLevel(word.confidence)) * 10 + (word.missedLast ? 30 : 0) + latenessDays(word, now);
 }
 
+function lastPracticeTime(word: FlashcardWord) {
+  if (!word.lastPractice) return 0;
+  const value = word.lastPractice instanceof Date ? word.lastPractice.getTime() : new Date(word.lastPractice).getTime();
+  return Number.isFinite(value) ? value : 0;
+}
+
+function toExcludeSet(excludeIds?: ReadonlySet<number> | readonly number[]) {
+  if (!excludeIds) return null;
+  return excludeIds instanceof Set ? excludeIds : new Set(excludeIds);
+}
+
 export function selectPracticeWords<T extends FlashcardWord>(
   words: T[],
   now: Date | number = Date.now(),
-  practiceAnyway = false
+  practiceAnyway = false,
+  excludeIds?: ReadonlySet<number> | readonly number[]
 ): T[] {
-  const due = words.filter((word) => isWordDue(word, now));
+  const excluded = toExcludeSet(excludeIds);
+  const pool = excluded ? words.filter((word) => !excluded.has(word.id)) : words;
+  const due = pool.filter((word) => isWordDue(word, now));
   if (due.length === 0) {
     if (!practiceAnyway) return [];
-    return [...words]
+    const closest: T[] = [];
+    const ranked = [...pool]
       .filter((word) => word.lastPractice)
       .sort(
         (left, right) =>
-          daysUntilDue(left, now) - daysUntilDue(right, now) || left.id - right.id
+          daysUntilDue(left, now) - daysUntilDue(right, now) ||
+          lastPracticeTime(left) - lastPracticeTime(right) ||
+          left.id - right.id
       );
+    for (const word of ranked) {
+      closest.push(word);
+      if (closest.length >= SESSION_CARDS) break;
+    }
+    return closest;
   }
 
   const ranked = [...due].sort(
-    (left, right) => sessionScore(right, now) - sessionScore(left, now) || left.id - right.id
+    (left, right) =>
+      sessionScore(right, now) - sessionScore(left, now) ||
+      lastPracticeTime(left) - lastPracticeTime(right) ||
+      left.id - right.id
   );
   const picked: T[] = [];
   let fresh = 0;
@@ -197,6 +222,7 @@ export function selectPracticeWords<T extends FlashcardWord>(
       fresh += 1;
     }
     picked.push(word);
+    if (picked.length >= SESSION_CARDS) break;
   }
   return picked;
 }

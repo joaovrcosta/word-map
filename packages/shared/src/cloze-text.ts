@@ -61,10 +61,48 @@ export function normalizeClozeAnswer(value: string): string {
     .replace(/^[^a-z]+|[^a-z]+$/g, "");
 }
 
+function clozeEditDistance(left: string, right: string): number {
+  if (left === right) return 0;
+  if (!left.length) return right.length;
+  if (!right.length) return left.length;
+  const rows = left.length + 1;
+  const cols = right.length + 1;
+  const grid: number[][] = Array.from({ length: rows }, () => Array(cols).fill(0));
+  for (let i = 0; i < rows; i += 1) grid[i]![0] = i;
+  for (let j = 0; j < cols; j += 1) grid[0]![j] = j;
+  for (let i = 1; i < rows; i += 1) {
+    for (let j = 1; j < cols; j += 1) {
+      const cost = left[i - 1] === right[j - 1] ? 0 : 1;
+      grid[i]![j] = Math.min(
+        grid[i - 1]![j]! + 1,
+        grid[i]![j - 1]! + 1,
+        grid[i - 1]![j - 1]! + cost
+      );
+    }
+  }
+  return grid[rows - 1]![cols - 1]!;
+}
+
+/** Singular/plural e 1 typo (ex.: village ↔ villages). Não aceita pedaço incompleto (medice ≠ medicine). */
+export function answersNearlyEqual(left: string, right: string): boolean {
+  if (!left || !right) return false;
+  if (left === right) return true;
+  if (left + "s" === right || right + "s" === left) return true;
+  if (left + "es" === right || right + "es" === left) return true;
+  if (left.endsWith("y") && left.slice(0, -1) + "ies" === right) return true;
+  if (right.endsWith("y") && right.slice(0, -1) + "ies" === left) return true;
+  // Só 1 letra de diferença, e comprimentos quase iguais (evita "medice" ≈ "medicine").
+  if (Math.abs(left.length - right.length) > 1) return false;
+  const minLen = Math.min(left.length, right.length);
+  return minLen >= 5 && clozeEditDistance(left, right) <= 1;
+}
+
 export function answersMatch(input: string, answer: string): boolean {
   const expected = normalizeClozeAnswer(answer);
   if (!expected) return false;
-  return normalizeClozeAnswer(input) === expected;
+  const got = normalizeClozeAnswer(input);
+  if (!got) return false;
+  return answersNearlyEqual(got, expected);
 }
 
 export function clozeTranslationHint(

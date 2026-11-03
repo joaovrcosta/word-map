@@ -6,18 +6,38 @@ import { countLabel, type Word } from "../../types";
 
 export const LEARNED_CONFIDENCE = 4;
 
-export function vaultLearningStats(words: Word[] | undefined | null) {
+export const RING_GREEN = "#24c875";
+export const RING_YELLOW = "#F5C518";
+export const RING_RED = "#FF4B6A";
+
+export type LearningRingParts = {
+  learned: number;
+  almost: number;
+  weak: number;
+};
+
+export function vaultLearningStats(words: ReadonlyArray<{ confidence: number }> | undefined | null) {
   const list = words ?? [];
   const total = list.length;
-  const learned = list.filter((word) => Math.round(word.confidence) >= LEARNED_CONFIDENCE).length;
+  let learned = 0;
+  let almost = 0;
+  let weak = 0;
+  for (const word of list) {
+    const level = Math.round(word.confidence);
+    if (level >= LEARNED_CONFIDENCE) learned += 1;
+    else if (level >= 3) almost += 1;
+    else weak += 1;
+  }
   const percent = total === 0 ? 0 : Math.round((learned / total) * 100);
-  return { total, learned, percent };
+  return { total, learned, almost, weak, percent };
 }
 
 type RingProps = {
-  percent: number;
+  percent?: number;
+  parts?: LearningRingParts;
   size?: number;
   stroke?: number;
+  /** Usado só no modo legado (percent sem parts). */
   color?: string;
   trackColor?: string;
   labelColor?: string;
@@ -26,6 +46,7 @@ type RingProps = {
 
 export function LearningProgressRing({
   percent,
+  parts,
   size = 52,
   stroke = 3.5,
   color = "#4B7BFF",
@@ -34,48 +55,74 @@ export function LearningProgressRing({
   showLabel = true,
 }: RingProps) {
   const theme = useTheme();
-  const clamped = Math.min(100, Math.max(0, percent));
-  const done = clamped >= 100;
-  const ringColor = done ? "#24c875" : color;
+  const totalParts = parts ? parts.learned + parts.almost + parts.weak : 0;
+  const labelPercent =
+    parts && totalParts > 0
+      ? Math.round((parts.learned / totalParts) * 100)
+      : Math.min(100, Math.max(0, percent ?? 0));
+  const done = labelPercent >= 100 && (parts ? parts.almost === 0 && parts.weak === 0 : true);
   const radius = (size - stroke) / 2;
   const circumference = 2 * Math.PI * radius;
-  const offset = circumference * (1 - clamped / 100);
+  const cx = size / 2;
+  const cy = size / 2;
+
+  const rawSegments =
+    parts && totalParts > 0
+      ? [
+          { key: "learned", count: parts.learned, color: RING_GREEN },
+          { key: "almost", count: parts.almost, color: RING_YELLOW },
+          { key: "weak", count: parts.weak, color: RING_RED },
+        ].filter((item) => item.count > 0)
+      : labelPercent > 0
+        ? [{ key: "legacy", count: labelPercent, color: done ? RING_GREEN : color }]
+        : [];
+
+  const segmentTotal = parts && totalParts > 0 ? totalParts : 100;
+  const segments = rawSegments.reduce<
+    Array<{ key: string; color: string; length: number; offset: number }>
+  >((acc, segment) => {
+    const length = (segment.count / segmentTotal) * circumference;
+    const offset = acc.reduce((sum, item) => sum + item.length, 0);
+    acc.push({ key: segment.key, color: segment.color, length, offset });
+    return acc;
+  }, []);
 
   return (
     <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
       <Svg width={size} height={size} style={{ position: "absolute" }}>
         <Circle
-          cx={size / 2}
-          cy={size / 2}
+          cx={cx}
+          cy={cy}
           r={radius}
           stroke={trackColor}
           strokeWidth={stroke}
           fill="none"
         />
-        {clamped > 0 ? (
+        {segments.map((segment) => (
           <Circle
-            cx={size / 2}
-            cy={size / 2}
+            key={segment.key}
+            cx={cx}
+            cy={cy}
             r={radius}
-            stroke={ringColor}
+            stroke={segment.color}
             strokeWidth={stroke}
             fill="none"
-            strokeDasharray={`${circumference} ${circumference}`}
-            strokeDashoffset={offset}
-            strokeLinecap="round"
-            transform={`rotate(-90 ${size / 2} ${size / 2})`}
+            strokeDasharray={`${segment.length} ${Math.max(0, circumference - segment.length)}`}
+            strokeDashoffset={-segment.offset}
+            strokeLinecap="butt"
+            transform={`rotate(-90 ${cx} ${cy})`}
           />
-        ) : null}
+        ))}
       </Svg>
       {showLabel ? (
         <Text
           style={{
-            color: labelColor,
+            color: done ? RING_GREEN : labelColor,
             fontFamily: theme.fonts.bold,
             fontSize: size < 40 ? 9 : 11,
           }}
         >
-          {clamped}%
+          {labelPercent}%
         </Text>
       ) : null}
     </View>
@@ -132,9 +179,13 @@ export function LearningProgressExplainModal({
               lineHeight: 22,
             }}
           >
-            Este círculo mostra o{" "}
-            <Text style={{ fontFamily: theme.fonts.bold, color: "#FFFFFF" }}>status de aprendizado</Text>{" "}
-            das palavras do vault. Complete o vault aprendendo todas as palavras (nível 4).
+            O círculo mostra o status das palavras:{" "}
+            <Text style={{ fontFamily: theme.fonts.bold, color: RING_GREEN }}>verde</Text> = nível 4
+            (aprendidas),{" "}
+            <Text style={{ fontFamily: theme.fonts.bold, color: RING_YELLOW }}>amarelo</Text> = nível 3
+            (quase),{" "}
+            <Text style={{ fontFamily: theme.fonts.bold, color: RING_RED }}>vermelho</Text> = níveis 1–2.
+            Em 100% o anel fica todo verde.
           </Text>
 
           <View
@@ -147,11 +198,11 @@ export function LearningProgressExplainModal({
               marginBottom: 8,
             }}
           >
-            <LearningProgressRing percent={0} size={56} color="#4B7BFF" />
+            <LearningProgressRing parts={{ learned: 1, almost: 1, weak: 2 }} size={56} />
             <Text style={{ color: "#FFFFFF", fontSize: 18 }}>→</Text>
-            <LearningProgressRing percent={80} size={56} color="#4B7BFF" />
+            <LearningProgressRing parts={{ learned: 3, almost: 1, weak: 0 }} size={56} />
             <Text style={{ color: "#FFFFFF", fontSize: 18 }}>→</Text>
-            <LearningProgressRing percent={100} size={56} />
+            <LearningProgressRing parts={{ learned: 4, almost: 0, weak: 0 }} size={56} />
           </View>
 
           <Pressable
@@ -182,8 +233,8 @@ export function LearningProgressLink({
 }) {
   const theme = useTheme();
   const [open, setOpen] = useState(false);
-  const { total, percent } = useMemo(() => vaultLearningStats(words), [words]);
-  const label = `${countLabel(total, "palavra", "palavras")}, ${percent}% aprendido`;
+  const stats = useMemo(() => vaultLearningStats(words), [words]);
+  const label = `${countLabel(stats.total, "palavra", "palavras")}, ${stats.percent}% aprendido`;
 
   return (
     <>
@@ -191,7 +242,13 @@ export function LearningProgressLink({
         onPress={() => setOpen(true)}
         style={{ flexDirection: "row", alignItems: "center", gap: 8, alignSelf: "flex-start" }}
       >
-        <LearningProgressRing percent={percent} size={22} stroke={2.5} color={accent} showLabel={false} />
+        <LearningProgressRing
+          parts={{ learned: stats.learned, almost: stats.almost, weak: stats.weak }}
+          size={22}
+          stroke={2.5}
+          color={accent}
+          showLabel={false}
+        />
         <Text
           style={{
             color: "#FFFFFF",

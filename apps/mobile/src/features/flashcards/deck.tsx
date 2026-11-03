@@ -41,6 +41,7 @@ import {
 } from "./types";
 import { toWord } from "./words";
 import { flushSaves, writeFocus } from "./saves";
+import { addPracticeXp } from "../study/practice-xp";
 import { useStudyHeartbeat } from "../study/use-study-heartbeat";
 import { useSession } from "../../session";
 import { isSpeechRecognitionAvailable } from "../../speech-recognition";
@@ -445,6 +446,7 @@ export function FlashcardDeck({
       setLastXpGain(gain);
       setSessionXp((current) => current + gain);
       setXpToken((current) => current + 1);
+      void addPracticeXp(gain);
     } else {
       streakRef.current = 0;
       setStreak(0);
@@ -582,8 +584,10 @@ export function FlashcardDeck({
 
   if (!isSessionActive) {
     const due = selectPracticeWords(words);
-    const reviewLabel =
-      mode === "speak"
+    const mastered = words.length > 0 && words.every((word) => Math.round(word.confidence) >= 4);
+    const reviewLabel = mastered
+      ? "Todas as palavras deste vault já estão aprendidas"
+      : mode === "speak"
         ? due.length === 0
           ? "Nenhuma frase vencida hoje"
           : due.length === 1
@@ -599,43 +603,77 @@ export function FlashcardDeck({
         <View style={{ paddingHorizontal: 8 }}>
           <CloseButton onPress={onLeave} />
         </View>
-      <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingHorizontal: 20 }}>
         {vaultName ? (
           <Text style={{ color: theme.colors.foreground, fontFamily: theme.fonts.bold, fontSize: 22, textAlign: "center" }}>
             {vaultName}
           </Text>
         ) : null}
-        <Text style={{ marginTop: 8, color: theme.colors.mutedForeground, fontFamily: theme.fonts.regular, fontSize: 15 }}>
+        <Text style={{ marginTop: 8, color: theme.colors.mutedForeground, fontFamily: theme.fonts.regular, fontSize: 15, textAlign: "center" }}>
           {reviewLabel}
         </Text>
-        <Pressable
-          disabled={starting}
-          onPress={() => void startSession(due.length === 0)}
-          style={{
-            marginTop: 28,
-            minWidth: 210,
-            height: 48,
-            borderRadius: 16,
-            alignItems: "center",
-            justifyContent: "center",
-            backgroundColor: theme.colors.green,
-            opacity: starting ? 0.6 : 1,
-          }}
-        >
-          <Text style={{ color: "#ffffff", fontFamily: theme.fonts.bold, fontSize: 14 }}>
-            {starting ? "COMEÇANDO..." : due.length === 0 ? "PRATICAR MESMO ASSIM" : "COMEÇAR"}
-          </Text>
-        </Pressable>
+        {mastered ? (
+          <>
+            <Text
+              style={{
+                marginTop: 10,
+                color: theme.colors.mutedForeground,
+                fontFamily: theme.fonts.regular,
+                fontSize: 14,
+                textAlign: "center",
+              }}
+            >
+              Volte mais tarde para revisar, ou escolha outro vault para treinar agora.
+            </Text>
+            <Pressable
+              onPress={onLeave}
+              style={{
+                marginTop: 28,
+                minWidth: 210,
+                height: 48,
+                borderRadius: 16,
+                alignItems: "center",
+                justifyContent: "center",
+                backgroundColor: theme.colors.green,
+              }}
+            >
+              <Text style={{ color: "#ffffff", fontFamily: theme.fonts.bold, fontSize: 14 }}>
+                ESCOLHER OUTRO VAULT
+              </Text>
+            </Pressable>
+          </>
+        ) : (
+          <Pressable
+            disabled={starting}
+            onPress={() => void startSession(due.length === 0)}
+            style={{
+              marginTop: 28,
+              minWidth: 210,
+              height: 48,
+              borderRadius: 16,
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundColor: theme.colors.green,
+              opacity: starting ? 0.6 : 1,
+            }}
+          >
+            <Text style={{ color: "#ffffff", fontFamily: theme.fonts.bold, fontSize: 14 }}>
+              {starting ? "COMEÇANDO..." : due.length === 0 ? "PRATICAR MESMO ASSIM" : "COMEÇAR"}
+            </Text>
+          </Pressable>
+        )}
         {loadError ? (
           <View style={{ marginTop: 16, alignItems: "center", gap: 10 }}>
             <Text style={{ color: theme.colors.destructive, fontFamily: theme.fonts.regular, fontSize: 14, textAlign: "center" }}>
               {loadError}
             </Text>
-            <Pressable onPress={() => void startSession(due.length === 0)} hitSlop={8}>
-              <Text style={{ color: theme.colors.green, fontFamily: theme.fonts.bold, fontSize: 13 }}>
-                Tentar de novo
-              </Text>
-            </Pressable>
+            {!mastered ? (
+              <Pressable onPress={() => void startSession(due.length === 0)} hitSlop={8}>
+                <Text style={{ color: theme.colors.green, fontFamily: theme.fonts.bold, fontSize: 13 }}>
+                  Tentar de novo
+                </Text>
+              </Pressable>
+            ) : null}
           </View>
         ) : null}
       </View>

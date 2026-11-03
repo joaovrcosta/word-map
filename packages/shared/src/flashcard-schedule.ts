@@ -1,5 +1,7 @@
 const ZONE = "America/Sao_Paulo";
 
+export const MAX_CONFIDENCE = 4;
+
 const INTERVAL_DAYS: Record<number, number> = {
   1: 1,
   2: 3,
@@ -8,8 +10,17 @@ const INTERVAL_DAYS: Record<number, number> = {
 };
 
 export function reviewIntervalDays(confidence: number): number {
-  const level = Math.min(4, Math.max(1, Math.round(confidence)));
+  const level = Math.min(MAX_CONFIDENCE, Math.max(1, Math.round(confidence)));
   return INTERVAL_DAYS[level] ?? 1;
+}
+
+export function isMaxConfidence(confidence: number): boolean {
+  return Math.round(confidence) >= MAX_CONFIDENCE;
+}
+
+/** Todas as palavras do pool já estão no nível máximo. */
+export function allWordsMastered(words: ReadonlyArray<{ confidence: number }>): boolean {
+  return words.length > 0 && words.every((word) => isMaxConfidence(word.confidence));
 }
 
 export function calendarDay(value: Date, timeZone = ZONE): string {

@@ -67,15 +67,15 @@ export default function TabsLayout() {
         <Tabs.Screen
           name="home"
           options={{
-            title: "Início",
-            tabBarIcon: ({ color, size }) => <Ionicons name="home" size={size} color={color} />,
+            title: "Review",
+            tabBarIcon: ({ color, size }) => <Ionicons name="albums" size={size} color={color} />,
           }}
         />
         <Tabs.Screen
-          name="vaults"
+          name="library"
           options={{
-            title: "Vaults",
-            tabBarIcon: ({ color, size }) => <Ionicons name="folder" size={size} color={color} />,
+            title: "Biblioteca",
+            tabBarIcon: ({ color, size }) => <Ionicons name="library" size={size} color={color} />,
           }}
         />
         <Tabs.Screen
@@ -105,10 +105,10 @@ export default function TabsLayout() {
           }}
         />
         <Tabs.Screen
-          name="flashcards"
+          name="vaults"
           options={{
-            title: "Treino",
-            tabBarIcon: ({ color, size }) => <Ionicons name="barbell-outline" size={size} color={color} />,
+            title: "Vaults",
+            tabBarIcon: ({ color, size }) => <Ionicons name="folder" size={size} color={color} />,
           }}
         />
         <Tabs.Screen
@@ -118,6 +118,7 @@ export default function TabsLayout() {
             tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
           }}
         />
+        <Tabs.Screen name="flashcards" options={{ href: null }} />
         <Tabs.Screen name="stories" options={{ href: null }} />
         <Tabs.Screen name="news" options={{ href: null }} />
         <Tabs.Screen name="books" options={{ href: null }} />

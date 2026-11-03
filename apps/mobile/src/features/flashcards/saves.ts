@@ -60,7 +60,7 @@ export async function flushSaves(pending: PendingSave[], request: Request) {
         });
       }
     } catch {
-      continue;
+      pending.push(save);
     }
   }
 }

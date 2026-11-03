@@ -17,23 +17,13 @@ import {
   LearningProgressRing,
   vaultLearningStats,
 } from "../../../src/features/vaults/learning-progress";
+import { DeckThumb, vaultAccent, vaultIcon } from "../../../src/features/vaults/deck-thumb";
 import { useSession } from "../../../src/session";
 import { useTheme } from "../../../src/theme";
 import { countLabel, type Vault } from "../../../src/types";
 import { ErrorText, Field, Heading, Loading, PrimaryButton, Screen, useTabBarInset } from "../../../src/ui";
 
 type Filter = "all" | "progress" | "learned" | "empty";
-
-const ACCENTS = ["#4B7BFF", "#9B5CFF", "#FF4B6A", "#24c875", "#FF9600", "#00C2A8"] as const;
-
-const ICONS: Array<keyof typeof Ionicons.glyphMap> = [
-  "sparkles",
-  "bookmark",
-  "heart",
-  "time",
-  "library",
-  "folder",
-];
 
 function askConfirm(title: string, message: string) {
   if (Platform.OS === "web" && typeof window !== "undefined") {
@@ -47,60 +37,8 @@ function askConfirm(title: string, message: string) {
   });
 }
 
-function vaultAccent(id: number) {
-  return ACCENTS[Math.abs(id) % ACCENTS.length] ?? ACCENTS[0];
-}
-
-function vaultIcon(id: number): keyof typeof Ionicons.glyphMap {
-  return ICONS[Math.abs(id) % ICONS.length] ?? "folder";
-}
-
 function DeckIcon({ accent, name }: { accent: string; name: keyof typeof Ionicons.glyphMap }) {
-  return (
-    <View style={{ width: 56, height: 56 }}>
-      <View
-        style={{
-          position: "absolute",
-          right: 0,
-          top: 4,
-          width: 46,
-          height: 46,
-          borderRadius: 12,
-          backgroundColor: accent,
-          opacity: 0.35,
-          transform: [{ rotate: "8deg" }],
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          left: 2,
-          top: 2,
-          width: 46,
-          height: 46,
-          borderRadius: 12,
-          backgroundColor: accent,
-          opacity: 0.55,
-          transform: [{ rotate: "-4deg" }],
-        }}
-      />
-      <View
-        style={{
-          position: "absolute",
-          left: 0,
-          bottom: 0,
-          width: 48,
-          height: 48,
-          borderRadius: 13,
-          backgroundColor: accent,
-          alignItems: "center",
-          justifyContent: "center",
-        }}
-      >
-        <Ionicons name={name} size={22} color="#FFFFFF" />
-      </View>
-    </View>
-  );
+  return <DeckThumb accent={accent} name={name} />;
 }
 
 export default function VaultListScreen() {
@@ -303,7 +241,8 @@ export default function VaultListScreen() {
           ItemSeparatorComponent={() => <View style={{ height: 4 }} />}
           renderItem={({ item }) => {
             const accent = vaultAccent(item.id);
-            const { total, percent } = vaultLearningStats(item.words);
+            const stats = vaultLearningStats(item.words);
+            const { total, percent } = stats;
             return (
               <Pressable
                 onPress={() => router.push(`/vaults/${item.id}` as Href)}
@@ -389,7 +328,11 @@ export default function VaultListScreen() {
                   hitSlop={8}
                   accessibilityLabel={`Progresso ${percent}%`}
                 >
-                  <LearningProgressRing percent={percent} size={52} color={accent} />
+                  <LearningProgressRing
+                    parts={{ learned: stats.learned, almost: stats.almost, weak: stats.weak }}
+                    size={52}
+                    color={accent}
+                  />
                 </Pressable>
               </Pressable>
             );

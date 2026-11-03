@@ -3,6 +3,7 @@ import { Linking, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import {
   alignSpokenWords,
+  speakIsPartial,
   speakPassScore,
   tokenizeSpeakText,
   type FlashcardWord,
@@ -43,7 +44,7 @@ export function SpeakCard({
   const [listening, setListening] = useState(false);
   const [permissionDenied, setPermissionDenied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [done, setDone] = useState<{ correct: boolean; transcript: string } | null>(null);
+  const [done, setDone] = useState<{ correct: boolean; partial: boolean; transcript: string } | null>(null);
   const [popToken, setPopToken] = useState(0);
   const [shakeToken, setShakeToken] = useState(0);
 
@@ -82,6 +83,7 @@ export function SpeakCard({
     const next = alignSpokenWords(target, transcript, { finalized: true });
     setStatuses(next);
     const correct = speakPassScore(next);
+    const partial = correct && speakIsPartial(next);
     if (correct) {
       cues.correct();
       setPopToken((current) => current + 1);
@@ -89,7 +91,7 @@ export function SpeakCard({
       cues.wrong();
       setShakeToken((current) => current + 1);
     }
-    setDone({ correct, transcript });
+    setDone({ correct, partial, transcript });
   };
 
   const startListening = async () => {
@@ -241,7 +243,7 @@ export function SpeakCard({
 
         {!done ? (
           <View style={{ width: "100%", gap: 16 }}>
-            <View style={{ flexDirection: "row", justifyContent: "space-around", paddingHorizontal: 12 }}>
+            <View style={{ flexDirection: "row", justifyContent: "center", paddingHorizontal: 12 }}>
               <Pressable
                 onPress={() => speakWord(target)}
                 style={{ alignItems: "center", gap: 6, minWidth: 72 }}
@@ -260,25 +262,6 @@ export function SpeakCard({
                   <Ionicons name="volume-high" size={22} color={theme.colors.greenText} />
                 </View>
                 <Text style={{ color: shell.muted, fontFamily: theme.fonts.medium, fontSize: 12 }}>Repetir</Text>
-              </Pressable>
-              <Pressable
-                onPress={onSkip}
-                style={{ alignItems: "center", gap: 6, minWidth: 72 }}
-                accessibilityLabel="Pular"
-              >
-                <View
-                  style={{
-                    width: 48,
-                    height: 48,
-                    borderRadius: 24,
-                    alignItems: "center",
-                    justifyContent: "center",
-                    backgroundColor: shell.chip,
-                  }}
-                >
-                  <Ionicons name="play-forward" size={22} color={theme.colors.greenText} />
-                </View>
-                <Text style={{ color: shell.muted, fontFamily: theme.fonts.medium, fontSize: 12 }}>Pular</Text>
               </Pressable>
             </View>
 
@@ -305,6 +288,20 @@ export function SpeakCard({
             >
               {listening ? "Ouvindo…" : available ? "Toque no microfone e fale" : "Microfone precisa do app nativo"}
             </Text>
+            <Pressable
+              onPress={() => {
+                sessionRef.current?.abort();
+                sessionRef.current = null;
+                setListening(false);
+                onSkip();
+              }}
+              accessibilityLabel="Não consigo falar agora"
+              style={{ alignItems: "center", paddingVertical: 8 }}
+            >
+              <Text style={{ color: shell.muted, fontFamily: theme.fonts.semibold, fontSize: 15 }}>
+                Não consigo falar agora
+              </Text>
+            </Pressable>
           </View>
         ) : null}
       </MotionFrame>
@@ -312,6 +309,7 @@ export function SpeakCard({
       {done ? (
         <FeedbackBanner
           correct={done.correct}
+          partial={done.partial}
           answer={target}
           onContinue={() => {
             if (!aliveRef.current || answeredRef.current) return;

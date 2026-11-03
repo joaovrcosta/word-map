@@ -10,7 +10,7 @@ const SPEAK_MODE_LOCKED = isSpeakModeLocked();
 
 export default function SpeakTrainingScreen() {
   useEffect(() => {
-    if (SPEAK_MODE_LOCKED) router.replace("/flashcards");
+    if (SPEAK_MODE_LOCKED) router.replace("/home");
   }, []);
 
   if (SPEAK_MODE_LOCKED) return <View style={{ flex: 1, backgroundColor: shell.background }} />;

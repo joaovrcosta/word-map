@@ -72,7 +72,7 @@ describe("selectPracticeWords", () => {
     );
     expect(selectPracticeWords(words, now)).toEqual([]);
     const closest = selectPracticeWords(words, now, true);
-    expect(closest.map((item) => item.id)).toEqual(words.map((item) => item.id));
+    expect(closest.map((item) => item.id)).toEqual(words.slice(0, 10).map((item) => item.id));
     expect(buildFlashcardQueue(closest, () => 0)).toHaveLength(10);
   });
 });

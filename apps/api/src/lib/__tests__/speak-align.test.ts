@@ -98,7 +98,7 @@ describe("speak-align", () => {
   });
 
   describe("speakPassScore", () => {
-    it("n=6 tolera 1 erro; n=4 não", () => {
+    it("aprova com ≥70% das palavras", () => {
       const sixOneMiss = [
         "correct",
         "correct",
@@ -107,9 +107,19 @@ describe("speak-align", () => {
         "correct",
         "pending",
       ] as const;
-      expect(speakPassScore([...sixOneMiss])).toBe(true);
+      expect(speakPassScore([...sixOneMiss])).toBe(true); // 5/6 ≈ 83%
       const fourOneMiss = ["correct", "correct", "correct", "wrong"] as const;
-      expect(speakPassScore([...fourOneMiss])).toBe(false);
+      expect(speakPassScore([...fourOneMiss])).toBe(true); // 3/4 = 75%
+      const fourTwoMiss = ["correct", "correct", "wrong", "wrong"] as const;
+      expect(speakPassScore([...fourTwoMiss])).toBe(false); // 2/4 = 50%
+      const tenSeven = Array.from({ length: 10 }, (_, i) =>
+        i < 7 ? "correct" : "wrong"
+      ) as Array<"correct" | "wrong">;
+      expect(speakPassScore(tenSeven)).toBe(true); // 70%
+      const tenSix = Array.from({ length: 10 }, (_, i) =>
+        i < 6 ? "correct" : "wrong"
+      ) as Array<"correct" | "wrong">;
+      expect(speakPassScore(tenSix)).toBe(false); // 60%
     });
   });
 });

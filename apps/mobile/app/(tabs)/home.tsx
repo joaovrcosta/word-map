@@ -1,5 +1,5 @@
-import { LibraryFeed } from "../../src/features/books/library-feed";
+import { ReviewSwipeDeck } from "../../src/features/flashcards/review-swipe-deck";
 
 export default function HomeScreen() {
-  return <LibraryFeed />;
+  return <ReviewSwipeDeck />;
 }

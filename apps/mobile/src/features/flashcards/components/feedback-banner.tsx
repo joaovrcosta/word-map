@@ -6,17 +6,28 @@ import { useMotionEnabled } from "../motion";
 
 export function FeedbackBanner({
   correct,
+  partial = false,
   answer,
   onContinue,
 }: {
   correct: boolean;
+  /** Aprovado com ≥70% (fala), sem ser perfeito. */
+  partial?: boolean;
   answer?: string;
   onContinue: () => void;
 }) {
   const theme = useTheme();
   const motion = useMotionEnabled();
-  const background = correct ? theme.colors.greenSoft : "#3a1618";
-  const color = correct ? theme.colors.greenText : theme.colors.destructive;
+  const kind = correct ? (partial ? "partial" : "correct") : "wrong";
+  const background =
+    kind === "correct" ? theme.colors.greenSoft : kind === "partial" ? "#2a2416" : "#3a1618";
+  const color =
+    kind === "correct" ? theme.colors.greenText : kind === "partial" ? "#E8C547" : theme.colors.destructive;
+  const title =
+    kind === "correct" ? "Muito bem!" : kind === "partial" ? "Parcialmente correto" : "Resposta correta:";
+  const buttonColor =
+    kind === "correct" ? theme.colors.green : kind === "partial" ? "#C9A227" : theme.colors.destructive;
+  const buttonEdge = kind === "correct" ? BUTTON_EDGE : kind === "partial" ? "#8a7018" : "#9f1239";
 
   return (
     <Animated.View
@@ -35,17 +46,14 @@ export function FeedbackBanner({
         borderTopRightRadius: 20,
       }}
     >
-      <Text style={{ color, fontFamily: theme.fonts.bold, fontSize: 18 }}>{correct ? "Muito bem!" : "Resposta correta:"}</Text>
-      {!correct && answer ? (
-        <Text style={{ marginTop: 4, color: theme.colors.foreground, fontFamily: theme.fonts.semibold, fontSize: 16 }}>{answer}</Text>
+      <Text style={{ color, fontFamily: theme.fonts.bold, fontSize: 18 }}>{title}</Text>
+      {(kind === "wrong" || kind === "partial") && answer ? (
+        <Text style={{ marginTop: 4, color: theme.colors.foreground, fontFamily: theme.fonts.semibold, fontSize: 16 }}>
+          {answer}
+        </Text>
       ) : null}
       <View style={{ marginTop: 16 }}>
-        <DuoButton
-          label="CONTINUAR"
-          onPress={onContinue}
-          color={correct ? theme.colors.green : theme.colors.destructive}
-          edge={correct ? BUTTON_EDGE : "#9f1239"}
-        />
+        <DuoButton label="CONTINUAR" onPress={onContinue} color={buttonColor} edge={buttonEdge} />
       </View>
     </Animated.View>
   );

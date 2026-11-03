@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Animated, Modal, PanResponder, Pressable, Text, View } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import Svg, { Circle } from "react-native-svg";
 import { STUDY_GOAL_PRESETS } from "@word-map/shared";
@@ -13,6 +13,7 @@ const RING = 132;
 const STROKE = 10;
 const RADIUS = (RING - STROKE) / 2;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+const DISMISS_DRAG = 96;
 
 type Props = {
   visible: boolean;
@@ -27,6 +28,9 @@ export function OffenseSheet({ visible, onClose, onSeeStats }: Props) {
   const [editingGoal, setEditingGoal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const dragY = useRef(new Animated.Value(0)).current;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   const reload = useCallback(async () => {
     try {
@@ -44,8 +48,32 @@ export function OffenseSheet({ visible, onClose, onSeeStats }: Props) {
       setError(null);
       return;
     }
+    dragY.setValue(0);
     void reload();
-  }, [reload, visible]);
+  }, [dragY, reload, visible]);
+
+  const pan = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+      onPanResponderMove: (_, gesture) => {
+        dragY.setValue(Math.max(0, gesture.dy));
+      },
+      onPanResponderRelease: (_, gesture) => {
+        if (gesture.dy > DISMISS_DRAG || gesture.vy > 1.1) {
+          Animated.timing(dragY, {
+            toValue: 560,
+            duration: 180,
+            useNativeDriver: true,
+          }).start(() => onCloseRef.current());
+          return;
+        }
+        Animated.spring(dragY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+      },
+      onPanResponderTerminate: () => {
+        Animated.spring(dragY, { toValue: 0, useNativeDriver: true, bounciness: 4 }).start();
+      },
+    })
+  ).current;
 
   const saveGoal = async (minutes: number) => {
     if (saving) return;
@@ -77,35 +105,39 @@ export function OffenseSheet({ visible, onClose, onSeeStats }: Props) {
       : `Faltam ${remainingMin} min hoje`;
 
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
+    <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose} statusBarTranslucent>
       <View style={{ flex: 1, justifyContent: "flex-end" }}>
         <Pressable
           accessibilityLabel="Fechar"
           onPress={onClose}
-          style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.45)" }}
+          style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.55)" }}
         />
-        <View
+        <Animated.View
           style={{
             backgroundColor: theme.shell.surface,
             borderTopLeftRadius: 28,
             borderTopRightRadius: 28,
             paddingHorizontal: 24,
-            paddingTop: 18,
+            paddingTop: 10,
             paddingBottom: 28,
             borderWidth: 1,
             borderColor: theme.shell.line,
+            zIndex: 2,
+            transform: [{ translateY: dragY }],
           }}
         >
-          <View
-            style={{
-              alignSelf: "center",
-              width: 44,
-              height: 4,
-              borderRadius: 2,
-              backgroundColor: theme.shell.line,
-              marginBottom: 18,
-            }}
-          />
+          <View {...pan.panHandlers} style={{ paddingTop: 4, paddingBottom: 4 }}>
+            <View
+              style={{
+                alignSelf: "center",
+                width: 44,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: theme.shell.line,
+                marginBottom: 18,
+              }}
+            />
+          </View>
 
           <View style={{ alignItems: "center" }}>
             <View style={{ width: RING, height: RING, alignItems: "center", justifyContent: "center" }}>
@@ -280,7 +312,7 @@ export function OffenseSheet({ visible, onClose, onSeeStats }: Props) {
               </Pressable>
             </View>
           )}
-        </View>
+        </Animated.View>
       </View>
     </Modal>
   );
