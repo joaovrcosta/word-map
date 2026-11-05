@@ -13,16 +13,16 @@ const fonts = {
 };
 
 export const shell = {
-  background: "#121212",
+  background: "#0B0B0B",
   foreground: "#FFFFFF",
   muted: "#8E8E93",
-  surface: "#1C1C1E",
-  line: "#3A3A3A",
-  tabBar: "#2A2A2C",
-  chip: "#2C2C2E",
+  surface: "#161616",
+  line: "#2A2A2A",
+  tabBar: "#000000",
+  chip: "#1C1C1E",
   chipText: "#FFFFFF",
   chipActive: "#FFFFFF",
-  chipActiveText: "#111111",
+  chipActiveText: "#0B0B0B",
   tones: {
     cream: "#F6E7A8",
     blue: "#C5E6F6",
@@ -34,6 +34,12 @@ export const shell = {
   actionOnPastel: "#1A1A1A",
   actionDangerOnPastel: "#6E2430",
   dangerOnDark: "#FF8A8A",
+  glow: {
+    purple: "#C084FC",
+    violet: "#8B5CF6",
+    indigo: "#6366F1",
+    blue: "#60A5FA",
+  },
   mascot: {
     body: "#2F9BFF",
     eye: "#F4F7FB",
@@ -59,17 +65,19 @@ export const fixedTones = {
 } as const satisfies Record<string, ToneName>;
 
 export const tabBarMetrics = {
-  height: 62,
-  gap: 12,
-  margin: 16,
+  height: 58,
+  gap: 0,
+  margin: 0,
+  centerSize: 56,
+  centerLift: 18,
 } as const;
 
-export function tabBarBottom(insetBottom: number) {
-  return Math.max(insetBottom, 12);
+export function tabBarBottom(_insetBottom: number) {
+  return 0;
 }
 
 export function tabBarContentInset(insetBottom: number) {
-  return tabBarMetrics.height + tabBarMetrics.gap + tabBarBottom(insetBottom);
+  return tabBarMetrics.height + Math.max(insetBottom, 10) + tabBarMetrics.centerLift / 2;
 }
 
 export function tabBarHidden(pathname: string) {

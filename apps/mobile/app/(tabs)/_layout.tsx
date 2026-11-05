@@ -1,19 +1,16 @@
 import { useState } from "react";
 import { Redirect, Tabs, usePathname } from "expo-router";
-import { Ionicons } from "@expo/vector-icons";
 import { ActivityIndicator, View } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AppTabBar } from "../../src/app-tab-bar";
 import { AddWordSearchSheet } from "../../src/features/vaults/add-word-search-sheet";
 import { useSession } from "../../src/session";
-import { tabBarBottom, tabBarHidden, tabBarMetrics, useTheme } from "../../src/theme";
+import { tabBarHidden, useTheme } from "../../src/theme";
 
 export default function TabsLayout() {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
   const { ready, user } = useSession();
   const pathname = usePathname();
   const hideTabBar = tabBarHidden(pathname);
-  const bottom = tabBarBottom(insets.bottom);
   const [searchOpen, setSearchOpen] = useState(false);
 
   if (!ready) {
@@ -29,55 +26,14 @@ export default function TabsLayout() {
   return (
     <>
       <Tabs
+        tabBar={(props) => (hideTabBar ? null : <AppTabBar state={props.state} descriptors={props.descriptors} navigation={props.navigation} />)}
         screenOptions={{
           headerShown: false,
           tabBarHideOnKeyboard: true,
-          tabBarActiveTintColor: theme.shell.foreground,
-          tabBarInactiveTintColor: theme.shell.muted,
-          tabBarStyle: hideTabBar
-            ? { display: "none", height: 0 }
-            : {
-                position: "absolute",
-                start: tabBarMetrics.margin,
-                end: tabBarMetrics.margin,
-                bottom,
-                height: tabBarMetrics.height,
-                borderRadius: tabBarMetrics.height / 2,
-                backgroundColor: theme.shell.tabBar,
-                borderTopWidth: 0,
-                paddingTop: 6,
-                paddingBottom: 6,
-                paddingHorizontal: 4,
-                overflow: "hidden",
-              },
-          tabBarLabelPosition: "below-icon",
-          tabBarItemStyle: {
-            flex: 1,
-            justifyContent: "center",
-            alignItems: "center",
-            paddingVertical: 0,
-          },
-          tabBarLabelStyle: {
-            fontFamily: theme.fonts.medium,
-            fontSize: 10,
-            marginTop: 2,
-          },
         }}
       >
-        <Tabs.Screen
-          name="home"
-          options={{
-            title: "Review",
-            tabBarIcon: ({ color, size }) => <Ionicons name="albums" size={size} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="library"
-          options={{
-            title: "Biblioteca",
-            tabBarIcon: ({ color, size }) => <Ionicons name="library" size={size} color={color} />,
-          }}
-        />
+        <Tabs.Screen name="home" options={{ title: "Review" }} />
+        <Tabs.Screen name="library" options={{ title: "Explorar" }} />
         <Tabs.Screen
           name="search"
           listeners={{
@@ -86,38 +42,10 @@ export default function TabsLayout() {
               setSearchOpen(true);
             },
           }}
-          options={{
-            title: "Busca",
-            tabBarIcon: () => (
-              <View
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: searchOpen ? theme.shell.tones.cream : theme.shell.tones.green,
-                }}
-              >
-                <Ionicons name="search" size={16} color={theme.shell.onPastel} />
-              </View>
-            ),
-          }}
+          options={{ title: "Busca" }}
         />
-        <Tabs.Screen
-          name="vaults"
-          options={{
-            title: "Vaults",
-            tabBarIcon: ({ color, size }) => <Ionicons name="folder" size={size} color={color} />,
-          }}
-        />
-        <Tabs.Screen
-          name="profile"
-          options={{
-            title: "Perfil",
-            tabBarIcon: ({ color, size }) => <Ionicons name="person" size={size} color={color} />,
-          }}
-        />
+        <Tabs.Screen name="vaults" options={{ title: "Vaults" }} />
+        <Tabs.Screen name="profile" options={{ title: "Perfil" }} />
         <Tabs.Screen name="flashcards" options={{ href: null }} />
         <Tabs.Screen name="stories" options={{ href: null }} />
         <Tabs.Screen name="news" options={{ href: null }} />

@@ -35,7 +35,7 @@ export type ReaderTheme = {
 
 const darkReader: ReaderTheme = {
   appearance: "dark",
-  background: "#121212",
+  background: "#0B0B0B",
   foreground: "#FFFFFF",
   muted: "#8E8E93",
   border: "#3A3A3A",
