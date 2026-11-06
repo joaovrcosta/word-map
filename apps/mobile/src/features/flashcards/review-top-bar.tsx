@@ -1,8 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Animated as RnAnimated,
-  Modal,
-  PanResponder,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,15 +10,16 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import Animated, { Easing, useAnimatedProps, useSharedValue, withTiming } from "react-native-reanimated";
 import Svg, { Circle } from "react-native-svg";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { AppBottomSheet, SHEET_CARD } from "../../bottom-sheet";
 import { useTheme } from "../../theme";
 import { countLabel } from "../../types";
-import { LearningProgressRing, type LearningRingParts } from "../vaults/learning-progress";
+import {
+  LearningProgressRing,
+  RING_GREEN,
+  type LearningRingParts,
+} from "../vaults/learning-progress";
 import { VaultDeckThumb } from "../vaults/deck-thumb";
 import type { PracticeXpState } from "../study/practice-xp";
-import { useTabBarInset } from "../../ui";
-
-const DISMISS_DRAG = 96;
 
 const LEVEL_RING = 22;
 const LEVEL_STROKE = 2.5;
@@ -40,6 +38,8 @@ export type ReviewVaultOption = {
 type Props = {
   streak: number;
   xp: PracticeXpState;
+  /** XP ganhos hoje (não o total). */
+  dayXp: number;
   vaultId: number | null;
   vaults: ReviewVaultOption[];
   allWordCount: number;
@@ -54,6 +54,7 @@ type Props = {
 export function ReviewTopBar({
   streak,
   xp,
+  dayXp,
   vaultId,
   vaults,
   allWordCount,
@@ -65,64 +66,32 @@ export function ReviewTopBar({
   onPickerOpenChange,
 }: Props) {
   const theme = useTheme();
-  const insets = useSafeAreaInsets();
-  const tabInset = useTabBarInset();
   const [pickerOpenInternal, setPickerOpenInternal] = useState(false);
   const [query, setQuery] = useState("");
   const pickerOpen = pickerOpenProp ?? pickerOpenInternal;
-  const sheetDragY = useRef(new RnAnimated.Value(0)).current;
-  const closePickerRef = useRef(() => undefined as void);
   const setPickerOpen = (open: boolean) => {
     onPickerOpenChange?.(open);
     if (pickerOpenProp === undefined) setPickerOpenInternal(open);
-    if (!open) {
-      setQuery("");
-      sheetDragY.setValue(0);
-    }
+    if (!open) setQuery("");
   };
   const closePicker = () => setPickerOpen(false);
-  closePickerRef.current = closePicker;
-  const sheetPan = useRef(
-    PanResponder.create({
-      onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 6 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
-      onPanResponderMove: (_, gesture) => {
-        sheetDragY.setValue(Math.max(0, gesture.dy));
-      },
-      onPanResponderRelease: (_, gesture) => {
-        if (gesture.dy > DISMISS_DRAG || gesture.vy > 1.1) {
-          RnAnimated.timing(sheetDragY, {
-            toValue: 520,
-            duration: 180,
-            useNativeDriver: true,
-          }).start(() => closePickerRef.current());
-          return;
-        }
-        RnAnimated.spring(sheetDragY, {
-          toValue: 0,
-          useNativeDriver: true,
-          bounciness: 4,
-        }).start();
-      },
-      onPanResponderTerminate: () => {
-        RnAnimated.spring(sheetDragY, {
-          toValue: 0,
-          useNativeDriver: true,
-          bounciness: 4,
-        }).start();
-      },
-    })
-  ).current;
   const ringProgress = useSharedValue(Math.min(1, Math.max(0, xp.progress)));
   const prevLevelRef = useRef(xp.level);
-
-  useEffect(() => {
-    if (pickerOpen) sheetDragY.setValue(0);
-  }, [pickerOpen, sheetDragY]);
 
   const selectedLabel = useMemo(() => {
     if (vaultId == null) return "Tudo";
     return vaults.find((vault) => vault.id === vaultId)?.name ?? "Vault";
   }, [vaultId, vaults]);
+
+  const selectedParts = useMemo(() => {
+    if (vaultId == null) return allParts;
+    return vaults.find((vault) => vault.id === vaultId)?.parts ?? allParts;
+  }, [vaultId, vaults, allParts]);
+
+  const selectedPercent = useMemo(() => {
+    if (vaultId == null) return allPercent;
+    return vaults.find((vault) => vault.id === vaultId)?.percent ?? allPercent;
+  }, [vaultId, vaults, allPercent]);
 
   const filteredVaults = useMemo(() => {
     const needle = query.trim().toLowerCase();
@@ -161,7 +130,7 @@ export function ReviewTopBar({
       <View style={styles.row}>
         <Pressable
           onPress={onPressStreak}
-          style={[styles.statsPill, { borderColor: "#24c875", backgroundColor: "#1C1C1E" }]}
+          style={[styles.statsPill, { borderColor: RING_GREEN, backgroundColor: "#1C1C1E" }]}
         >
           <View style={styles.stat}>
             <Ionicons name="flame" size={16} color="#ff9600" />
@@ -173,13 +142,13 @@ export function ReviewTopBar({
           <View style={styles.stat}>
             <Ionicons name="flash" size={15} color="#1cb0f6" />
             <Text style={[styles.statText, styles.xpValue, { fontFamily: theme.fonts.bold }]} numberOfLines={1}>
-              {xp.totalXp}
+              {dayXp}
             </Text>
           </View>
 
           <View style={styles.stat}>
             <View style={styles.levelRing}>
-              <Svg width={LEVEL_RING} height={LEVEL_RING} style={StyleSheet.absoluteFill}>
+              <Svg width={LEVEL_RING} height={LEVEL_RING} style={StyleSheet.absoluteFillObject}>
                 <Circle
                   cx={LEVEL_RING / 2}
                   cy={LEVEL_RING / 2}
@@ -192,7 +161,7 @@ export function ReviewTopBar({
                   cx={LEVEL_RING / 2}
                   cy={LEVEL_RING / 2}
                   r={LEVEL_RADIUS}
-                  stroke="#24c875"
+                  stroke={RING_GREEN}
                   strokeWidth={LEVEL_STROKE}
                   fill="none"
                   strokeDasharray={`${LEVEL_CIRC} ${LEVEL_CIRC}`}
@@ -212,7 +181,13 @@ export function ReviewTopBar({
           onPress={() => setPickerOpen(true)}
           style={[styles.vaultPill, { backgroundColor: "#2A2A2C" }]}
         >
-          <View style={styles.vaultDot} />
+          <LearningProgressRing
+            parts={selectedParts}
+            percent={selectedPercent}
+            size={16}
+            stroke={3}
+            showLabel={false}
+          />
           <Text
             numberOfLines={1}
             style={[styles.vaultLabel, { fontFamily: theme.fonts.semibold }]}
@@ -223,91 +198,62 @@ export function ReviewTopBar({
         </Pressable>
       </View>
 
-      <Modal
-        animationType="fade"
-        transparent
-        visible={pickerOpen}
-        onRequestClose={closePicker}
-        statusBarTranslucent
-      >
-        <View style={styles.sheetRoot}>
-          <Pressable
-            accessibilityLabel="Fechar"
-            onPress={closePicker}
-            style={styles.sheetBackdrop}
+      <AppBottomSheet visible={pickerOpen} onClose={closePicker} title="Deck para revisar" maxHeight="78%">
+        <View style={[styles.search, { backgroundColor: SHEET_CARD, borderColor: theme.shell.line }]}>
+          <Ionicons name="search" size={18} color="rgba(255,255,255,0.45)" />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Buscar vault"
+            placeholderTextColor="rgba(255,255,255,0.35)"
+            autoCorrect={false}
+            autoCapitalize="none"
+            style={[styles.searchInput, { fontFamily: theme.fonts.medium, color: "#FFFFFF" }]}
           />
-          <RnAnimated.View
-            style={[
-              styles.sheet,
-              {
-                backgroundColor: theme.shell.surface,
-                borderColor: theme.shell.line,
-                paddingBottom: Math.max(18, tabInset || insets.bottom + 8),
-                transform: [{ translateY: sheetDragY }],
-              },
-            ]}
-          >
-            <View {...sheetPan.panHandlers} style={styles.sheetGrab}>
-              <View style={[styles.handle, { backgroundColor: theme.shell.line }]} />
-              <Text style={[styles.sheetTitle, { fontFamily: theme.fonts.bold }]}>Deck para revisar</Text>
-            </View>
-
-            <View style={[styles.search, { backgroundColor: "rgba(255,255,255,0.06)", borderColor: theme.shell.line }]}>
-              <Ionicons name="search" size={18} color="rgba(255,255,255,0.45)" />
-              <TextInput
-                value={query}
-                onChangeText={setQuery}
-                placeholder="Buscar vault"
-                placeholderTextColor="rgba(255,255,255,0.35)"
-                autoCorrect={false}
-                autoCapitalize="none"
-                style={[styles.searchInput, { fontFamily: theme.fonts.medium, color: "#FFFFFF" }]}
-              />
-              {query ? (
-                <Pressable onPress={() => setQuery("")} hitSlop={8}>
-                  <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.4)" />
-                </Pressable>
-              ) : null}
-            </View>
-
-            <ScrollView
-              style={styles.list}
-              showsVerticalScrollIndicator={false}
-              keyboardShouldPersistTaps="handled"
-              bounces={false}
-            >
-              {!query.trim() ? (
-                <DeckRow
-                  vaultId={null}
-                  label="Tudo"
-                  subtitle={countLabel(allWordCount, "palavra", "palavras")}
-                  percent={allPercent}
-                  parts={allParts}
-                  selected={vaultId == null}
-                  onPress={() => pick(null)}
-                />
-              ) : null}
-              {filteredVaults.map((vault) => (
-                <DeckRow
-                  key={vault.id}
-                  vaultId={vault.id}
-                  label={vault.name}
-                  subtitle={countLabel(vault.wordCount, "palavra", "palavras")}
-                  percent={vault.percent}
-                  parts={vault.parts}
-                  selected={vaultId === vault.id}
-                  onPress={() => pick(vault.id)}
-                />
-              ))}
-              {filteredVaults.length === 0 ? (
-                <Text style={[styles.empty, { fontFamily: theme.fonts.medium }]}>
-                  Nenhum vault encontrado
-                </Text>
-              ) : null}
-            </ScrollView>
-          </RnAnimated.View>
+          {query ? (
+            <Pressable onPress={() => setQuery("")} hitSlop={8}>
+              <Ionicons name="close-circle" size={18} color="rgba(255,255,255,0.4)" />
+            </Pressable>
+          ) : null}
         </View>
-      </Modal>
+
+        <ScrollView
+          style={styles.list}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          bounces={false}
+          nestedScrollEnabled
+        >
+          {!query.trim() ? (
+            <DeckRow
+              vaultId={null}
+              label="Tudo"
+              subtitle={countLabel(allWordCount, "palavra", "palavras")}
+              percent={allPercent}
+              parts={allParts}
+              selected={vaultId == null}
+              onPress={() => pick(null)}
+            />
+          ) : null}
+          {filteredVaults.map((vault) => (
+            <DeckRow
+              key={vault.id}
+              vaultId={vault.id}
+              label={vault.name}
+              subtitle={countLabel(vault.wordCount, "palavra", "palavras")}
+              percent={vault.percent}
+              parts={vault.parts}
+              selected={vaultId === vault.id}
+              onPress={() => pick(vault.id)}
+            />
+          ))}
+          {filteredVaults.length === 0 ? (
+            <Text style={[styles.empty, { fontFamily: theme.fonts.medium }]}>
+              Nenhum vault encontrado
+            </Text>
+          ) : null}
+        </ScrollView>
+      </AppBottomSheet>
     </>
   );
 }
@@ -333,7 +279,7 @@ function DeckRow({
   return (
     <Pressable
       onPress={onPress}
-      style={[styles.deckRow, selected ? { backgroundColor: "rgba(36,200,117,0.1)" } : null]}
+      style={[styles.deckRow, selected ? { backgroundColor: "rgba(36,200,117,0.12)" } : null]}
     >
       <View style={styles.deckIcon}>
         <VaultDeckThumb vaultId={vaultId} size={52} />
@@ -353,9 +299,9 @@ function DeckRow({
           {subtitle}
         </Text>
       </View>
-      <LearningProgressRing parts={parts} percent={percent} size={44} stroke={3} />
+      <LearningProgressRing parts={parts} percent={percent} size={40} />
       {selected ? (
-        <Ionicons name="checkmark-circle" size={18} color="#24c875" style={{ marginLeft: 6 }} />
+        <Ionicons name="checkmark-circle" size={18} color={RING_GREEN} style={{ marginLeft: 6 }} />
       ) : (
         <View style={{ width: 18, marginLeft: 6 }} />
       )}
@@ -400,12 +346,14 @@ const styles = StyleSheet.create({
     textAlign: "left",
   },
   levelValue: {
-    minWidth: 52,
+    minWidth: 58,
+    flexShrink: 0,
     textAlign: "left",
   },
   levelRing: {
     width: LEVEL_RING,
     height: LEVEL_RING,
+    flexShrink: 0,
   },
   vaultPill: {
     flexDirection: "row",
@@ -418,50 +366,10 @@ const styles = StyleSheet.create({
     maxWidth: "46%",
     marginLeft: "auto",
   },
-  vaultDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    borderWidth: 2.5,
-    borderColor: "#1cb0f6",
-  },
   vaultLabel: {
     color: "#FFFFFF",
     fontSize: 13,
     flexShrink: 1,
-  },
-  sheetRoot: {
-    flex: 1,
-    justifyContent: "flex-end",
-  },
-  sheetBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.55)",
-  },
-  sheet: {
-    borderTopLeftRadius: 28,
-    borderTopRightRadius: 28,
-    borderWidth: 1,
-    paddingHorizontal: 18,
-    paddingTop: 8,
-    maxHeight: "78%",
-    zIndex: 2,
-  },
-  sheetGrab: {
-    paddingTop: 4,
-    paddingBottom: 4,
-  },
-  handle: {
-    alignSelf: "center",
-    width: 44,
-    height: 4,
-    borderRadius: 2,
-    marginBottom: 14,
-  },
-  sheetTitle: {
-    color: "#FFFFFF",
-    fontSize: 22,
-    marginBottom: 14,
   },
   search: {
     flexDirection: "row",

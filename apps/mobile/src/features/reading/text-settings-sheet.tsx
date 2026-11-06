@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
-  Modal,
   Pressable,
   ScrollView,
   Switch,
@@ -10,6 +9,7 @@ import {
 import Slider from "@react-native-community/slider";
 import { Ionicons } from "@expo/vector-icons";
 import type { ReadingFontSize, ReadingPreferences, ReadingThemeMode } from "@word-map/shared";
+import { AppBottomSheet, SHEET_CARD } from "../../bottom-sheet";
 import { listEnglishVoices, type ReadingVoiceOption } from "../../speech";
 import { useTheme } from "../../theme";
 import { useReaderTheme } from "./reader-theme";
@@ -91,39 +91,9 @@ export function TextSettingsSheet({
   ];
 
   return (
-    <Modal animationType="slide" transparent visible={visible} onRequestClose={onClose}>
-      <View style={{ flex: 1, justifyContent: "flex-end" }}>
-        <Pressable
-          accessibilityLabel="Fechar"
-          onPress={onClose}
-          style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.45)" }}
-        />
-        <View
-          style={{
-            maxHeight: "86%",
-            backgroundColor: reader.menu.card,
-            borderTopLeftRadius: 28,
-            borderTopRightRadius: 28,
-            paddingHorizontal: 24,
-            paddingTop: 18,
-            paddingBottom: 28,
-            borderWidth: 1,
-            borderColor: reader.menu.cardBorder,
-          }}
-        >
-          <View
-            style={{
-              alignSelf: "center",
-              width: 44,
-              height: 4,
-              borderRadius: 2,
-              backgroundColor: reader.menu.cardBorder,
-              marginBottom: 18,
-            }}
-          />
-
+    <AppBottomSheet visible={visible} onClose={onClose} title="Leitura" maxHeight="86%">
           <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
-            <Text style={{ color: reader.foreground, fontFamily: theme.fonts.bold, fontSize: 16, marginBottom: 12 }}>
+            <Text style={{ color: "#FFFFFF", fontFamily: theme.fonts.bold, fontSize: 16, marginBottom: 12 }}>
               Tema
             </Text>
             <View style={{ flexDirection: "row", justifyContent: "space-around", marginBottom: 28 }}>
@@ -160,8 +130,8 @@ export function TextSettingsSheet({
               style={{
                 borderRadius: 14,
                 borderWidth: 1,
-                borderColor: reader.menu.cardBorder,
-                backgroundColor: reader.menu.chip,
+                borderColor: theme.shell.line,
+                backgroundColor: SHEET_CARD,
                 paddingHorizontal: 14,
                 paddingVertical: 14,
                 flexDirection: "row",
@@ -307,9 +277,7 @@ export function TextSettingsSheet({
           >
             <Text style={{ color: ACCENT, fontFamily: theme.fonts.bold, fontSize: 16 }}>Fechar</Text>
           </Pressable>
-        </View>
-      </View>
-    </Modal>
+    </AppBottomSheet>
   );
 }
 

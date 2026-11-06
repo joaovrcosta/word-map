@@ -2,7 +2,8 @@ import { useCallback, useMemo, useState } from "react";
 import { type Href, router, useFocusEffect } from "expo-router";
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
 import { grammarClassLabel, STUDY_GOAL_PRESETS } from "@word-map/shared";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
+import { AppBottomSheet, SHEET_CARD } from "../../src/bottom-sheet";
 import { type RankingBoard } from "../../src/ranking";
 import { useSession } from "../../src/session";
 import type { StudyToday } from "../../src/study";
@@ -664,46 +665,13 @@ export default function ProfileScreen() {
         </>
       ) : null}
 
-      <Modal
-        animationType="slide"
-        transparent
+      <AppBottomSheet
         visible={settingsOpen}
-        onRequestClose={() => setSettingsOpen(false)}
+        onClose={() => setSettingsOpen(false)}
+        title="Configurações"
       >
-        <View style={{ flex: 1, justifyContent: "flex-end" }}>
-          <Pressable
-            accessibilityLabel="Fechar"
-            onPress={() => setSettingsOpen(false)}
-            style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: "rgba(0,0,0,0.45)" }}
-          />
-          <View
-            style={{
-              backgroundColor: theme.shell.surface,
-              borderTopLeftRadius: 28,
-              borderTopRightRadius: 28,
-              paddingHorizontal: 24,
-              paddingTop: 18,
-              paddingBottom: 28,
-              borderWidth: 1,
-              borderColor: theme.shell.line,
-            }}
-          >
-            <View
-              style={{
-                alignSelf: "center",
-                width: 44,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: theme.shell.line,
-                marginBottom: 18,
-              }}
-            />
-            <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.bold, fontSize: 20 }}>
-              Configurações
-            </Text>
-
             {editingGoal ? (
-              <View style={{ marginTop: 18, gap: 10 }}>
+              <View style={{ marginTop: 10, gap: 10 }}>
                 <Text style={{ color: theme.shell.muted, fontFamily: theme.fonts.medium, fontSize: 14 }}>
                   Meta diária
                 </Text>
@@ -719,13 +687,13 @@ export default function ProfileScreen() {
                           paddingHorizontal: 14,
                           paddingVertical: 10,
                           borderRadius: 999,
-                          backgroundColor: active ? theme.colors.green : theme.shell.chip,
+                          backgroundColor: active ? theme.colors.green : SHEET_CARD,
                           opacity: savingGoal ? 0.6 : 1,
                         }}
                       >
                         <Text
                           style={{
-                            color: theme.shell.foreground,
+                            color: "#FFFFFF",
                             fontFamily: theme.fonts.bold,
                             fontSize: 13,
                           }}
@@ -743,9 +711,9 @@ export default function ProfileScreen() {
                 </Pressable>
               </View>
             ) : (
-              <View style={{ marginTop: 12 }}>
+              <View style={{ marginTop: 4 }}>
                 <Pressable onPress={() => setEditingGoal(true)} style={{ paddingVertical: 14 }}>
-                  <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.semibold, fontSize: 16 }}>
+                  <Text style={{ color: "#FFFFFF", fontFamily: theme.fonts.semibold, fontSize: 16 }}>
                     Alterar meta diária
                   </Text>
                 </Pressable>
@@ -756,7 +724,7 @@ export default function ProfileScreen() {
                   }}
                   style={{ paddingVertical: 14 }}
                 >
-                  <Text style={{ color: theme.shell.foreground, fontFamily: theme.fonts.semibold, fontSize: 16 }}>
+                  <Text style={{ color: "#FFFFFF", fontFamily: theme.fonts.semibold, fontSize: 16 }}>
                     Ver ranking
                   </Text>
                 </Pressable>
@@ -773,9 +741,7 @@ export default function ProfileScreen() {
                 </Pressable>
               </View>
             )}
-          </View>
-        </View>
-      </Modal>
+      </AppBottomSheet>
     </Screen>
   );
 }

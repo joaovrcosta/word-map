@@ -1,14 +1,18 @@
 import { useMemo, useState } from "react";
-import { Modal, Pressable, Text, View } from "react-native";
+import { Pressable, Text, View } from "react-native";
 import Svg, { Circle } from "react-native-svg";
+import { LEARNING_STATUS_META } from "@word-map/shared/learning-status";
+import { resolveLearningStatusFromWord } from "@word-map/shared/fsrs-schedule";
+import { AppBottomSheet, SHEET_CARD } from "../../bottom-sheet";
 import { useTheme } from "../../theme";
 import { countLabel, type Word } from "../../types";
 
 export const LEARNED_CONFIDENCE = 4;
 
-export const RING_GREEN = "#24c875";
-export const RING_YELLOW = "#F5C518";
-export const RING_RED = "#FF4B6A";
+/** Cores dos segmentos = mesmas das tags FSRS. */
+export const RING_GREEN = LEARNING_STATUS_META.confident.color;
+export const RING_YELLOW = LEARNING_STATUS_META.reviewing.color;
+export const RING_RED = LEARNING_STATUS_META.learning.color;
 
 export type LearningRingParts = {
   learned: number;
@@ -16,16 +20,25 @@ export type LearningRingParts = {
   weak: number;
 };
 
-export function vaultLearningStats(words: ReadonlyArray<{ confidence: number }> | undefined | null) {
+type WordForRing = {
+  confidence?: number;
+  fsrsState?: number | null;
+  stability?: number | null;
+  dueAt?: Date | string | null;
+  lastPractice?: Date | string | null;
+  lastReview?: Date | string | null;
+};
+
+export function vaultLearningStats(words: ReadonlyArray<WordForRing> | undefined | null) {
   const list = words ?? [];
   const total = list.length;
   let learned = 0;
   let almost = 0;
   let weak = 0;
   for (const word of list) {
-    const level = Math.round(word.confidence);
-    if (level >= LEARNED_CONFIDENCE) learned += 1;
-    else if (level >= 3) almost += 1;
+    const status = resolveLearningStatusFromWord(word);
+    if (status === "confident") learned += 1;
+    else if (status === "reviewing") almost += 1;
     else weak += 1;
   }
   const percent = total === 0 ? 0 : Math.round((learned / total) * 100);
@@ -40,6 +53,7 @@ type RingProps = {
   /** Usado só no modo legado (percent sem parts). */
   color?: string;
   trackColor?: string;
+  dividerColor?: string;
   labelColor?: string;
   showLabel?: boolean;
 };
@@ -47,10 +61,11 @@ type RingProps = {
 export function LearningProgressRing({
   percent,
   parts,
-  size = 52,
-  stroke = 3.5,
-  color = "#4B7BFF",
+  size = 44,
+  stroke = 4.5,
+  color = RING_YELLOW,
   trackColor = "rgba(255,255,255,0.16)",
+  dividerColor,
   labelColor = "#FFFFFF",
   showLabel = true,
 }: RingProps) {
@@ -65,6 +80,7 @@ export function LearningProgressRing({
   const circumference = 2 * Math.PI * radius;
   const cx = size / 2;
   const cy = size / 2;
+  const cutColor = dividerColor ?? theme.shell.background;
 
   const rawSegments =
     parts && totalParts > 0
@@ -78,14 +94,19 @@ export function LearningProgressRing({
         : [];
 
   const segmentTotal = parts && totalParts > 0 ? totalParts : 100;
-  const segments = rawSegments.reduce<
-    Array<{ key: string; color: string; length: number; offset: number }>
-  >((acc, segment) => {
-    const length = (segment.count / segmentTotal) * circumference;
-    const offset = acc.reduce((sum, item) => sum + item.length, 0);
-    acc.push({ key: segment.key, color: segment.color, length, offset });
-    return acc;
-  }, []);
+  const gap = rawSegments.length > 1 ? Math.min(1.6, circumference * 0.012) : 0;
+
+  const segments: Array<{ key: string; color: string; length: number; offset: number }> = [];
+  const dividers: number[] = [];
+  let cursor = 0;
+  for (const segment of rawSegments) {
+    const share = (segment.count / segmentTotal) * circumference;
+    const length = Math.max(0, share - gap);
+    const offset = cursor + gap / 2;
+    segments.push({ key: segment.key, color: segment.color, length, offset });
+    if (gap > 0) dividers.push(cursor);
+    cursor += share;
+  }
 
   return (
     <View style={{ width: size, height: size, alignItems: "center", justifyContent: "center" }}>
@@ -113,13 +134,28 @@ export function LearningProgressRing({
             transform={`rotate(-90 ${cx} ${cy})`}
           />
         ))}
+        {dividers.map((offset, index) => (
+          <Circle
+            key={`div-${index}`}
+            cx={cx}
+            cy={cy}
+            r={radius}
+            stroke={cutColor}
+            strokeWidth={stroke}
+            fill="none"
+            strokeDasharray={`${gap} ${Math.max(0, circumference - gap)}`}
+            strokeDashoffset={-(offset - gap / 2)}
+            strokeLinecap="butt"
+            transform={`rotate(-90 ${cx} ${cy})`}
+          />
+        ))}
       </Svg>
       {showLabel ? (
         <Text
           style={{
-            color: done ? RING_GREEN : labelColor,
+            color: labelColor,
             fontFamily: theme.fonts.bold,
-            fontSize: size < 40 ? 9 : 11,
+            fontSize: size < 36 ? 9 : 10,
           }}
         >
           {labelPercent}%
@@ -139,94 +175,64 @@ export function LearningProgressExplainModal({
   const theme = useTheme();
 
   return (
-    <Modal animationType="fade" transparent visible={visible} onRequestClose={onClose}>
+    <AppBottomSheet visible={visible} onClose={onClose} title="Progresso do vault">
+      <Text
+        style={{
+          color: "rgba(255,255,255,0.78)",
+          fontFamily: theme.fonts.regular,
+          fontSize: 15,
+          lineHeight: 22,
+        }}
+      >
+        O círculo mostra o status das palavras:{" "}
+        <Text style={{ fontFamily: theme.fonts.bold, color: RING_GREEN }}>verde</Text> = CONFIDENT
+        (aprendidas),{" "}
+        <Text style={{ fontFamily: theme.fonts.bold, color: RING_YELLOW }}>azul</Text> = REVIEWING
+        (quase),{" "}
+        <Text style={{ fontFamily: theme.fonts.bold, color: RING_RED }}>magenta</Text> = LEARNING /
+        RELEARNING / NEW. Em 100% o anel fica todo verde.
+      </Text>
+
+      <View
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 10,
+          marginTop: 22,
+          marginBottom: 8,
+          backgroundColor: SHEET_CARD,
+          borderRadius: 20,
+          paddingVertical: 18,
+        }}
+      >
+        <LearningProgressRing parts={{ learned: 1, almost: 1, weak: 2 }} size={48} />
+        <Text style={{ color: "#FFFFFF", fontSize: 18 }}>→</Text>
+        <LearningProgressRing parts={{ learned: 3, almost: 1, weak: 0 }} size={48} />
+        <Text style={{ color: "#FFFFFF", fontSize: 18 }}>→</Text>
+        <LearningProgressRing parts={{ learned: 4, almost: 0, weak: 0 }} size={48} />
+      </View>
+
       <Pressable
         onPress={onClose}
         style={{
-          flex: 1,
-          backgroundColor: "rgba(0,0,0,0.55)",
+          marginTop: 18,
+          height: 48,
+          borderRadius: 14,
+          backgroundColor: "#E8E8E8",
+          alignItems: "center",
           justifyContent: "center",
-          paddingHorizontal: 28,
         }}
       >
-        <Pressable
-          onPress={(event) => event.stopPropagation()}
-          style={{
-            borderRadius: 22,
-            borderWidth: 1.5,
-            borderColor: "#24c875",
-            backgroundColor: "#1C1C1E",
-            paddingHorizontal: 20,
-            paddingTop: 22,
-            paddingBottom: 18,
-          }}
-        >
-          <Text
-            style={{
-              color: "#FFFFFF",
-              fontFamily: theme.fonts.bold,
-              fontSize: 20,
-              marginBottom: 10,
-            }}
-          >
-            Progresso do vault 🌱
-          </Text>
-          <Text
-            style={{
-              color: "rgba(255,255,255,0.78)",
-              fontFamily: theme.fonts.regular,
-              fontSize: 15,
-              lineHeight: 22,
-            }}
-          >
-            O círculo mostra o status das palavras:{" "}
-            <Text style={{ fontFamily: theme.fonts.bold, color: RING_GREEN }}>verde</Text> = CONFIDENT
-            (aprendidas),{" "}
-            <Text style={{ fontFamily: theme.fonts.bold, color: RING_YELLOW }}>amarelo</Text> = REVIEWING
-            (quase),{" "}
-            <Text style={{ fontFamily: theme.fonts.bold, color: RING_RED }}>vermelho</Text> = LEARNING /
-            RELEARNING. Em 100% o anel fica todo verde.
-          </Text>
-
-          <View
-            style={{
-              flexDirection: "row",
-              alignItems: "center",
-              justifyContent: "center",
-              gap: 10,
-              marginTop: 22,
-              marginBottom: 8,
-            }}
-          >
-            <LearningProgressRing parts={{ learned: 1, almost: 1, weak: 2 }} size={56} />
-            <Text style={{ color: "#FFFFFF", fontSize: 18 }}>→</Text>
-            <LearningProgressRing parts={{ learned: 3, almost: 1, weak: 0 }} size={56} />
-            <Text style={{ color: "#FFFFFF", fontSize: 18 }}>→</Text>
-            <LearningProgressRing parts={{ learned: 4, almost: 0, weak: 0 }} size={56} />
-          </View>
-
-          <Pressable
-            onPress={onClose}
-            style={{
-              marginTop: 18,
-              height: 48,
-              borderRadius: 14,
-              backgroundColor: "#E8E8E8",
-              alignItems: "center",
-              justifyContent: "center",
-            }}
-          >
-            <Text style={{ color: "#111", fontFamily: theme.fonts.bold, fontSize: 16 }}>Entendi</Text>
-          </Pressable>
-        </Pressable>
+        <Text style={{ color: "#111", fontFamily: theme.fonts.bold, fontSize: 16 }}>Entendi</Text>
       </Pressable>
-    </Modal>
+    </AppBottomSheet>
   );
 }
 
 export function LearningProgressLink({
   words,
-  accent = "#4B7BFF",
+  accent = RING_GREEN,
 }: {
   words: Word[];
   accent?: string;
@@ -244,8 +250,8 @@ export function LearningProgressLink({
       >
         <LearningProgressRing
           parts={{ learned: stats.learned, almost: stats.almost, weak: stats.weak }}
-          size={22}
-          stroke={2.5}
+          size={18}
+          stroke={3.5}
           color={accent}
           showLabel={false}
         />

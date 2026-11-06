@@ -21,6 +21,12 @@ export type DayPracticeState = {
   words: DayPracticeWord[];
 };
 
+export type PracticeUserId = number | null | undefined;
+
+function scopedKey(base: string, userId: PracticeUserId) {
+  return userId != null ? `${base}.u${userId}` : base;
+}
+
 function calendarDayKey(value = new Date()) {
   return new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Sao_Paulo",
@@ -62,6 +68,34 @@ function storageSet(key: string, value: string) {
   return AsyncStorage.setItem(key, value);
 }
 
+function storageRemove(key: string) {
+  if (Platform.OS === "web" && typeof localStorage !== "undefined") {
+    localStorage.removeItem(key);
+    return Promise.resolve();
+  }
+  return AsyncStorage.removeItem(key);
+}
+
+/** Migra chave legada (global) → por usuário. */
+async function adoptLegacy(base: string, userId: PracticeUserId) {
+  if (userId == null) return null;
+  const scoped = scopedKey(base, userId);
+  const existing = await storageGet(scoped);
+  const legacy = await storageGet(base);
+  if (legacy == null) return existing;
+
+  const shouldAdopt =
+    existing == null ||
+    (base === XP_KEY &&
+      (!(Number(existing) > 0) && Number(legacy) > 0));
+
+  if (!shouldAdopt) return existing;
+
+  await storageSet(scoped, legacy);
+  await storageRemove(base);
+  return legacy;
+}
+
 /** XP needed to go from `level` → `level + 1`. */
 export function xpToAdvanceFrom(level: number) {
   const n = Math.max(1, Math.floor(level));
@@ -100,9 +134,9 @@ export function practiceXpFromTotal(totalXp: number): PracticeXpState {
   };
 }
 
-export async function readPracticeXp(): Promise<PracticeXpState> {
+export async function readPracticeXp(userId?: PracticeUserId): Promise<PracticeXpState> {
   try {
-    const raw = await storageGet(XP_KEY);
+    const raw = (await adoptLegacy(XP_KEY, userId)) ?? (await storageGet(scopedKey(XP_KEY, userId)));
     const total = raw ? Number(raw) : 0;
     return practiceXpFromTotal(Number.isFinite(total) ? total : 0);
   } catch {
@@ -110,23 +144,24 @@ export async function readPracticeXp(): Promise<PracticeXpState> {
   }
 }
 
-export async function addPracticeXp(amount: number): Promise<PracticeXpState> {
+export async function addPracticeXp(amount: number, userId?: PracticeUserId): Promise<PracticeXpState> {
   const gain = Math.max(0, Math.floor(amount));
-  if (gain <= 0) return readPracticeXp();
-  const current = await readPracticeXp();
+  if (gain <= 0) return readPracticeXp(userId);
+  const current = await readPracticeXp(userId);
   const next = practiceXpFromTotal(current.totalXp + gain);
-  await storageSet(XP_KEY, String(next.totalXp));
+  await storageSet(scopedKey(XP_KEY, userId), String(next.totalXp));
   if (gain > 0) {
-    const day = await readDayPractice();
-    await storageSet(DAY_KEY, JSON.stringify({ ...day, xp: day.xp + gain }));
+    const day = await readDayPractice(userId);
+    await storageSet(scopedKey(DAY_KEY, userId), JSON.stringify({ ...day, xp: day.xp + gain }));
   }
   return next;
 }
 
-export async function readDayPractice(): Promise<DayPracticeState> {
+export async function readDayPractice(userId?: PracticeUserId): Promise<DayPracticeState> {
   try {
     const today = calendarDayKey();
-    const raw = await storageGet(DAY_KEY);
+    const raw =
+      (await adoptLegacy(DAY_KEY, userId)) ?? (await storageGet(scopedKey(DAY_KEY, userId)));
     if (!raw) return emptyDayPractice(today);
     const parsed = JSON.parse(raw) as Partial<DayPracticeState>;
     if (!parsed || parsed.day !== today || !Array.isArray(parsed.words)) {
@@ -144,21 +179,24 @@ export async function readDayPractice(): Promise<DayPracticeState> {
   }
 }
 
-export async function recordDayReview(word: DayPracticeWord): Promise<DayPracticeState> {
-  const current = await readDayPractice();
+export async function recordDayReview(
+  word: DayPracticeWord,
+  userId?: PracticeUserId
+): Promise<DayPracticeState> {
+  const current = await readDayPractice(userId);
   if (current.words.some((item) => item.id === word.id)) return current;
   const next: DayPracticeState = {
     ...current,
     words: [{ id: word.id, name: word.name.trim() || `#${word.id}` }, ...current.words].slice(0, 80),
   };
-  await storageSet(DAY_KEY, JSON.stringify(next));
+  await storageSet(scopedKey(DAY_KEY, userId), JSON.stringify(next));
   return next;
 }
 
 /** `null` = all vaults ("Tudo") */
-export async function readReviewVaultId(): Promise<number | null> {
+export async function readReviewVaultId(userId?: PracticeUserId): Promise<number | null> {
   try {
-    const raw = await storageGet(VAULT_KEY);
+    const raw = await storageGet(scopedKey(VAULT_KEY, userId));
     if (!raw || raw === "all") return null;
     const id = Number(raw);
     return Number.isFinite(id) ? id : null;
@@ -167,6 +205,6 @@ export async function readReviewVaultId(): Promise<number | null> {
   }
 }
 
-export async function writeReviewVaultId(vaultId: number | null) {
-  await storageSet(VAULT_KEY, vaultId == null ? "all" : String(vaultId));
+export async function writeReviewVaultId(vaultId: number | null, userId?: PracticeUserId) {
+  await storageSet(scopedKey(VAULT_KEY, userId), vaultId == null ? "all" : String(vaultId));
 }

@@ -2,7 +2,6 @@ import { useCallback, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
-  Modal,
   Platform,
   Pressable,
   Switch,
@@ -12,6 +11,7 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { type Href, router, useFocusEffect } from "expo-router";
+import { AppBottomSheet } from "../../../src/bottom-sheet";
 import {
   LearningProgressExplainModal,
   LearningProgressRing,
@@ -21,7 +21,7 @@ import { DeckThumb, vaultAccent, vaultIcon } from "../../../src/features/vaults/
 import { useSession } from "../../../src/session";
 import { useTheme } from "../../../src/theme";
 import { countLabel, type Vault } from "../../../src/types";
-import { ErrorText, Field, Heading, Loading, PrimaryButton, Screen, useTabBarInset } from "../../../src/ui";
+import { ErrorText, Field, Loading, PrimaryButton, Screen, useTabBarInset } from "../../../src/ui";
 
 type Filter = "all" | "progress" | "learned" | "empty";
 
@@ -330,7 +330,7 @@ export default function VaultListScreen() {
                 >
                   <LearningProgressRing
                     parts={{ learned: stats.learned, almost: stats.almost, weak: stats.weak }}
-                    size={52}
+                    size={44}
                     color={accent}
                   />
                 </Pressable>
@@ -362,18 +362,11 @@ export default function VaultListScreen() {
 
       <LearningProgressExplainModal visible={explainOpen} onClose={() => setExplainOpen(false)} />
 
-      <Modal animationType="fade" transparent visible={editor != null} onRequestClose={() => setEditor(null)}>
-        <View style={{ flex: 1, justifyContent: "center", padding: 24, backgroundColor: "rgba(0,0,0,0.55)" }}>
-          <View
-            style={{
-              backgroundColor: "#1C1C1E",
-              borderRadius: 18,
-              padding: 20,
-              borderWidth: 1,
-              borderColor: "rgba(255,255,255,0.12)",
-            }}
-          >
-            <Heading>{editor?.id == null ? "Novo vault" : "Editar vault"}</Heading>
+      <AppBottomSheet
+        visible={editor != null}
+        onClose={() => setEditor(null)}
+        title={editor?.id == null ? "Novo vault" : "Editar vault"}
+      >
             <Field
               autoFocus
               value={editor?.name ?? ""}
@@ -428,9 +421,7 @@ export default function VaultListScreen() {
                 Cancelar
               </Text>
             </Pressable>
-          </View>
-        </View>
-      </Modal>
+      </AppBottomSheet>
     </Screen>
   );
 }

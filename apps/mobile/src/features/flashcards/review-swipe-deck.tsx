@@ -24,6 +24,7 @@ import { PracticeStatsSheet } from "../study/practice-stats-sheet";
 import {
   addPracticeXp,
   practiceXpFromTotal,
+  readDayPractice,
   readPracticeXp,
   readReviewVaultId,
   recordDayReview,
@@ -99,7 +100,8 @@ function wordNameOptions(word: FlashcardWord, pool: FlashcardWord[]) {
 export function ReviewSwipeDeck() {
   const theme = useTheme();
   const tabInset = useTabBarInset();
-  const { request } = useSession();
+  const { request, user } = useSession();
+  const userId = user?.id;
   useLessonCues();
 
   const [words, setWords] = useState<FlashcardWord[]>([]);
@@ -116,6 +118,7 @@ export function ReviewSwipeDeck() {
   const [vaultPickerOpen, setVaultPickerOpen] = useState(false);
   const [dayStreak, setDayStreak] = useState(0);
   const [xp, setXp] = useState<PracticeXpState>(() => practiceXpFromTotal(0));
+  const [dayXp, setDayXp] = useState(0);
   const [dueDone, setDueDone] = useState(false);
 
   const stepsRef = useRef<FlashcardStep[]>([]);
@@ -245,12 +248,13 @@ export function ReviewSwipeDeck() {
     setDueDone(false);
     appendingRef.current = false;
     try {
-      const [raw, vaultList, today, practiceXp, savedVault] = await Promise.all([
+      const [raw, vaultList, today, practiceXp, dayPractice, savedVault] = await Promise.all([
         request<RawWord[]>("/flashcards/words"),
         request<Vault[]>("/vaults").catch(() => [] as Vault[]),
         request<StudyToday>("/study/today").catch(() => null),
-        readPracticeXp(),
-        readReviewVaultId(),
+        readPracticeXp(userId),
+        readDayPractice(userId),
+        readReviewVaultId(userId),
       ]);
       const mapped = (Array.isArray(raw) ? raw : []).map(toWord);
       const options = (Array.isArray(vaultList) ? vaultList : []).map((vault) => ({
@@ -269,6 +273,7 @@ export function ReviewSwipeDeck() {
       setVaults(options);
       setVaultId(nextVault);
       setXp(practiceXp);
+      setDayXp(dayPractice.xp);
       setDayStreak(today?.currentStreak ?? 0);
       hitStreakRef.current = 0;
       levelsRef.current = new Map();
@@ -296,7 +301,7 @@ export function ReviewSwipeDeck() {
       setLoading(false);
       setBuilding(false);
     }
-  }, [buildBatch, request]);
+  }, [buildBatch, request, userId]);
 
   useFocusEffect(
     useCallback(() => {
@@ -317,10 +322,17 @@ export function ReviewSwipeDeck() {
     assumeInteractive: true,
   });
 
-  const awardXp = useCallback((gain: number) => {
-    if (gain <= 0) return;
-    void addPracticeXp(gain).then(setXp);
-  }, []);
+  const awardXp = useCallback(
+    (gain: number) => {
+      if (gain <= 0) return;
+      void addPracticeXp(gain, userId).then(async (next) => {
+        setXp(next);
+        const day = await readDayPractice(userId);
+        setDayXp(day.xp);
+      });
+    },
+    [userId]
+  );
 
   const noteChallenge = useCallback(
     (word: FlashcardWord, correct: boolean, kind: ChallengeKind, typed?: string) => {
@@ -340,10 +352,10 @@ export function ReviewSwipeDeck() {
         challenge: kind,
         streak: correct ? hitStreakRef.current : 0,
       });
-      void recordDayReview({ id: word.id, name: word.name });
+      void recordDayReview({ id: word.id, name: word.name }, userId);
       void typed;
     },
-    [awardXp, patchLocalWord]
+    [awardXp, patchLocalWord, userId]
   );
 
   const appendMore = useCallback(async () => {
@@ -411,14 +423,14 @@ export function ReviewSwipeDeck() {
     async (nextVault: number | null) => {
       setVaultId(nextVault);
       vaultIdRef.current = nextVault;
-      void writeReviewVaultId(nextVault);
+      void writeReviewVaultId(nextVault, userId);
       practicedIdsRef.current = new Set();
       const source =
         nextVault == null ? wordsRef.current : wordsRef.current.filter((word) => word.vaultId === nextVault);
       const force = selectPracticeWords(source).length === 0;
       await startQueue(force, true);
     },
-    [startQueue]
+    [startQueue, userId]
   );
 
   const advanceRecall = useCallback(
@@ -430,7 +442,7 @@ export function ReviewSwipeDeck() {
         // Rating FSRS: Again(1) / Good(3) — não o nível absoluto.
         pendingRef.current.push(makeProgressSave(current.word.id, knew ? 3 : 1));
         patchLocalWord(current.word.id, confidence, !knew);
-        void recordDayReview({ id: current.word.id, name: current.word.name });
+        void recordDayReview({ id: current.word.id, name: current.word.name }, userId);
         if (knew) {
           hitStreakRef.current += 1;
           awardXp(challengeXpForStreak(hitStreakRef.current));
@@ -443,7 +455,7 @@ export function ReviewSwipeDeck() {
       const again = !knew && !current.retry ? [{ ...current, retry: true as const }] : [];
       finishStep(again);
     },
-    [awardXp, finishStep, patchLocalWord]
+    [awardXp, finishStep, patchLocalWord, userId]
   );
 
   if (loading) {
@@ -464,6 +476,7 @@ export function ReviewSwipeDeck() {
         <ReviewTopBar
           streak={dayStreak}
           xp={xp}
+          dayXp={dayXp}
           vaultId={vaultId}
           vaults={vaultOptions}
           allWordCount={words.length}
@@ -570,6 +583,7 @@ export function ReviewSwipeDeck() {
                 <View style={StyleSheet.absoluteFill} pointerEvents="none">
                   <ReviewSwipeRecall
                     word={peek.word}
+                    pool={scopedWords}
                     front
                     interactive={false}
                     onFlip={() => undefined}
@@ -587,6 +601,7 @@ export function ReviewSwipeDeck() {
                 {step.type === "recall" ? (
                   <ReviewSwipeRecall
                     word={step.word}
+                    pool={scopedWords}
                     front={!flipped}
                     interactive
                     onFlip={() => setFlipped((value) => !value)}
@@ -639,7 +654,7 @@ export function ReviewSwipeDeck() {
             {showSwipeHints ? (
               <View style={styles.footerHints}>
                 <View style={styles.hint}>
-                  <Ionicons name="arrow-back" size={16} color="#FF4B6A" />
+                  <Ionicons name="arrow-back" size={16} color="#ff9600" />
                   <Text style={{ color: "rgba(255,255,255,0.55)", fontFamily: theme.fonts.medium, fontSize: 12 }}>
                     Não lembro
                   </Text>
@@ -648,7 +663,7 @@ export function ReviewSwipeDeck() {
                   <Text style={{ color: "rgba(255,255,255,0.55)", fontFamily: theme.fonts.medium, fontSize: 12 }}>
                     Sabia
                   </Text>
-                  <Ionicons name="arrow-forward" size={16} color={theme.colors.green} />
+                  <Ionicons name="arrow-forward" size={16} color="#24c875" />
                 </View>
               </View>
             ) : null}

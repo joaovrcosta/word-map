@@ -782,9 +782,9 @@ export default function VaultDetailScreen() {
             <Pressable
               onPress={(event) => event.stopPropagation()}
               style={{
-                backgroundColor: theme.shell.surface,
-                borderTopLeftRadius: 24,
-                borderTopRightRadius: 24,
+                backgroundColor: "#0B0B0B",
+                borderTopLeftRadius: 28,
+                borderTopRightRadius: 28,
                 maxHeight: "92%",
                 paddingBottom: Math.max(insets.bottom, 16),
               }}

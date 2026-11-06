@@ -70,7 +70,7 @@ export function FlashcardDeck({
 }) {
   const theme = useTheme();
   const motion = useMotionEnabled();
-  const { request } = useSession();
+  const { request, user } = useSession();
   const [words, setWords] = useState<FlashcardWord[]>([]);
   const [vaultName, setVaultName] = useState("");
   const [session, setSession] = useState<StudySession | null>(null);
@@ -446,7 +446,7 @@ export function FlashcardDeck({
       setLastXpGain(gain);
       setSessionXp((current) => current + gain);
       setXpToken((current) => current + 1);
-      void addPracticeXp(gain);
+      void addPracticeXp(gain, user?.id);
     } else {
       streakRef.current = 0;
       setStreak(0);
