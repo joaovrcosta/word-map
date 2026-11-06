@@ -10,6 +10,9 @@ export type FlashcardWord = {
   translations: string[];
   confidence: number;
   lastPractice?: Date | null;
+  dueAt?: Date | null;
+  fsrsState?: number | null;
+  stability?: number | null;
   missedLast?: boolean;
   vaultId: number;
   createdAt: Date;

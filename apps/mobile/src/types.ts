@@ -6,6 +6,12 @@ export type Word = {
   translations: string[];
   notes?: string | null;
   confidence: number;
+  fsrsState?: number | null;
+  stability?: number | null;
+  dueAt?: string | null;
+  lastPractice?: string | null;
+  lastReview?: string | null;
+  reps?: number;
   vaultId: number;
 };
 

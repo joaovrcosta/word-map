@@ -1,7 +1,13 @@
 export type ChallengeKind = "listen" | "match" | "cloze" | "speak";
 
 export type PendingSave =
-  | { kind: "progress"; wordId: number; confidence: number }
+  | {
+      kind: "progress";
+      wordId: number;
+      rating: number;
+      clientReviewId: string;
+      reviewedAt: string;
+    }
   | { kind: "result"; wordId: number; correct: boolean; challenge: ChallengeKind; streak: number };
 
 export type ReviewKind = "recall" | ChallengeKind;
@@ -35,6 +41,9 @@ export type RawWord = {
   translations: string[];
   confidence: number;
   lastPractice?: string | null;
+  dueAt?: string | null;
+  fsrsState?: number | null;
+  stability?: number | null;
   missedLast?: boolean;
   vaultId: number;
   createdAt: string;

@@ -117,6 +117,16 @@ model Word {
   notes            String?
   lastPractice     DateTime?
   confidence       Int           @default(1)
+  /// FSRS card state (0 New, 1 Learning, 2 Review, 3 Relearning). dueAt null = not migrated yet.
+  fsrsState        Int           @default(0)
+  stability        Float?
+  difficulty       Float?
+  dueAt            DateTime?
+  scheduledDays    Float         @default(0)
+  learningSteps    Int           @default(0)
+  reps             Int           @default(0)
+  lapses           Int           @default(0)
+  lastReview       DateTime?
   isSaved          Boolean       @default(false)
   frequency        Int           @default(0)
   createdAt        DateTime      @default(now())
@@ -129,11 +139,14 @@ model Word {
   semanticConnections SemanticConnectionWord[]
   sentenceWords    SentenceWord[]
   reviews          WordReview[]
+  fsrsLogs         WordFsrsReviewLog[]
   passageExplanations WordPassageExplanation[]
   clozes           WordCloze[]
   origins          WordOrigin[]
   pointAwards      PointAward[]
   levelMarks       WordLevelMark[]
+
+  @@index([dueAt])
 }
 
 model PointAward {
@@ -196,6 +209,26 @@ model WordReview {
   word      Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
 
   @@index([wordId])
+}
+
+/// FSRS review history. Train weights from reviewedAt + rating (not fuzzed dueAt).
+model WordFsrsReviewLog {
+  id             Int      @id @default(autoincrement())
+  wordId         Int
+  clientReviewId String?  @unique
+  rating         Int
+  reviewedAt     DateTime
+  state          Int
+  stability      Float
+  difficulty     Float
+  dueAt          DateTime
+  scheduledDays  Float?
+  learningSteps  Int?
+  source         String   @default("recall")
+  createdAt      DateTime @default(now())
+  word           Word     @relation(fields: [wordId], references: [id], onDelete: Cascade)
+
+  @@index([wordId, reviewedAt])
 }
 
 model WordHistory {

@@ -61,10 +61,8 @@ import {
   type ReadingPosition,
   type Vault,
 } from "../../../../../src/types";
+import { LearningStatusTag } from "../../../../../src/features/learning/learning-status-tag";
 import { ErrorText, Field, Heading, Loading, PrimaryButton, Screen } from "../../../../../src/ui";
-
-const LEVEL_COLORS = ["#ff4b4b", "#ff9600", "#ffc800", "#24c875"];
-const LEVEL_TEXT = ["#ffffff", "#ffffff", "#3c3c3c", "#ffffff"];
 const WINDOW_RADIUS_MAX = 1;
 const WORDS_READY_TIMEOUT_MS = 2500;
 
@@ -1231,7 +1229,6 @@ function BookWordsSheet({
               </Text>
             ) : (
               ordered.map((word) => {
-                const level = Math.min(4, Math.max(1, word.confidence || 1));
                 return (
                   <Pressable
                     key={word.id}
@@ -1245,26 +1242,7 @@ function BookWordsSheet({
                       borderBottomColor: reader.border,
                     }}
                   >
-                    <View
-                      style={{
-                        width: 24,
-                        height: 24,
-                        borderRadius: 12,
-                        alignItems: "center",
-                        justifyContent: "center",
-                        backgroundColor: LEVEL_COLORS[level - 1],
-                      }}
-                    >
-                      <Text
-                        style={{
-                          color: LEVEL_TEXT[level - 1],
-                          fontFamily: theme.fonts.bold,
-                          fontSize: 11,
-                        }}
-                      >
-                        {level}
-                      </Text>
-                    </View>
+                    <LearningStatusTag word={{ confidence: word.confidence }} />
                     <View style={{ flex: 1 }}>
                       <Text style={{ color: reader.foreground, fontFamily: theme.fonts.bold, fontSize: 17 }}>
                         {word.name}

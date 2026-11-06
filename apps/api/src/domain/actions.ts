@@ -130,6 +130,11 @@ export async function getVaults(): Promise<Vault[]> {
             translations: true,
             notes: true,
             confidence: true,
+            fsrsState: true,
+            stability: true,
+            dueAt: true,
+            lastReview: true,
+            reps: true,
             isSaved: true,
             lastPractice: true,
             frequency: true,
@@ -344,6 +349,13 @@ export async function createWord(data: CreateWordData): Promise<Word> {
       throw new Error("Vault não encontrado");
     }
 
+    const { migrateLegacyWordToFsrs } = await import("@word-map/shared/fsrs-schedule");
+    const fsrsSeed = migrateLegacyWordToFsrs({
+      wordId: 0,
+      confidence: data.confidence,
+      lastPractice: null,
+    });
+
     // Criar a palavra
     const wordData = {
       name: data.name.trim(),
@@ -351,7 +363,17 @@ export async function createWord(data: CreateWordData): Promise<Word> {
       category: data.category || null,
       translations: data.translations,
       notes: data.notes ?? null,
-      confidence: data.confidence,
+      confidence: fsrsSeed.confidence,
+      fsrsState: fsrsSeed.fsrsState,
+      stability: fsrsSeed.stability,
+      difficulty: fsrsSeed.difficulty,
+      dueAt: fsrsSeed.dueAt,
+      scheduledDays: fsrsSeed.scheduledDays,
+      learningSteps: fsrsSeed.learningSteps,
+      reps: fsrsSeed.reps,
+      lapses: fsrsSeed.lapses,
+      lastReview: fsrsSeed.lastReview,
+      lastPractice: fsrsSeed.lastPractice,
       vaultId: data.vaultId,
       status: true,
       isSaved: data.isSaved ?? true, // true por padrão se não especificado

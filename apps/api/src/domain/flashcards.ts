@@ -1,11 +1,16 @@
-
 import { Prisma } from "@prisma/client";
+import { isWordDue } from "@word-map/shared/flashcard-schedule";
 import { prisma } from "../prisma/client";
-import { isWordDue, reviewIntervalDays } from "@word-map/shared/flashcard-schedule";
 import { revalidatePath } from "../common/revalidate";
 import { getCurrentUser } from "../auth/current-user";
 import { awardFlashcardPoints } from "../lib/points";
-import { recordWordLevel } from "./word-levels";
+import {
+  applyWordFsrsProgress,
+  ensureWordMigrated,
+  FSRS_WORD_SELECT,
+  type ProgressInput,
+  type ProgressResult,
+} from "./word-fsrs";
 
 export interface FlashcardWord {
   id: number;
@@ -15,6 +20,9 @@ export interface FlashcardWord {
   translations: string[];
   confidence: number;
   lastPractice?: Date | null;
+  dueAt?: Date | null;
+  fsrsState?: number | null;
+  stability?: number | null;
   missedLast?: boolean;
   vaultId: number;
   createdAt: Date;
@@ -28,9 +36,9 @@ export interface FlashcardProgress {
   lastReviewed: Date | null;
   nextReview: Date | null;
   reviewCount: number;
-  confidence: number; // 1-4
+  confidence: number;
   streak: number;
-  easeFactor: number; // Fator de facilidade para repetição espaçada
+  easeFactor: number;
 }
 
 export interface FlashcardSession {
@@ -60,23 +68,30 @@ async function listFlashcardWords(vaultId?: number): Promise<FlashcardWord[]> {
         },
       },
       select: {
-        id: true,
         name: true,
         grammaticalClass: true,
         category: true,
         translations: true,
-        confidence: true,
-        lastPractice: true,
         vaultId: true,
         createdAt: true,
         updatedAt: true,
+        ...FSRS_WORD_SELECT,
       },
       orderBy: {
-        createdAt: "asc", // Palavras mais antigas primeiro para revisão
+        createdAt: "asc",
       },
     });
 
-    const ids = words.map((word) => word.id);
+    // Lazy-migrate any rows still missing dueAt (idempotent).
+    const migrated = await Promise.all(
+      words.map(async (word) => {
+        if (word.dueAt != null) return word;
+        const next = await ensureWordMigrated(word);
+        return { ...word, ...next };
+      })
+    );
+
+    const ids = migrated.map((word) => word.id);
     const missed = new Set<number>();
     if (ids.length > 0) {
       const latest = await prisma.$queryRaw<Array<{ wordId: number; correct: boolean }>>`
@@ -90,7 +105,22 @@ async function listFlashcardWords(vaultId?: number): Promise<FlashcardWord[]> {
       }
     }
 
-    return words.map((word) => ({ ...word, missedLast: missed.has(word.id) }));
+    return migrated.map((word) => ({
+      id: word.id,
+      name: word.name,
+      grammaticalClass: word.grammaticalClass,
+      category: word.category,
+      translations: word.translations,
+      confidence: word.confidence,
+      lastPractice: word.lastPractice,
+      dueAt: word.dueAt,
+      fsrsState: word.fsrsState,
+      stability: word.stability,
+      vaultId: word.vaultId,
+      createdAt: word.createdAt,
+      updatedAt: word.updatedAt,
+      missedLast: missed.has(word.id),
+    }));
   } catch (error) {
     console.error("Erro ao buscar palavras para flashcards:", error);
     throw new Error("Erro ao buscar palavras para flashcards");
@@ -105,10 +135,8 @@ export function getAllFlashcardWords(): Promise<FlashcardWord[]> {
   return listFlashcardWords();
 }
 
-// Buscar informações do vault para flashcards
 export async function getVaultForFlashcards(vaultId: number) {
   try {
-    // Verificar se o usuário está autenticado
     const user = await getCurrentUser();
     if (!user) {
       throw new Error("Usuário não autenticado");
@@ -117,7 +145,7 @@ export async function getVaultForFlashcards(vaultId: number) {
     const vault = await prisma.vault.findUnique({
       where: {
         id: vaultId,
-        userId: user.id, // Verificar se o vault pertence ao usuário atual
+        userId: user.id,
       },
       select: {
         id: true,
@@ -144,54 +172,30 @@ export async function getVaultForFlashcards(vaultId: number) {
   }
 }
 
-// Atualizar progresso de uma palavra (simulado - em produção seria uma tabela separada)
+/** FSRS rating path. `confidence` is legacy alias for rating when `rating` is absent. */
 export async function updateWordProgress(
   wordId: number,
-  confidence: number,
-  reviewCount: number
-): Promise<void> {
+  input: ProgressInput
+): Promise<ProgressResult> {
   try {
-    // Verificar se o usuário está autenticado
     const user = await getCurrentUser();
     if (!user) {
       throw new Error("Usuário não autenticado");
     }
 
-    // Verificar se a palavra existe e pertence ao usuário
-    const existingWord = await prisma.word.findUnique({
-      where: {
-        id: wordId,
-        vault: {
-          userId: user.id, // Verificar se a palavra pertence ao usuário atual
-        },
-      },
-    });
-
-    if (!existingWord) {
-      throw new Error("Palavra não encontrada ou não pertence ao usuário");
-    }
-
-    // Em produção, isso seria uma tabela separada de progresso
-    // Por enquanto, vamos apenas atualizar a confiança da palavra
-    await prisma.word.update({
-      where: { id: wordId },
-      data: {
-        confidence: confidence,
-        lastPractice: new Date(),
-        updatedAt: new Date(),
-      },
-    });
-    if (confidence !== existingWord.confidence) {
-      await recordWordLevel(wordId, confidence);
-    }
-
+    const result = await applyWordFsrsProgress(wordId, user.id, input);
     revalidatePath("/home/flashcards");
+    return result;
   } catch (error) {
     console.error("Erro ao atualizar progresso da palavra:", error);
-    throw new Error("Erro ao atualizar progresso da palavra");
+    throw error;
   }
 }
 
+/**
+ * Challenge outcomes: points + WordReview only.
+ * Does NOT apply FSRS or change confidence/card (avoids same-day inflation).
+ */
 export async function recordChallengeResult(
   wordId: number,
   correct: boolean,
@@ -211,23 +215,12 @@ export async function recordChallengeResult(
           userId: user.id,
         },
       },
+      select: { id: true },
     });
 
     if (!existingWord) {
       throw new Error("Palavra não encontrada ou não pertence ao usuário");
     }
-
-    const nextConfidence = correct
-      ? Math.min(4, existingWord.confidence + 1)
-      : Math.max(1, existingWord.confidence - 1);
-
-    await prisma.word.update({
-      where: { id: wordId },
-      data: {
-        confidence: nextConfidence,
-        lastPractice: new Date(),
-      },
-    });
 
     const review = await prisma.wordReview.create({
       data: {
@@ -239,9 +232,6 @@ export async function recordChallengeResult(
     if (correct) {
       await awardFlashcardPoints(user.id, wordId, review.id, streak);
     }
-    if (nextConfidence !== existingWord.confidence) {
-      await recordWordLevel(wordId, nextConfidence);
-    }
 
     revalidatePath("/home/flashcards");
   } catch (error) {
@@ -250,10 +240,7 @@ export async function recordChallengeResult(
   }
 }
 
-// Gerar sessão de flashcards
-export async function createFlashcardSession(
-  vaultId: number
-): Promise<FlashcardSession> {
+export async function createFlashcardSession(vaultId: number): Promise<FlashcardSession> {
   try {
     const vault = await getVaultForFlashcards(vaultId);
     const words = await getFlashcardWords(vaultId);
@@ -264,7 +251,7 @@ export async function createFlashcardSession(
       vaultName: vault.name,
       totalWords: vault.totalWords,
       wordsToReview: words.length,
-      newWords: words.filter((w) => w.confidence === 1).length,
+      newWords: words.filter((w) => !w.lastPractice && (w.fsrsState ?? 0) === 0).length,
       completedWords: 0,
       startTime: new Date(),
     };
@@ -276,26 +263,19 @@ export async function createFlashcardSession(
   }
 }
 
-// Calcular próximo review baseado no algoritmo de repetição espaçada
 export async function calculateNextReview(
   currentConfidence: number,
   reviewCount: number,
   easeFactor: number = 2.5
 ): Promise<Date> {
-  const now = new Date();
-  const interval = reviewIntervalDays(currentConfidence);
   void reviewCount;
   void easeFactor;
-
-  const nextReview = new Date(now);
-  nextReview.setDate(now.getDate() + interval);
-
-  return nextReview;
+  // Legacy endpoint: approximate with a short due from an empty-ish schedule.
+  const now = new Date();
+  const days = currentConfidence >= 4 ? 21 : currentConfidence >= 3 ? 7 : currentConfidence >= 2 ? 3 : 1;
+  return new Date(now.getTime() + days * 86_400_000);
 }
 
-// Filtrar palavras para revisão baseado no algoritmo de repetição espaçada
-export async function filterWordsForReview(
-  words: FlashcardWord[]
-): Promise<FlashcardWord[]> {
+export async function filterWordsForReview(words: FlashcardWord[]): Promise<FlashcardWord[]> {
   return words.filter((word) => isWordDue(word));
 }

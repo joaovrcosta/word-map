@@ -180,12 +180,12 @@ export function LearningProgressExplainModal({
             }}
           >
             O círculo mostra o status das palavras:{" "}
-            <Text style={{ fontFamily: theme.fonts.bold, color: RING_GREEN }}>verde</Text> = nível 4
+            <Text style={{ fontFamily: theme.fonts.bold, color: RING_GREEN }}>verde</Text> = CONFIDENT
             (aprendidas),{" "}
-            <Text style={{ fontFamily: theme.fonts.bold, color: RING_YELLOW }}>amarelo</Text> = nível 3
+            <Text style={{ fontFamily: theme.fonts.bold, color: RING_YELLOW }}>amarelo</Text> = REVIEWING
             (quase),{" "}
-            <Text style={{ fontFamily: theme.fonts.bold, color: RING_RED }}>vermelho</Text> = níveis 1–2.
-            Em 100% o anel fica todo verde.
+            <Text style={{ fontFamily: theme.fonts.bold, color: RING_RED }}>vermelho</Text> = LEARNING /
+            RELEARNING. Em 100% o anel fica todo verde.
           </Text>
 
           <View

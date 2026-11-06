@@ -1,14 +1,37 @@
-import { Body, Controller, Get, Param, ParseIntPipe, Post } from "@nestjs/common";
-import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional } from "class-validator";
+import { Body, Controller, Get, HttpException, Param, ParseIntPipe, Post } from "@nestjs/common";
+import { IsArray, IsBoolean, IsIn, IsInt, IsNumber, IsOptional, IsString } from "class-validator";
 import { FlashcardsService } from "./flashcards.service";
 import type { ChallengeKind, FlashcardWord } from "../domain/flashcards";
+import { applyWordLearningPreset } from "../domain/word-fsrs";
+import { getCurrentUser } from "../auth/current-user";
+
+class StatusDto {
+  @IsIn(["new", "learning", "relearning", "reviewing", "confident"])
+  status!: "new" | "learning" | "relearning" | "reviewing" | "confident";
+}
 
 class ProgressDto {
+  /** Preferred FSRS rating (1 Again … 4 Easy). */
+  @IsOptional()
   @IsInt()
-  confidence!: number;
+  rating?: number;
 
+  /** Legacy alias for rating when `rating` is absent. Ignored if `rating` is set. */
+  @IsOptional()
   @IsInt()
-  reviewCount!: number;
+  confidence?: number;
+
+  @IsOptional()
+  @IsInt()
+  reviewCount?: number;
+
+  @IsOptional()
+  @IsString()
+  reviewedAt?: string;
+
+  @IsOptional()
+  @IsString()
+  clientReviewId?: string;
 }
 
 class ResultDto {
@@ -110,7 +133,24 @@ export class FlashcardsController {
 
   @Post("words/:id/progress")
   progress(@Param("id", ParseIntPipe) id: number, @Body() body: ProgressDto) {
-    return this.flashcards.progress(id, body.confidence, body.reviewCount);
+    return this.flashcards.progress(id, {
+      rating: body.rating,
+      confidence: body.confidence,
+      reviewedAt: body.reviewedAt,
+      clientReviewId: body.clientReviewId,
+    });
+  }
+
+  @Post("words/:id/status")
+  async status(@Param("id", ParseIntPipe) id: number, @Body() body: StatusDto) {
+    const user = await getCurrentUser();
+    if (!user) throw new HttpException({ error: "Não autenticado" }, 401);
+    try {
+      return await applyWordLearningPreset(id, user.id, body.status);
+    } catch (error) {
+      const statusCode = (error as { statusCode?: number } | null)?.statusCode ?? 500;
+      throw new HttpException({ error: error instanceof Error ? error.message : "Erro" }, statusCode);
+    }
   }
 
   @Post("words/:id/result")

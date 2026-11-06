@@ -40,14 +40,39 @@ export async function writeFocus(vaultId: number, words: WordFocus[]) {
   else await SecureStore.setItemAsync(key, raw);
 }
 
+function newClientReviewId() {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  return `r_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+export function makeProgressSave(wordId: number, rating: number): PendingSave {
+  return {
+    kind: "progress",
+    wordId,
+    rating,
+    clientReviewId: newClientReviewId(),
+    reviewedAt: new Date().toISOString(),
+  };
+}
+
 export async function flushSaves(pending: PendingSave[], request: Request) {
   const batch = pending.splice(0);
+  batch.sort((a, b) => {
+    if (a.kind !== "progress" || b.kind !== "progress") return 0;
+    return a.reviewedAt.localeCompare(b.reviewedAt);
+  });
   for (const save of batch) {
     try {
       if (save.kind === "progress") {
         await request(`/flashcards/words/${save.wordId}/progress`, {
           method: "POST",
-          body: JSON.stringify({ confidence: save.confidence, reviewCount: 1 }),
+          body: JSON.stringify({
+            rating: save.rating,
+            reviewedAt: save.reviewedAt,
+            clientReviewId: save.clientReviewId,
+          }),
         });
       } else {
         await request(`/flashcards/words/${save.wordId}/result`, {

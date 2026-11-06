@@ -11,10 +11,10 @@ import { type UserStats } from "../../src/user-stats";
 import { ErrorText, Loading, Muted, Screen } from "../../src/ui";
 
 const confidenceLabels: Record<number, string> = {
-  1: "Iniciante",
-  2: "Básico",
-  3: "Intermediário",
-  4: "Avançado",
+  1: "LEARNING",
+  2: "RELEARNING",
+  3: "REVIEWING",
+  4: "CONFIDENT",
 };
 
 const barColors = ["#24c875", "#1cb0f6", "#ff9600", "#ce82ff", "#ff9600", "#ff4b4b"];

@@ -47,7 +47,7 @@ import {
 import { vaultLearningStats } from "../vaults/learning-progress";
 import { ReviewTopBar, type ReviewVaultOption } from "./review-top-bar";
 import { cues, useLessonCues } from "./cues";
-import { flushSaves } from "./saves";
+import { flushSaves, makeProgressSave } from "./saves";
 import { type ChallengeKind, type PendingSave, type RawWord } from "./types";
 import { toWord } from "./words";
 
@@ -427,7 +427,8 @@ export function ReviewSwipeDeck() {
       if (!current || current.type !== "recall") return;
       if (!current.retry) {
         const confidence = nextConfidence(current.word, knew);
-        pendingRef.current.push({ kind: "progress", wordId: current.word.id, confidence });
+        // Rating FSRS: Again(1) / Good(3) — não o nível absoluto.
+        pendingRef.current.push(makeProgressSave(current.word.id, knew ? 3 : 1));
         patchLocalWord(current.word.id, confidence, !knew);
         void recordDayReview({ id: current.word.id, name: current.word.name });
         if (knew) {

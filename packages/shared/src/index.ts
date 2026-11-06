@@ -2,6 +2,8 @@ export * from "./word-matching";
 export * from "./word-origin";
 export * from "./cloze-text";
 export * from "./flashcard-schedule";
+export * from "./fsrs-schedule";
+export * from "./learning-status";
 export * from "./flashcard-queue";
 export * from "./flashcard-points";
 export * from "./reading-pages";

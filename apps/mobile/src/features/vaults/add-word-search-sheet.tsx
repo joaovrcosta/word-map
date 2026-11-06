@@ -28,8 +28,12 @@ import { ErrorText } from "../../ui";
 
 type SearchScope = "words" | "decks";
 
-const RECENT_KEY = "word-map.vault-word-search-recent";
-const MAX_RECENT = 12;
+const RECENT_KEY_LEGACY = "word-map.vault-word-search-recent";
+const MAX_RECENT = 20;
+
+function recentKeyForUser(userId: number | null | undefined) {
+  return userId != null ? `${RECENT_KEY_LEGACY}.u${userId}` : RECENT_KEY_LEGACY;
+}
 const DEBOUNCE_MS = 300;
 const GRADIENT = ["#FF2D95", "#4B7BFF"] as const;
 
@@ -41,6 +45,16 @@ const SEARCH_IDEAS = [
   "ephemeral",
   "ubuntu",
   "saudade",
+];
+
+const DECK_SEARCH_IDEAS = [
+  "business",
+  "travel",
+  "phrasal verbs",
+  "TOEFL",
+  "daily English",
+  "medical",
+  "idioms",
 ];
 
 type VaultHit = {
@@ -123,7 +137,8 @@ export function AddWordSearchSheet({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { height: windowHeight } = useWindowDimensions();
-  const { request } = useSession();
+  const { request, user } = useSession();
+  const recentKey = recentKeyForUser(user?.id);
 
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
@@ -289,17 +304,29 @@ export function AddWordSearchSheet({
 
   const loadRecent = useCallback(async () => {
     try {
-      const raw = await AsyncStorage.getItem(RECENT_KEY);
+      let raw = await AsyncStorage.getItem(recentKey);
+      // Migra histórico legado (global no device) para a chave do usuário uma vez.
+      if (!raw && user?.id != null) {
+        const legacy = await AsyncStorage.getItem(RECENT_KEY_LEGACY);
+        if (legacy) {
+          raw = legacy;
+          await AsyncStorage.setItem(recentKey, legacy);
+          await AsyncStorage.removeItem(RECENT_KEY_LEGACY);
+        }
+      }
       if (!raw) {
         setRecent([]);
         return;
       }
       const parsed = JSON.parse(raw) as unknown;
-      setRecent(Array.isArray(parsed) ? parsed.filter((item) => typeof item === "string") : []);
+      const list = Array.isArray(parsed)
+        ? parsed.filter((item): item is string => typeof item === "string").slice(0, MAX_RECENT)
+        : [];
+      setRecent(list);
     } catch {
       setRecent([]);
     }
-  }, []);
+  }, [recentKey, user?.id]);
 
   const loadVaults = useCallback(async () => {
     try {
@@ -344,13 +371,13 @@ export function AddWordSearchSheet({
       MAX_RECENT
     );
     setRecent(next);
-    await AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next));
+    await AsyncStorage.setItem(recentKey, JSON.stringify(next));
   };
 
   const removeRecent = async (value: string) => {
     const next = recent.filter((item) => item !== value);
     setRecent(next);
-    await AsyncStorage.setItem(RECENT_KEY, JSON.stringify(next));
+    await AsyncStorage.setItem(recentKey, JSON.stringify(next));
   };
 
   useEffect(() => {
@@ -845,7 +872,11 @@ export function AddWordSearchSheet({
                   autoFocus
                   value={query}
                   onChangeText={setQuery}
-                  placeholder="Buscar ou descrever qualquer palavra"
+                  placeholder={
+                    searchScope === "decks"
+                      ? "Buscar decks pelo nome"
+                      : "Buscar ou descrever qualquer palavra"
+                  }
                   placeholderTextColor="rgba(255,255,255,0.4)"
                   autoCapitalize="none"
                   autoCorrect={false}
@@ -903,19 +934,25 @@ export function AddWordSearchSheet({
               showsVerticalScrollIndicator={false}
               contentContainerStyle={{ paddingBottom: 12 }}
             >
+              <Text style={[styles.sectionTitle, { fontFamily: theme.fonts.bold }]}>
+                {searchScope === "decks" ? "Ideias de decks" : "Ideias de busca"}
+              </Text>
               {searchScope === "decks" ? (
-                <Text style={[styles.emptyRecent, { fontFamily: theme.fonts.regular, marginTop: 22 }]}>
+                <Text
+                  style={[
+                    styles.emptyRecent,
+                    { fontFamily: theme.fonts.regular, marginTop: 0, marginBottom: 12, paddingTop: 0 },
+                  ]}
+                >
                   Busque decks públicos pelo nome — os seus e os de outras pessoas.
                 </Text>
-              ) : (
-                <>
-              <Text style={[styles.sectionTitle, { fontFamily: theme.fonts.bold }]}>Ideias de busca</Text>
+              ) : null}
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={{ paddingHorizontal: 18, gap: 10 }}
               >
-                {SEARCH_IDEAS.map((idea) => (
+                {(searchScope === "decks" ? DECK_SEARCH_IDEAS : SEARCH_IDEAS).map((idea) => (
                   <Pressable key={idea} onPress={() => setQuery(idea)}>
                     <LinearGradient
                       colors={[...GRADIENT]}
@@ -924,7 +961,11 @@ export function AddWordSearchSheet({
                       style={styles.chipBorder}
                     >
                       <View style={[styles.chipInner, { backgroundColor: theme.shell.background }]}>
-                        <Ionicons name="search" size={14} color="#FF2D95" />
+                        <Ionicons
+                          name={searchScope === "decks" ? "albums-outline" : "search"}
+                          size={14}
+                          color="#FF2D95"
+                        />
                         <Text style={[styles.chipLabel, { fontFamily: theme.fonts.medium }]} numberOfLines={1}>
                           {idea}
                         </Text>
@@ -939,7 +980,9 @@ export function AddWordSearchSheet({
               </Text>
               {recent.length === 0 ? (
                 <Text style={[styles.emptyRecent, { fontFamily: theme.fonts.regular }]}>
-                  Digite em inglês ou português para pesquisar no dicionário e nos seus vaults.
+                  {searchScope === "decks"
+                    ? "Digite o nome de um deck para encontrar vaults públicos."
+                    : "Digite em inglês ou português para pesquisar no dicionário e nos seus vaults."}
                 </Text>
               ) : (
                 recent.map((item, index) => (
@@ -963,8 +1006,6 @@ export function AddWordSearchSheet({
                     </Pressable>
                   </View>
                 ))
-              )}
-                </>
               )}
             </ScrollView>
           ) : searching ? (

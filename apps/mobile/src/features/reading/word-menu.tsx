@@ -45,16 +45,28 @@ import {
   type TutorFollowUpResponse,
   type TutorFollowUpTurn,
 } from "@word-map/shared";
+import type { LearningStatusId } from "@word-map/shared/fsrs-schedule";
 import { userFacingError } from "../../api";
 import { useSession } from "../../session";
 import { speakWord } from "../../speech";
 import { shell, useTheme } from "../../theme";
+import {
+  LearningStatusTag,
+  statusIdFromWord,
+} from "../learning/learning-status-tag";
 import { useReaderTheme } from "./reader-theme";
 import { type Vault, type Word } from "../../types";
 import { type WordAnchor } from "./page-text";
 
 const LEVEL_COLORS = ["#ff4b4b", "#ff9600", "#ffc800", "#24c875"];
-const LEVEL_TEXT = [shell.foreground, shell.foreground, shell.onPastel, shell.foreground];
+const CONFIDENCE_FROM_STATUS: Record<LearningStatusId, number> = {
+  new: 1,
+  learning: 1,
+  relearning: 2,
+  reviewing: 3,
+  confident: 4,
+};
+const STATUS_OPTIONS: LearningStatusId[] = ["learning", "relearning", "reviewing", "confident"];
 const GLOW_EDGE = "rgba(201, 242, 196, 0.42)";
 const GLOW_MID = "rgba(155, 232, 184, 0.18)";
 const GLOW_BAND = 32;
@@ -901,8 +913,9 @@ export function ReadingWordMenu({
     }
   };
 
-  const handleConfidence = async (level: number) => {
+  const handleStatus = async (status: LearningStatusId) => {
     if (saving) return;
+    const level = CONFIDENCE_FROM_STATUS[status];
     markDirty();
     if (localSaved) {
       setSaving(true);
@@ -912,6 +925,10 @@ export function ReadingWordMenu({
           method: "PATCH",
           body: JSON.stringify({ confidence: level }),
         });
+        await request(`/flashcards/words/${localSaved.id}/status`, {
+          method: "POST",
+          body: JSON.stringify({ status }),
+        }).catch(() => undefined);
         setLocalSaved(toSaved(updated, localSaved.vaultName));
         materializedRef.current = true;
         try {
@@ -1286,31 +1303,17 @@ export function ReadingWordMenu({
       ) : (
         <View style={{ width: sheet ? 42 : 0 }} />
       )}
-      <View style={styles.levels}>
-        {[1, 2, 3, 4].map((level) => {
-          const active = confidence === level;
+      <View style={[styles.levels, { flexWrap: "wrap", gap: 6 }]}>
+        {STATUS_OPTIONS.map((status) => {
+          const active = statusIdFromWord({ confidence }) === status;
           return (
             <Pressable
-              key={level}
+              key={status}
               disabled={saving || (!localSaved && !resolvedVaultId)}
-              onPress={() => void handleConfidence(level)}
-              style={[
-                styles.levelButton,
-                sheet && styles.levelButtonSheet,
-                {
-                  backgroundColor: active ? LEVEL_COLORS[level - 1] : shell.chip,
-                },
-              ]}
+              onPress={() => void handleStatus(status)}
+              style={{ opacity: active ? 1 : 0.55 }}
             >
-              <Text
-                style={{
-                  color: active ? LEVEL_TEXT[level - 1] : shell.muted,
-                  fontFamily: theme.fonts.bold,
-                  fontSize: 13,
-                }}
-              >
-                {level}
-              </Text>
+              <LearningStatusTag status={status} size={sheet ? "md" : "compact"} />
             </Pressable>
           );
         })}
@@ -1435,24 +1438,7 @@ export function ReadingWordMenu({
                       </Pressable>
                     );
                   })}
-                  {confidence > 0 ? (
-                    <View
-                      style={[
-                        styles.level,
-                        { backgroundColor: LEVEL_COLORS[Math.min(confidence, 4) - 1] },
-                      ]}
-                    >
-                      <Text
-                        style={{
-                          color: LEVEL_TEXT[Math.min(confidence, 4) - 1],
-                          fontFamily: theme.fonts.bold,
-                          fontSize: 11,
-                        }}
-                      >
-                        {confidence}
-                      </Text>
-                    </View>
-                  ) : null}
+                  {confidence > 0 ? <LearningStatusTag word={{ confidence }} /> : null}
                 </View>
 
                 {localSaved && details ? (

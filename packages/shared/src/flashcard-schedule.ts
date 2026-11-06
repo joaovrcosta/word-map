@@ -45,7 +45,12 @@ function asDate(value: Date | string | number): Date {
   return value instanceof Date ? value : new Date(value);
 }
 
-export function isWordDue(
+function nowMs(now: Date | number) {
+  return typeof now === "number" ? now : now.getTime();
+}
+
+/** Legacy interval table — only used when dueAt is null (pre-migration). */
+export function isWordDueLegacy(
   word: { confidence: number; lastPractice?: Date | string | null },
   now: Date | number = Date.now()
 ) {
@@ -54,19 +59,54 @@ export function isWordDue(
   return days >= reviewIntervalDays(word.confidence);
 }
 
-export function latenessDays(
-  word: { confidence: number; lastPractice?: Date | string | null },
+export function isWordDue(
+  word: {
+    confidence: number;
+    lastPractice?: Date | string | null;
+    dueAt?: Date | string | null;
+  },
   now: Date | number = Date.now()
 ) {
+  if (word.dueAt != null) {
+    const due = word.dueAt instanceof Date ? word.dueAt : new Date(word.dueAt);
+    return due.getTime() <= nowMs(now);
+  }
+  return isWordDueLegacy(word, now);
+}
+
+export function latenessDays(
+  word: {
+    confidence: number;
+    lastPractice?: Date | string | null;
+    dueAt?: Date | string | null;
+  },
+  now: Date | number = Date.now()
+) {
+  if (word.dueAt != null) {
+    const due = word.dueAt instanceof Date ? word.dueAt : new Date(word.dueAt);
+    const lateMs = nowMs(now) - due.getTime();
+    if (lateMs <= 0) return 0;
+    return Math.min(30, Math.floor(lateMs / 86_400_000));
+  }
   if (!word.lastPractice) return 30;
   const days = calendarDaysBetween(new Date(word.lastPractice), asDate(now));
   return Math.min(30, Math.max(0, days - reviewIntervalDays(word.confidence)));
 }
 
 export function daysUntilDue(
-  word: { confidence: number; lastPractice?: Date | string | null },
+  word: {
+    confidence: number;
+    lastPractice?: Date | string | null;
+    dueAt?: Date | string | null;
+  },
   now: Date | number = Date.now()
 ) {
+  if (word.dueAt != null) {
+    const due = word.dueAt instanceof Date ? word.dueAt : new Date(word.dueAt);
+    const leftMs = due.getTime() - nowMs(now);
+    if (leftMs <= 0) return 0;
+    return Math.ceil(leftMs / 86_400_000);
+  }
   if (!word.lastPractice) return 0;
   const days = calendarDaysBetween(new Date(word.lastPractice), asDate(now));
   return Math.max(0, reviewIntervalDays(word.confidence) - days);

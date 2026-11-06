@@ -24,6 +24,16 @@ jest.mock("../../prisma/client", () => ({
     wordReview: {
       create: jest.fn(),
     },
+    wordFsrsReviewLog: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+    },
+    $transaction: jest.fn(async (fn: (tx: unknown) => unknown) =>
+      fn({
+        word: { update: jest.fn() },
+        wordFsrsReviewLog: { create: jest.fn() },
+      })
+    ),
     $executeRaw: jest.fn().mockResolvedValue(1),
     $queryRaw: jest.fn().mockResolvedValue([]),
     vault: {
@@ -184,64 +194,19 @@ describe("Flashcards Actions", () => {
   });
 
   describe("updateWordProgress", () => {
-    it("deve atualizar progresso da palavra com sucesso", async () => {
-      const mockWord = {
-        id: 1,
-        name: "hello",
-        grammaticalClass: "interjection",
-        category: "greeting",
-        translations: ["olá", "oi"],
-        confidence: 2,
-        isSaved: true,
-        vaultId: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      };
+    it("deve falhar se usuário não estiver autenticado", async () => {
+      mockGetCurrentUser.mockResolvedValue(null);
 
-      const mockUpdatedWord = {
-        ...mockWord,
-        confidence: 4,
-        updatedAt: new Date(),
-      };
-
-      mockPrisma.word.findUnique.mockResolvedValue(mockWord);
-      mockPrisma.word.update.mockResolvedValue(mockUpdatedWord);
-
-      await updateWordProgress(1, 4, 5);
-
-      expect(mockGetCurrentUser).toHaveBeenCalled();
-      expect(mockPrisma.word.findUnique).toHaveBeenCalledWith({
-        where: {
-          id: 1,
-          vault: {
-            userId: 1,
-          },
-        },
-      });
-      expect(mockPrisma.word.update).toHaveBeenCalledWith({
-        where: { id: 1 },
-        data: {
-          confidence: 4,
-          lastPractice: expect.any(Date),
-          updatedAt: expect.any(Date),
-        },
-      });
-      expect(mockRevalidatePath).toHaveBeenCalledWith("/home/flashcards");
+      await expect(updateWordProgress(1, { rating: 3 })).rejects.toThrow(
+        "Usuário não autenticado"
+      );
     });
 
     it("deve falhar se palavra não for encontrada", async () => {
       mockPrisma.word.findUnique.mockResolvedValue(null);
 
-      await expect(updateWordProgress(999, 4, 5)).rejects.toThrow(
-        "Erro ao atualizar progresso da palavra"
-      );
-    });
-
-    it("deve falhar se usuário não estiver autenticado", async () => {
-      mockGetCurrentUser.mockResolvedValue(null);
-
-      await expect(updateWordProgress(1, 4, 5)).rejects.toThrow(
-        "Erro ao atualizar progresso da palavra"
+      await expect(updateWordProgress(999, { rating: 3 })).rejects.toThrow(
+        "Palavra não encontrada ou não pertence ao usuário"
       );
     });
   });
@@ -385,23 +350,16 @@ describe("Flashcards Actions", () => {
   });
 
   describe("recordChallengeResult", () => {
-    it("deve subir a confiança quando o desafio está certo", async () => {
+    it("registra o challenge sem alterar o card FSRS", async () => {
       mockPrisma.word.findUnique.mockResolvedValue({
         id: 1,
         confidence: 2,
       });
-      mockPrisma.word.update.mockResolvedValue({});
       mockPrisma.wordReview.create.mockResolvedValue({ id: 11 });
 
       await recordChallengeResult(1, true, "listen");
 
-      expect(mockPrisma.word.update).toHaveBeenCalledWith({
-        where: { id: 1 },
-        data: {
-          confidence: 3,
-          lastPractice: expect.any(Date),
-        },
-      });
+      expect(mockPrisma.word.update).not.toHaveBeenCalled();
       expect(mockPrisma.wordReview.create).toHaveBeenCalledWith({
         data: {
           wordId: 1,
@@ -409,41 +367,18 @@ describe("Flashcards Actions", () => {
           challenge: "listen",
         },
       });
-      expect(mockPrisma.$executeRaw).toHaveBeenCalled();
     });
 
-    it("mantém a confiança entre 1 e 4 no completar", async () => {
-      mockPrisma.word.findUnique.mockResolvedValue({
-        id: 1,
-        confidence: 4,
-      });
-      mockPrisma.word.update.mockResolvedValue({});
-      mockPrisma.wordReview.create.mockResolvedValue({ id: 12 });
-
-      await recordChallengeResult(1, true, "cloze");
-
-      expect(mockPrisma.word.update).toHaveBeenCalledWith({
-        where: { id: 1 },
-        data: {
-          confidence: 4,
-          lastPractice: expect.any(Date),
-        },
-      });
-
+    it("ainda registra falhas de challenge", async () => {
       mockPrisma.word.findUnique.mockResolvedValue({
         id: 1,
         confidence: 1,
       });
+      mockPrisma.wordReview.create.mockResolvedValue({ id: 12 });
 
       await recordChallengeResult(1, false, "cloze");
 
-      expect(mockPrisma.word.update).toHaveBeenLastCalledWith({
-        where: { id: 1 },
-        data: {
-          confidence: 1,
-          lastPractice: expect.any(Date),
-        },
-      });
+      expect(mockPrisma.word.update).not.toHaveBeenCalled();
       expect(mockPrisma.wordReview.create).toHaveBeenCalledWith({
         data: {
           wordId: 1,

@@ -18,8 +18,8 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { type Href, router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
-import { brand } from "@word-map/design-tokens";
 import { normalizeGrammaticalClass, type DictionaryEntry } from "@word-map/shared";
+import type { LearningStatusId } from "@word-map/shared/fsrs-schedule";
 import { useSession } from "../../../src/session";
 import { speakWord } from "../../../src/speech";
 import { useTheme } from "../../../src/theme";
@@ -29,10 +29,22 @@ import {
   type Vault,
   type Word,
 } from "../../../src/types";
+import {
+  LearningStatusChooser,
+  LearningStatusTag,
+  statusIdFromWord,
+} from "../../../src/features/learning/learning-status-tag";
 import { ReadingWordMenu, type SavedReadingWord } from "../../../src/features/reading/word-menu";
 import { AddWordSearchSheet } from "../../../src/features/vaults/add-word-search-sheet";
 import { LearningProgressLink } from "../../../src/features/vaults/learning-progress";
 import { ErrorText, Field, Heading, Loading, Muted, PrimaryButton, Screen } from "../../../src/ui";
+
+function confidenceFromStatus(status: LearningStatusId): number {
+  if (status === "new" || status === "learning") return 1;
+  if (status === "relearning") return 2;
+  if (status === "reviewing") return 3;
+  return 4;
+}
 
 const VAULT_ACCENTS = ["#4B7BFF", "#9B5CFF", "#FF4B6A", "#24c875", "#FF9600", "#00C2A8"] as const;
 
@@ -59,18 +71,16 @@ function accentSoft(hex: string, alpha: number) {
   return `rgba(${r},${g},${b},${alpha})`;
 }
 
-const LEVELS = [brand.level1, brand.level2, brand.level3, brand.level4];
-
 type Draft = {
   id: number | null;
   name: string;
   translation: string;
   grammaticalClass: string;
-  confidence: number;
+  status: LearningStatusId;
 };
 
 function blankDraft(): Draft {
-  return { id: null, name: "", translation: "", grammaticalClass: "substantivo", confidence: 1 };
+  return { id: null, name: "", translation: "", grammaticalClass: "substantivo", status: "new" };
 }
 
 function savedFromWord(word: Word, vaultName: string): SavedReadingWord {
@@ -164,18 +174,25 @@ export default function VaultDetailScreen() {
     setSaving(true);
     setError(null);
     try {
+      const confidence = confidenceFromStatus(draft.status);
       if (draft.id == null) {
-        await request("/words", {
+        const created = await request<{ id: number }>("/words", {
           method: "POST",
           body: JSON.stringify({
             name: draft.name.trim(),
             grammaticalClass: draft.grammaticalClass,
             translations,
-            confidence: draft.confidence,
+            confidence,
             vaultId: vault.id,
             isSaved: true,
           }),
         });
+        if (created?.id) {
+          await request(`/flashcards/words/${created.id}/status`, {
+            method: "POST",
+            body: JSON.stringify({ status: draft.status }),
+          }).catch(() => undefined);
+        }
       } else {
         await request(`/words/${draft.id}`, {
           method: "PATCH",
@@ -183,8 +200,12 @@ export default function VaultDetailScreen() {
             name: draft.name.trim(),
             grammaticalClass: draft.grammaticalClass,
             translations,
-            confidence: draft.confidence,
+            confidence,
           }),
+        });
+        await request(`/flashcards/words/${draft.id}/status`, {
+          method: "POST",
+          body: JSON.stringify({ status: draft.status }),
         });
       }
       setDraft(null);
@@ -544,7 +565,6 @@ export default function VaultDetailScreen() {
           )
         }
         renderItem={({ item }: { item: Word }) => {
-          const level = Math.min(4, Math.max(1, item.confidence || 1));
           const translation = item.translations.filter(Boolean).join(", ");
           return (
             <View
@@ -589,26 +609,7 @@ export default function VaultDetailScreen() {
                   {translation || classLabel(item.grammaticalClass)}
                 </Text>
               </Pressable>
-              <View
-                style={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: 14,
-                  alignItems: "center",
-                  justifyContent: "center",
-                  backgroundColor: LEVELS[level - 1],
-                }}
-              >
-                <Text
-                  style={{
-                    color: level === 3 ? "#3c3c3c" : "#ffffff",
-                    fontFamily: theme.fonts.bold,
-                    fontSize: 13,
-                  }}
-                >
-                  {level}
-                </Text>
-              </View>
+              <LearningStatusTag word={item} />
             </View>
           );
         }}
@@ -961,42 +962,15 @@ export default function VaultDetailScreen() {
                     textTransform: "uppercase",
                   }}
                 >
-                  Confiança
+                  Status
                 </Text>
-                <View style={{ flexDirection: "row", gap: 10, marginTop: 10 }}>
-                  {LEVELS.map((color, index) => {
-                    const level = index + 1;
-                    const selected = draft?.confidence === level;
-                    return (
-                      <Pressable
-                        key={color}
-                        onPress={() =>
-                          setDraft((current) => (current ? { ...current, confidence: level } : current))
-                        }
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: 22,
-                          alignItems: "center",
-                          justifyContent: "center",
-                          backgroundColor: color,
-                          borderWidth: selected ? 2 : 0,
-                          borderColor: theme.shell.foreground,
-                          transform: [{ scale: selected ? 1.05 : 1 }],
-                        }}
-                      >
-                        <Text
-                          style={{
-                            color: level === 3 ? "#3c3c3c" : "#ffffff",
-                            fontFamily: theme.fonts.bold,
-                            fontSize: 15,
-                          }}
-                        >
-                          {level}
-                        </Text>
-                      </Pressable>
-                    );
-                  })}
+                <View style={{ marginTop: 10 }}>
+                  <LearningStatusChooser
+                    value={draft?.status ?? "new"}
+                    onChange={(status) =>
+                      setDraft((current) => (current ? { ...current, status } : current))
+                    }
+                  />
                 </View>
 
                 <Pressable

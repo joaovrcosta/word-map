@@ -179,12 +179,16 @@ export function createResources(request: Request) {
       request("GET", `/flashcards/vaults/${vaultId}`),
     updateWordProgress: (
       wordId: number,
-      confidence: number,
-      reviewCount: number
+      rating: number,
+      _reviewCount?: number
     ) =>
       request("POST", `/flashcards/words/${wordId}/progress`, {
-        confidence,
-        reviewCount,
+        rating,
+        reviewedAt: new Date().toISOString(),
+        clientReviewId:
+          typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+            ? crypto.randomUUID()
+            : `r_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`,
       }),
     recordChallengeResult: (
       wordId: number,

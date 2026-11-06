@@ -320,8 +320,16 @@ export class FlashcardsService {
     return getVaultForFlashcards(vaultId);
   }
 
-  progress(wordId: number, confidence: number, reviewCount: number) {
-    return updateWordProgress(wordId, confidence, reviewCount);
+  progress(
+    wordId: number,
+    input: {
+      rating?: number;
+      confidence?: number;
+      reviewedAt?: string;
+      clientReviewId?: string;
+    }
+  ) {
+    return updateWordProgress(wordId, input);
   }
 
   result(wordId: number, correct: boolean, challenge: ChallengeKind, streak?: number) {

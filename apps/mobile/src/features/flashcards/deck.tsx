@@ -40,7 +40,7 @@ import {
   type StudySession,
 } from "./types";
 import { toWord } from "./words";
-import { flushSaves, writeFocus } from "./saves";
+import { flushSaves, makeProgressSave, writeFocus } from "./saves";
 import { addPracticeXp } from "../study/practice-xp";
 import { useStudyHeartbeat } from "../study/use-study-heartbeat";
 import { useSession } from "../../session";
@@ -471,7 +471,7 @@ export function FlashcardDeck({
     const step = stepsRef.current[indexRef.current];
     if (!step || step.type !== "recall") return;
     if (!step.retry) {
-      pendingSavesRef.current.push({ kind: "progress", wordId: step.word.id, confidence });
+      pendingSavesRef.current.push(makeProgressSave(step.word.id, confidence));
       rememberLevel(step.word, confidence);
       rememberOutcome(step.word, "recall", String(confidence));
     }
