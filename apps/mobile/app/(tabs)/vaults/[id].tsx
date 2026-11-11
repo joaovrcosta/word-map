@@ -609,7 +609,7 @@ export default function VaultDetailScreen() {
                   {translation || classLabel(item.grammaticalClass)}
                 </Text>
               </Pressable>
-              <LearningStatusTag word={item} />
+              <LearningStatusTag word={item} size="icon" />
             </View>
           );
         }}

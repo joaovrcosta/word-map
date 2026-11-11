@@ -258,14 +258,14 @@ export function ReviewSwipeRecall({
         },
         interactive
           ? {
-              transform: [
-                { translateX: dragX },
-                { translateY: dragY },
-                { rotate },
-                { perspective: 1200 },
-                { rotateY: flipRotate },
-              ],
-            }
+            transform: [
+              { translateX: dragX },
+              { translateY: dragY },
+              { rotate },
+              { perspective: 1200 },
+              { rotateY: flipRotate },
+            ],
+          }
           : { transform: [{ scale: 0.96 }, { translateY: 14 }] },
       ]}
     >

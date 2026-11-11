@@ -1,10 +1,14 @@
 /**
- * Funções para tradução automática de inglês para português
+ * Funções para tradução automática a partir do inglês
  * Usando APIs de tradução configuráveis
  */
 
-import { getActiveTranslationService } from "./translate-config";
+import {
+  DEFAULT_TRANSLATION_LANGUAGE,
+  normalizeTranslationLanguage,
+} from "@word-map/shared";
 import { apiBase } from "@/lib/api/http";
+import useUserSettingsStore from "@/store/userSettingsStore";
 
 export interface TranslationResponse {
   translatedText: string;
@@ -15,12 +19,26 @@ export interface TranslationResponse {
   error?: string;
 }
 
+function resolveTranslationTarget(explicit?: string) {
+  if (explicit) return normalizeTranslationLanguage(explicit);
+  try {
+    return normalizeTranslationLanguage(
+      useUserSettingsStore.getState().settings.translationLanguage
+    );
+  } catch {
+    return DEFAULT_TRANSLATION_LANGUAGE;
+  }
+}
+
 /**
- * Traduz texto do inglês para português
+ * Traduz texto do inglês para o idioma configurado
  * @param text - Texto em inglês para traduzir
- * @returns Texto traduzido em português
+ * @returns Texto traduzido
  */
-export async function translateToPortuguese(text: string): Promise<string> {
+export async function translateToPortuguese(
+  text: string,
+  targetLanguage?: string
+): Promise<string> {
   console.log("=== translateToPortuguese INÍCIO ===");
   console.log("Texto para traduzir:", text);
 
@@ -28,6 +46,8 @@ export async function translateToPortuguese(text: string): Promise<string> {
     console.log("Texto vazio, retornando original");
     return text;
   }
+
+  const target = resolveTranslationTarget(targetLanguage);
 
   try {
     console.log("Fazendo requisição para /api/translate...");
@@ -40,7 +60,7 @@ export async function translateToPortuguese(text: string): Promise<string> {
       body: JSON.stringify({
         text: text,
         source: "en",
-        target: "pt",
+        target,
       }),
     });
 

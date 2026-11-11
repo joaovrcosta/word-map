@@ -16,3 +16,4 @@ export * from "./speak-align";
 export * from "./spoken-word";
 export * from "./tutor-follow-up";
 export * from "./study-goal";
+export * from "./translation-language";

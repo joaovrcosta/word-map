@@ -1,8 +1,22 @@
 import { HttpException, Injectable } from "@nestjs/common";
+import {
+  MAX_FOLLOW_UPS_PER_EXPLANATION,
+  MAX_FOLLOW_UP_ANSWER,
+  MAX_FOLLOW_UP_EXPLANATION,
+  MAX_FOLLOW_UP_QUESTION,
+  MAX_FOLLOW_UP_SENTENCE,
+  MAX_FOLLOW_UP_SPAN,
+  DEFAULT_TRANSLATION_LANGUAGE,
+  normalizeTranslationLanguage,
+  translationLanguagePromptName,
+  type TutorFollowUpTurn,
+  type TranslationLanguageCode,
+} from "@word-map/shared";
 import { PrismaService } from "../prisma/prisma.service";
 import { prisma } from "../prisma/client";
 import { getCurrentUser } from "../auth/current-user";
 import { getPassageExplanation } from "../domain/passage-explanations";
+import { getUserSettings } from "../domain/user-settings";
 import { writePassageExplanation } from "../lib/passage-explanation";
 import { consumeTutorQuota, refundTutorQuota } from "../lib/tutor-quota";
 import {
@@ -24,15 +38,6 @@ import {
   buildFollowUpPrompt,
   parseFollowUpAnswer,
 } from "../lib/tutor-follow-up";
-import {
-  MAX_FOLLOW_UPS_PER_EXPLANATION,
-  MAX_FOLLOW_UP_ANSWER,
-  MAX_FOLLOW_UP_EXPLANATION,
-  MAX_FOLLOW_UP_QUESTION,
-  MAX_FOLLOW_UP_SENTENCE,
-  MAX_FOLLOW_UP_SPAN,
-  type TutorFollowUpTurn,
-} from "@word-map/shared";
 
 const FIELD_LIMITS = {
   span: 200,
@@ -46,6 +51,13 @@ function readField(value: unknown, max: number): string | null {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > max) return null;
   return trimmed;
+}
+
+async function resolveTranslationLanguage(): Promise<TranslationLanguageCode> {
+  const settings = await getUserSettings();
+  return normalizeTranslationLanguage(
+    settings?.translationLanguage ?? DEFAULT_TRANSLATION_LANGUAGE
+  );
 }
 
 function readFollowUpTurns(value: unknown): TutorFollowUpTurn[] | null {
@@ -152,11 +164,14 @@ export class TutorService {
       if (!previousParagraph) fail(400, "Trecho inválido");
     }
 
+    const translationLanguage = await resolveTranslationLanguage();
+    const languageName = translationLanguagePromptName(translationLanguage);
     const cacheKey = explanationCacheKey({
       promptVersion: PROMPT_VERSION,
       model: TUTOR_MODEL,
       span,
       sentence,
+      language: translationLanguage,
     });
     const wordId = typeof body.wordId === "number" ? body.wordId : null;
     const cached = await prisma.readingExplanation.findUnique({ where: { cacheKey } });
@@ -185,6 +200,7 @@ export class TutorService {
         sentence,
         paragraph,
         previousParagraph,
+        languageName,
       });
       const result = await explainWithRetry(prompt);
       const parsed = parseTutorContext(result.text, result.blocked);
@@ -256,6 +272,10 @@ export class TutorService {
     const quota = await consumeTutorQuota(user.id);
     if (!quota.allowed) failTutorQuota(quota.window);
 
+    const languageName = translationLanguagePromptName(
+      await resolveTranslationLanguage()
+    );
+
     try {
       const result = await createOpenAITutor().completeJson(
         buildFollowUpPrompt({
@@ -264,6 +284,7 @@ export class TutorService {
           explanation,
           question,
           previousTurns,
+          languageName,
         }),
         FOLLOW_UP_MAX_TOKENS
       );
@@ -310,9 +331,13 @@ export class TutorService {
     const quota = await consumeTutorQuota(user.id);
     if (!quota.allowed) failTutorQuota(quota.window);
 
+    const languageName = translationLanguagePromptName(
+      await resolveTranslationLanguage()
+    );
+
     try {
       const result = await createOpenAITutor().completeJson(
-        buildSuggestTranslationPrompt({ word, sentence }),
+        buildSuggestTranslationPrompt({ word, sentence, languageName }),
         120
       );
       const parsed = parseSuggestTranslation(result.text, word, result.blocked);

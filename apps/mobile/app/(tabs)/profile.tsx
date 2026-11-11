@@ -1,7 +1,15 @@
 import { useCallback, useMemo, useState } from "react";
 import { type Href, router, useFocusEffect } from "expo-router";
 import { FontAwesome5, Ionicons } from "@expo/vector-icons";
-import { grammarClassLabel, STUDY_GOAL_PRESETS } from "@word-map/shared";
+import {
+  DEFAULT_TRANSLATION_LANGUAGE,
+  grammarClassLabel,
+  normalizeTranslationLanguage,
+  STUDY_GOAL_PRESETS,
+  TRANSLATION_LANGUAGES,
+  translationLanguageLabel,
+  type TranslationLanguageCode,
+} from "@word-map/shared";
 import { Pressable, Text, View } from "react-native";
 import { AppBottomSheet, SHEET_CARD } from "../../src/bottom-sheet";
 import { type RankingBoard } from "../../src/ranking";
@@ -234,8 +242,13 @@ export default function ProfileScreen() {
   const [board, setBoard] = useState<RankingBoard | null>(null);
   const [study, setStudy] = useState<StudyToday | null>(null);
   const [savingGoal, setSavingGoal] = useState(false);
+  const [savingLanguage, setSavingLanguage] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [editingGoal, setEditingGoal] = useState(false);
+  const [editingLanguage, setEditingLanguage] = useState(false);
+  const [translationLanguage, setTranslationLanguage] = useState<TranslationLanguageCode>(
+    DEFAULT_TRANSLATION_LANGUAGE
+  );
   const [activityFilter, setActivityFilter] = useState<ActivityFilter>("all");
   const [error, setError] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
@@ -247,12 +260,14 @@ export default function ProfileScreen() {
         request<UserStats>("/users/stats"),
         request<RankingBoard>("/ranking?period=lifetime").catch(() => null),
         request<StudyToday>("/study/today").catch(() => null),
+        request<{ translationLanguage?: string } | null>("/users/settings").catch(() => null),
       ])
-        .then(([statsData, ranking, studyData]) => {
+        .then(([statsData, ranking, studyData, settings]) => {
           if (cancelled) return;
           setStats(statsData);
           setBoard(ranking);
           setStudy(studyData);
+          setTranslationLanguage(normalizeTranslationLanguage(settings?.translationLanguage));
           setError(null);
         })
         .catch(() => {
@@ -281,6 +296,22 @@ export default function ProfileScreen() {
       setError("Não foi possível salvar a meta diária.");
     } finally {
       setSavingGoal(false);
+    }
+  };
+
+  const saveTranslationLanguage = async (code: TranslationLanguageCode) => {
+    setSavingLanguage(true);
+    try {
+      await request("/users/settings", {
+        method: "PUT",
+        body: JSON.stringify({ translationLanguage: code }),
+      });
+      setTranslationLanguage(code);
+      setEditingLanguage(false);
+    } catch {
+      setError("Não foi possível salvar o idioma de tradução.");
+    } finally {
+      setSavingLanguage(false);
     }
   };
 
@@ -321,6 +352,7 @@ export default function ProfileScreen() {
           label="Configurações"
           onPress={() => {
             setEditingGoal(false);
+            setEditingLanguage(false);
             setSettingsOpen(true);
           }}
         />
@@ -710,11 +742,66 @@ export default function ProfileScreen() {
                   </Text>
                 </Pressable>
               </View>
+            ) : editingLanguage ? (
+              <View style={{ marginTop: 10, gap: 10 }}>
+                <Text style={{ color: theme.shell.muted, fontFamily: theme.fonts.medium, fontSize: 14 }}>
+                  Idioma das traduções e contextos
+                </Text>
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8 }}>
+                  {TRANSLATION_LANGUAGES.map((language) => {
+                    const active = translationLanguage === language.code;
+                    return (
+                      <Pressable
+                        key={language.code}
+                        disabled={savingLanguage}
+                        onPress={() => void saveTranslationLanguage(language.code)}
+                        style={{
+                          paddingHorizontal: 14,
+                          paddingVertical: 10,
+                          borderRadius: 999,
+                          backgroundColor: active ? theme.colors.green : SHEET_CARD,
+                          opacity: savingLanguage ? 0.6 : 1,
+                        }}
+                      >
+                        <Text
+                          style={{
+                            color: "#FFFFFF",
+                            fontFamily: theme.fonts.bold,
+                            fontSize: 13,
+                          }}
+                        >
+                          {language.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+                <Pressable onPress={() => setEditingLanguage(false)} style={{ paddingVertical: 10 }}>
+                  <Text style={{ color: theme.shell.muted, fontFamily: theme.fonts.semibold, textAlign: "center" }}>
+                    Voltar
+                  </Text>
+                </Pressable>
+              </View>
             ) : (
               <View style={{ marginTop: 4 }}>
                 <Pressable onPress={() => setEditingGoal(true)} style={{ paddingVertical: 14 }}>
                   <Text style={{ color: "#FFFFFF", fontFamily: theme.fonts.semibold, fontSize: 16 }}>
                     Alterar meta diária
+                  </Text>
+                </Pressable>
+                <Pressable onPress={() => setEditingLanguage(true)} style={{ paddingVertical: 14 }}>
+                  <Text style={{ color: "#FFFFFF", fontFamily: theme.fonts.semibold, fontSize: 16 }}>
+                    Idioma das traduções
+                  </Text>
+                  <Text
+                    style={{
+                      color: theme.shell.muted,
+                      fontFamily: theme.fonts.medium,
+                      fontSize: 13,
+                      marginTop: 4,
+                    }}
+                  >
+                    {translationLanguageLabel(translationLanguage)}
                   </Text>
                 </Pressable>
                 <Pressable

@@ -15,6 +15,7 @@ export function useLoadUserSettings() {
           setSettings({
             useAllVaultsForLinks: userSettings.useAllVaultsForLinks,
             autoTranslateWordPreview: userSettings.autoTranslateWordPreview,
+            translationLanguage: userSettings.translationLanguage ?? "pt",
           });
         }
       } catch (error) {

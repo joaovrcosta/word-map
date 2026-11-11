@@ -594,8 +594,8 @@ export function ReviewSwipeDeck() {
 
               <ReviewBringForward
                 stepKey={`${step.type}-${stepIndex}-${step.type === "match"
-                    ? step.pairs.map((pair) => pair.word.id).join("-")
-                    : step.word.id
+                  ? step.pairs.map((pair) => pair.word.id).join("-")
+                  : step.word.id
                   }-${step.retry ? "r" : "n"}`}
               >
                 {step.type === "recall" ? (

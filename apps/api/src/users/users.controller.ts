@@ -1,7 +1,10 @@
 import { Body, Controller, Get, Put } from "@nestjs/common";
+import { TRANSLATION_LANGUAGES } from "@word-map/shared";
 import { Transform } from "class-transformer";
-import { IsBoolean, IsIn, IsInt, IsOptional } from "class-validator";
+import { IsBoolean, IsIn, IsInt, IsOptional, IsString } from "class-validator";
 import { UsersService } from "./users.service";
+
+const TRANSLATION_LANGUAGE_CODES = TRANSLATION_LANGUAGES.map((item) => item.code);
 
 class SettingsDto {
   @IsOptional()
@@ -11,6 +14,11 @@ class SettingsDto {
   @IsOptional()
   @IsBoolean()
   autoTranslateWordPreview?: boolean;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(TRANSLATION_LANGUAGE_CODES)
+  translationLanguage?: (typeof TRANSLATION_LANGUAGE_CODES)[number];
 
   @IsOptional()
   @Transform(({ value }) => (value === undefined || value === null ? value : Number(value)))

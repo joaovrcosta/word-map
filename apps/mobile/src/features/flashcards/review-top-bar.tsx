@@ -130,7 +130,7 @@ export function ReviewTopBar({
       <View style={styles.row}>
         <Pressable
           onPress={onPressStreak}
-          style={[styles.statsPill, { borderColor: RING_GREEN, backgroundColor: "#1C1C1E" }]}
+          style={[styles.statsPill, { backgroundColor: "#1C1C1E" }]}
         >
           <View style={styles.stat}>
             <Ionicons name="flame" size={16} color="#ff9600" />
@@ -319,18 +319,18 @@ const styles = StyleSheet.create({
   statsPill: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
+    gap: 8,
     paddingHorizontal: 10,
     paddingVertical: 7,
     borderRadius: 999,
-    borderWidth: 1.5,
+    borderWidth: 0,
     flexGrow: 0,
     flexShrink: 0,
   },
   stat: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 4,
+    gap: 3,
   },
   statText: {
     color: "#FFFFFF",
@@ -338,15 +338,12 @@ const styles = StyleSheet.create({
     fontVariant: ["tabular-nums"],
   },
   streakValue: {
-    minWidth: 18,
     textAlign: "left",
   },
   xpValue: {
-    minWidth: 42,
     textAlign: "left",
   },
   levelValue: {
-    minWidth: 58,
     flexShrink: 0,
     textAlign: "left",
   },

@@ -39,6 +39,7 @@ describe("explanationCacheKey", () => {
     const current = explanationCacheKey(base);
     expect(explanationCacheKey({ ...base, promptVersion: "9" })).not.toBe(current);
     expect(explanationCacheKey({ ...base, model: "other-model" })).not.toBe(current);
+    expect(explanationCacheKey({ ...base, language: "es" })).not.toBe(current);
     expect(
       explanationCacheKey({
         ...base,

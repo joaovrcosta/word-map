@@ -1,4 +1,9 @@
-import { isStudyGoalMinutes } from "@word-map/shared";
+import {
+  isStudyGoalMinutes,
+  isTranslationLanguageCode,
+  normalizeTranslationLanguage,
+  type TranslationLanguageCode,
+} from "@word-map/shared";
 import { prisma } from "../prisma/client";
 import { revalidatePath } from "../common/revalidate";
 import { getCurrentUser } from "../auth/current-user";
@@ -9,6 +14,7 @@ export interface UserSettings {
   userId: number;
   useAllVaultsForLinks: boolean;
   autoTranslateWordPreview: boolean;
+  translationLanguage: TranslationLanguageCode;
   dailyGoalMinutes: number;
   currentStreak: number;
   bestStreak: number;
@@ -21,9 +27,23 @@ export interface UserSettings {
 export type UserSettingsUpdate = Partial<
   Pick<
     UserSettings,
-    "useAllVaultsForLinks" | "autoTranslateWordPreview" | "dailyGoalMinutes"
+    | "useAllVaultsForLinks"
+    | "autoTranslateWordPreview"
+    | "translationLanguage"
+    | "dailyGoalMinutes"
   >
 >;
+
+function mapSettingsRow(
+  row: Omit<UserSettings, "translationLanguage"> & {
+    translationLanguage?: string | null;
+  }
+): UserSettings {
+  return {
+    ...row,
+    translationLanguage: normalizeTranslationLanguage(row.translationLanguage),
+  };
+}
 
 export async function getUserSettings(): Promise<UserSettings | null> {
   try {
@@ -31,12 +51,19 @@ export async function getUserSettings(): Promise<UserSettings | null> {
     if (!user) return null;
 
     await ensureUserSettings(user.id);
-    const rows = await prisma.$queryRaw<UserSettings[]>`
+    const rows = await prisma.$queryRaw<
+      Array<
+        Omit<UserSettings, "translationLanguage"> & {
+          translationLanguage?: string | null;
+        }
+      >
+    >`
       SELECT
         id,
         "userId",
         "useAllVaultsForLinks",
         "autoTranslateWordPreview",
+        "translationLanguage",
         "dailyGoalMinutes",
         "currentStreak",
         "bestStreak",
@@ -48,7 +75,8 @@ export async function getUserSettings(): Promise<UserSettings | null> {
       WHERE "userId" = ${user.id}
       LIMIT 1
     `;
-    return rows[0] ?? null;
+    const row = rows[0];
+    return row ? mapSettingsRow(row) : null;
   } catch (error) {
     console.error("Erro ao buscar configurações do usuário:", error);
     return null;
@@ -72,6 +100,13 @@ export async function upsertUserSettings(
       await updateDailyGoalMinutes(goal);
     }
 
+    if (
+      updates.translationLanguage !== undefined &&
+      !isTranslationLanguageCode(updates.translationLanguage)
+    ) {
+      throw new Error("Idioma de tradução inválido");
+    }
+
     const { dailyGoalMinutes: _goal, ...rest } = updates;
     const hasFlags =
       rest.useAllVaultsForLinks !== undefined ||
@@ -80,8 +115,23 @@ export async function upsertUserSettings(
     if (hasFlags) {
       await prisma.userSettings.update({
         where: { userId: user.id },
-        data: rest,
+        data: {
+          ...(rest.useAllVaultsForLinks !== undefined
+            ? { useAllVaultsForLinks: rest.useAllVaultsForLinks }
+            : {}),
+          ...(rest.autoTranslateWordPreview !== undefined
+            ? { autoTranslateWordPreview: rest.autoTranslateWordPreview }
+            : {}),
+        },
       });
+    }
+
+    if (rest.translationLanguage !== undefined) {
+      await prisma.$executeRaw`
+        UPDATE "UserSettings"
+        SET "translationLanguage" = ${rest.translationLanguage}, "updatedAt" = NOW()
+        WHERE "userId" = ${user.id}
+      `;
     }
 
     const settings = await getUserSettings();
@@ -99,6 +149,7 @@ export async function upsertUserSettings(
 
     if (error instanceof Error) {
       if (error.message === "Meta diária inválida") throw error;
+      if (error.message === "Idioma de tradução inválido") throw error;
       if (error.message === "Usuário não autenticado") throw error;
       if (error.message.includes("Unique constraint")) {
         throw new Error("Configurações já existem para este usuário");

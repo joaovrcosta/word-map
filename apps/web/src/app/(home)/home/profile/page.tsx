@@ -23,7 +23,14 @@ import {
 import { getCurrentUser } from "@/actions/auth";
 import useUserSettingsStore from "@/store/userSettingsStore";
 import useThemeStore from "@/store/themeStore";
-import { STUDY_GOAL_PRESETS } from "@word-map/shared";
+import {
+  DEFAULT_TRANSLATION_LANGUAGE,
+  normalizeTranslationLanguage,
+  STUDY_GOAL_PRESETS,
+  TRANSLATION_LANGUAGES,
+  translationLanguageLabel,
+  type TranslationLanguageCode,
+} from "@word-map/shared";
 import type { StudyToday } from "@/lib/study";
 
 interface UserStats {
@@ -132,11 +139,15 @@ export default function ProfilePage() {
           updateSettings({
             useAllVaultsForLinks: userSettings.useAllVaultsForLinks,
             autoTranslateWordPreview: userSettings.autoTranslateWordPreview,
+            translationLanguage: normalizeTranslationLanguage(
+              userSettings.translationLanguage
+            ),
           });
         } else {
           updateSettings({
             useAllVaultsForLinks: false,
             autoTranslateWordPreview: false,
+            translationLanguage: DEFAULT_TRANSLATION_LANGUAGE,
           });
         }
 
@@ -241,6 +252,24 @@ export default function ProfilePage() {
         alert(`Erro ao salvar configuração: ${error.message}`);
       } else {
         alert("Erro desconhecido ao salvar configuração");
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleTranslationLanguageChange = async (
+    language: TranslationLanguageCode
+  ) => {
+    setSaving(true);
+    try {
+      await upsertUserSettings({ translationLanguage: language });
+      updateSettings({ translationLanguage: language });
+    } catch (error) {
+      if (error instanceof Error) {
+        alert(`Erro ao salvar idioma: ${error.message}`);
+      } else {
+        alert("Erro desconhecido ao salvar idioma");
       }
     } finally {
       setSaving(false);
@@ -637,7 +666,7 @@ export default function ProfilePage() {
                     </Label>
                     <p className="mt-1 text-sm font-bold text-[#777]">
                       {settings.autoTranslateWordPreview
-                        ? "Definições e exemplos aparecem em português ao clicar em palavras nos textos"
+                        ? `Definições e exemplos aparecem em ${translationLanguageLabel(settings.translationLanguage).toLowerCase()} ao clicar em palavras nos textos`
                         : "Definições e exemplos aparecem em inglês ao clicar em palavras nos textos"}
                     </p>
                   </div>
@@ -648,6 +677,36 @@ export default function ProfilePage() {
                     disabled={saving}
                     className="data-[state=checked]:bg-[#24c875]"
                   />
+                </div>
+
+                <div className="border-t-2 border-[#e5e5e5] dark:border-gray-800" />
+
+                <div>
+                  <Label className="text-sm font-extrabold text-[#3c3c3c]">
+                    Idioma das traduções e contextos
+                  </Label>
+                  <p className="mt-1 text-sm font-bold text-[#777]">
+                    Usado nas traduções, previews e explicações de contexto
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    {TRANSLATION_LANGUAGES.map((language) => (
+                      <button
+                        key={language.code}
+                        type="button"
+                        disabled={saving}
+                        onClick={() =>
+                          void handleTranslationLanguageChange(language.code)
+                        }
+                        className={`rounded-full px-3 py-1.5 text-xs font-extrabold ${
+                          settings.translationLanguage === language.code
+                            ? "bg-[#24c875] text-white"
+                            : "bg-[#e8eaed] text-[#3c3c3c] hover:bg-[#dce0e5] dark:bg-[#373e47] dark:text-[#e6edf3]"
+                        }`}
+                      >
+                        {language.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div className="rounded-2xl bg-[#f7f7f7] p-4">

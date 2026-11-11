@@ -19,6 +19,7 @@ import {
 } from "../src/features/share/parse-shared-text";
 import { useSession } from "../src/session";
 import { useTheme } from "../src/theme";
+import { fetchTranslationLanguage } from "../src/translation-language";
 import { type Vault } from "../src/types";
 import { ErrorText, Heading, Muted, PrimaryButton, Screen } from "../src/ui";
 
@@ -197,12 +198,13 @@ export default function ShareScreen() {
       } else {
         let nextTranslations = translations;
         if (nextTranslations.length > 0) {
+          const target = await fetchTranslationLanguage(request);
           nextTranslations = await Promise.all(
             nextTranslations.map(async (text) => {
               try {
                 const data = await request<{ translatedText?: string }>("/translate", {
                   method: "POST",
-                  body: JSON.stringify({ text, source: "en", target: "pt" }),
+                  body: JSON.stringify({ text, source: "en", target }),
                 });
                 return data.translatedText?.trim() || text;
               } catch {

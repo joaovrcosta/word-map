@@ -17,7 +17,7 @@ const ICONS: Record<LearningStatusMeta["icon"], keyof typeof Ionicons.glyphMap> 
   "checkmark-circle": "checkmark-circle",
 };
 
-type Size = "compact" | "md";
+type Size = "compact" | "md" | "icon";
 
 export function LearningStatusTag({
   status,
@@ -39,38 +39,45 @@ export function LearningStatusTag({
 }) {
   const theme = useTheme();
   const meta = status ? learningStatusMeta(status) : learningStatusMetaForWord(word ?? {});
-  const padH = size === "md" ? 10 : 8;
-  const padV = size === "md" ? 6 : 4;
+  const iconOnly = size === "icon";
+  const padH = iconOnly ? 9 : size === "md" ? 10 : 8;
+  const padV = iconOnly ? 9 : size === "md" ? 6 : 4;
   const fontSize = size === "md" ? 12 : 10;
-  const iconSize = size === "md" ? 14 : 11;
+  const iconSize = iconOnly ? 16 : size === "md" ? 14 : 11;
 
   return (
     <View
+      accessibilityLabel={meta.label}
       style={[
         {
           flexDirection: "row",
           alignItems: "center",
-          gap: 5,
-          alignSelf: "flex-start",
+          justifyContent: "center",
+          gap: iconOnly ? 0 : 5,
+          alignSelf: iconOnly ? "center" : "flex-start",
           backgroundColor: meta.color,
           borderRadius: 999,
           paddingHorizontal: padH,
           paddingVertical: padV,
+          minWidth: iconOnly ? 34 : undefined,
+          minHeight: iconOnly ? 34 : undefined,
         },
         style,
       ]}
     >
       <Ionicons name={ICONS[meta.icon]} size={iconSize} color="#FFFFFF" />
-      <Text
-        style={{
-          color: "#FFFFFF",
-          fontFamily: theme.fonts.bold,
-          fontSize,
-          letterSpacing: 0.4,
-        }}
-      >
-        {meta.label}
-      </Text>
+      {iconOnly ? null : (
+        <Text
+          style={{
+            color: "#FFFFFF",
+            fontFamily: theme.fonts.bold,
+            fontSize,
+            letterSpacing: 0.4,
+          }}
+        >
+          {meta.label}
+        </Text>
+      )}
     </View>
   );
 }

@@ -1,10 +1,15 @@
 "use client";
 
+import {
+  DEFAULT_TRANSLATION_LANGUAGE,
+  type TranslationLanguageCode,
+} from "@word-map/shared";
 import { create } from "zustand";
 
 interface UserSettings {
   useAllVaultsForLinks: boolean;
   autoTranslateWordPreview: boolean;
+  translationLanguage: TranslationLanguageCode;
 }
 
 interface UserSettingsStore {
@@ -17,6 +22,7 @@ const useUserSettingsStore = create<UserSettingsStore>((set) => ({
   settings: {
     useAllVaultsForLinks: false,
     autoTranslateWordPreview: false,
+    translationLanguage: DEFAULT_TRANSLATION_LANGUAGE,
   },
   updateSettings: (newSettings) =>
     set((state) => ({

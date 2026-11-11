@@ -26,6 +26,7 @@ import * as Speech from "expo-speech";
 import {
   buildReadingContext,
   DEFAULT_PHRASES_VAULT_NAME,
+  DEFAULT_TRANSLATION_LANGUAGE,
   DEFAULT_WORDS_VAULT_NAME,
   extractRelatedSentences,
   formatOriginDate,
@@ -38,6 +39,7 @@ import {
   MAX_FOLLOW_UPS_PER_EXPLANATION,
   normalizeGrammaticalClass,
   normalizePhrase,
+  normalizeTranslationLanguage,
   resolveGrammarSlug,
   splitParagraphs,
   type DictionaryEntry,
@@ -699,11 +701,17 @@ export function ReadingWordMenu({
     setCandidateMeanings([]);
     (async () => {
       let autoTranslate = false;
+      let targetLanguage = DEFAULT_TRANSLATION_LANGUAGE;
       try {
-        const settings = await request<{ autoTranslateWordPreview?: boolean } | null>("/users/settings");
+        const settings = await request<{
+          autoTranslateWordPreview?: boolean;
+          translationLanguage?: string;
+        } | null>("/users/settings");
         autoTranslate = Boolean(settings?.autoTranslateWordPreview);
+        targetLanguage = normalizeTranslationLanguage(settings?.translationLanguage);
       } catch {
         autoTranslate = false;
+        targetLanguage = DEFAULT_TRANSLATION_LANGUAGE;
       }
       let entry: DictionaryEntry | null = null;
       try {
@@ -725,8 +733,8 @@ export function ReadingWordMenu({
       setTranslating(true);
       try {
         const translated = autoTranslate
-          ? collectCandidateMeanings(await translateEntryPreview(request, entry))
-          : await translateMany(request, raw);
+          ? collectCandidateMeanings(await translateEntryPreview(request, entry, targetLanguage))
+          : await translateMany(request, raw, targetLanguage);
         if (cancelled) return;
         setCandidateMeanings(uniqueMeanings(translated));
       } catch {
@@ -1293,7 +1301,7 @@ export function ReadingWordMenu({
     <View style={[styles.footer, sheet && styles.sheetFooter]}>
       {localSaved ? (
         <Pressable disabled={saving} onPress={() => void handleRemove()} style={styles.removeButton}>
-          <View style={styles.iconChip}>
+          <View style={[styles.iconChip, sheet && styles.iconChipSheet]}>
             <Ionicons name="trash-outline" size={sheet ? 18 : 14} color={shell.foreground} />
           </View>
           {sheet ? null : (
@@ -1301,9 +1309,9 @@ export function ReadingWordMenu({
           )}
         </Pressable>
       ) : (
-        <View style={{ width: sheet ? 42 : 0 }} />
+        <View style={{ width: sheet ? 38 : 0 }} />
       )}
-      <View style={[styles.levels, { flexWrap: "wrap", gap: 6 }]}>
+      <View style={[styles.levels, sheet && styles.levelsSheet]}>
         {STATUS_OPTIONS.map((status) => {
           const active = statusIdFromWord({ confidence }) === status;
           return (
@@ -1313,7 +1321,7 @@ export function ReadingWordMenu({
               onPress={() => void handleStatus(status)}
               style={{ opacity: active ? 1 : 0.55 }}
             >
-              <LearningStatusTag status={status} size={sheet ? "md" : "compact"} />
+              <LearningStatusTag status={status} size={sheet ? "icon" : "compact"} />
             </Pressable>
           );
         })}
@@ -1324,7 +1332,7 @@ export function ReadingWordMenu({
           onPress={requestClose}
           style={[styles.sheetDone, { backgroundColor: theme.colors.green }]}
         >
-          <Ionicons name="checkmark" size={22} color={shell.foreground} />
+          <Ionicons name="checkmark" size={20} color={shell.foreground} />
         </Pressable>
       ) : null}
     </View>
@@ -1895,14 +1903,15 @@ function bestShortTranslation(candidates: string[]) {
 
 async function translateMany(
   request: <T>(path: string, init?: RequestInit) => Promise<T>,
-  texts: string[]
+  texts: string[],
+  target: string = DEFAULT_TRANSLATION_LANGUAGE
 ) {
   return Promise.all(
     texts.map(async (text) => {
       try {
         const data = await request<{ translatedText?: string }>("/translate", {
           method: "POST",
-          body: JSON.stringify({ text, source: "en", target: "pt" }),
+          body: JSON.stringify({ text, source: "en", target }),
         });
         return data.translatedText?.trim() || text;
       } catch {
@@ -1914,7 +1923,8 @@ async function translateMany(
 
 async function translateEntryPreview(
   request: <T>(path: string, init?: RequestInit) => Promise<T>,
-  entry: DictionaryEntry | null
+  entry: DictionaryEntry | null,
+  target: string = DEFAULT_TRANSLATION_LANGUAGE
 ): Promise<DictionaryEntry | null> {
   if (!entry?.meanings?.length) return entry;
   const meanings = entry.meanings.slice(0, 2).map((meaning) => ({
@@ -1930,7 +1940,7 @@ async function translateEntryPreview(
       slots.push({ meaningIndex, definitionIndex });
     });
   });
-  const translated = await translateMany(request, texts);
+  const translated = await translateMany(request, texts, target);
   slots.forEach((slot, index) => {
     const definition = meanings[slot.meaningIndex]?.definitions?.[slot.definitionIndex];
     if (definition) definition.definition = translated[index];
@@ -1968,10 +1978,11 @@ const styles = StyleSheet.create({
   sheetFooter: {
     marginTop: 0,
     paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingTop: 12,
     paddingBottom: 4,
+    gap: 12,
   },
-  sheetDone: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  sheetDone: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
   iconChip: {
     width: 42,
     height: 42,
@@ -1979,6 +1990,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "#3A3A3C",
+  },
+  iconChipSheet: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
   },
   inputBox: {
     height: 52,
@@ -2174,6 +2190,7 @@ const styles = StyleSheet.create({
   },
   removeButton: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 2 },
   levels: { flexDirection: "row", gap: 10 },
+  levelsSheet: { flex: 1, flexWrap: "nowrap", justifyContent: "center", gap: 10 },
   levelButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   levelButtonSheet: { width: 46, height: 46, borderRadius: 23 },
   vaults: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

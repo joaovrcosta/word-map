@@ -23,6 +23,7 @@ import { normalizeGrammaticalClass, type DictionaryEntry } from "@word-map/share
 import { ReadingWordMenu, type SavedReadingWord } from "../reading/word-menu";
 import { useSession } from "../../session";
 import { useTheme } from "../../theme";
+import { fetchTranslationLanguage } from "../../translation-language";
 import { classLabel, type Vault, type Word } from "../../types";
 import { ErrorText } from "../../ui";
 
@@ -424,8 +425,11 @@ export function AddWordSearchSheet({
         .flatMap((meaning) => (meaning.definitions ?? []).map((item) => item.definition?.trim() ?? ""))
         .filter(Boolean)
         .slice(0, 3);
+      const target = await fetchTranslationLanguage(request);
       const translated = definitionsEn.length
-        ? await Promise.all(definitionsEn.map((text) => translateText(text, "en", "pt").then((pt) => pt || text)))
+        ? await Promise.all(
+            definitionsEn.map((text) => translateText(text, "en", target).then((value) => value || text))
+          )
         : [];
       const prefer = preferPt?.trim();
       let definitions = translated;
@@ -588,12 +592,13 @@ export function AddWordSearchSheet({
       } else {
         let translations = word.translations;
         if (word.translate && translations.length > 0) {
+          const target = await fetchTranslationLanguage(request);
           translations = await Promise.all(
             translations.map(async (text) => {
               try {
                 const data = await request<{ translatedText?: string }>("/translate", {
                   method: "POST",
-                  body: JSON.stringify({ text, source: "en", target: "pt" }),
+                  body: JSON.stringify({ text, source: "en", target }),
                 });
                 return data.translatedText?.trim() || text;
               } catch {
@@ -725,12 +730,13 @@ export function AddWordSearchSheet({
       } else {
         let translations = pending.translations;
         if (pending.translate && translations.length > 0) {
+          const target = await fetchTranslationLanguage(request);
           translations = await Promise.all(
             translations.map(async (text) => {
               try {
                 const data = await request<{ translatedText?: string }>("/translate", {
                   method: "POST",
-                  body: JSON.stringify({ text, source: "en", target: "pt" }),
+                  body: JSON.stringify({ text, source: "en", target }),
                 });
                 return data.translatedText?.trim() || text;
               } catch {
