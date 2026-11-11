@@ -1298,30 +1298,32 @@ export function ReadingWordMenu({
     </View>
   );
   const levelBar = (
-    <View style={[styles.footer, sheet && styles.sheetFooter]}>
+    <View style={[styles.footer, sheet ? styles.sheetFooter : styles.cardFooter]}>
       {localSaved ? (
-        <Pressable disabled={saving} onPress={() => void handleRemove()} style={styles.removeButton}>
-          <View style={[styles.iconChip, sheet && styles.iconChipSheet]}>
-            <Ionicons name="trash-outline" size={sheet ? 18 : 14} color={shell.foreground} />
+        <Pressable
+          accessibilityLabel="Remover palavra"
+          disabled={saving}
+          onPress={() => void handleRemove()}
+          style={styles.removeButton}
+        >
+          <View style={[styles.iconChip, styles.iconChipCompact]}>
+            <Ionicons name="trash-outline" size={16} color={shell.foreground} />
           </View>
-          {sheet ? null : (
-            <Text style={{ color: shell.muted, fontFamily: theme.fonts.semibold, fontSize: 12 }}>Remover</Text>
-          )}
         </Pressable>
       ) : (
-        <View style={{ width: sheet ? 38 : 0 }} />
+        <View style={{ width: 34 }} />
       )}
-      <View style={[styles.levels, sheet && styles.levelsSheet]}>
+      <View style={styles.levelsRow}>
         {STATUS_OPTIONS.map((status) => {
           const active = statusIdFromWord({ confidence }) === status;
           return (
             <Pressable
               key={status}
+              accessibilityLabel={status}
               disabled={saving || (!localSaved && !resolvedVaultId)}
               onPress={() => void handleStatus(status)}
-              style={{ opacity: active ? 1 : 0.55 }}
             >
-              <LearningStatusTag status={status} size={sheet ? "icon" : "compact"} />
+              <LearningStatusTag status={status} size="icon" active={active} />
             </Pressable>
           );
         })}
@@ -1334,7 +1336,9 @@ export function ReadingWordMenu({
         >
           <Ionicons name="checkmark" size={20} color={shell.foreground} />
         </Pressable>
-      ) : null}
+      ) : (
+        <View style={{ width: 34 }} />
+      )}
     </View>
   );
   return (
@@ -1982,6 +1986,11 @@ const styles = StyleSheet.create({
     paddingBottom: 4,
     gap: 12,
   },
+  cardFooter: {
+    marginTop: 10,
+    paddingHorizontal: 4,
+    gap: 10,
+  },
   sheetDone: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
   iconChip: {
     width: 42,
@@ -1991,10 +2000,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     backgroundColor: "#3A3A3C",
   },
-  iconChipSheet: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
+  iconChipCompact: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
   },
   inputBox: {
     height: 52,
@@ -2189,8 +2198,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   removeButton: { flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 2 },
-  levels: { flexDirection: "row", gap: 10 },
-  levelsSheet: { flex: 1, flexWrap: "nowrap", justifyContent: "center", gap: 10 },
+  levelsRow: {
+    flex: 1,
+    flexDirection: "row",
+    flexWrap: "nowrap",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
   levelButton: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
   levelButtonSheet: { width: 46, height: 46, borderRadius: 23 },
   vaults: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

@@ -161,6 +161,32 @@ async function requestCompletion(
   }
 
   if (!response.ok) {
+    let detail = "";
+    try {
+      const errorBody = (await response.json()) as {
+        error?: { code?: string; message?: string };
+      };
+      const code = errorBody?.error?.code;
+      const message = errorBody?.error?.message;
+      if (code === "expired_secret_key" || /expired/i.test(message ?? "")) {
+        throw new Error(
+          "Chave da OpenAI expirada. Atualize OPENAI_API_KEY no .env da API."
+        );
+      }
+      if (code || message) {
+        detail = ` (${code ?? "error"}: ${message ?? "sem detalhes"})`;
+      }
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message.includes("OPENAI_API_KEY")
+      ) {
+        throw error;
+      }
+    }
+    console.error(
+      `OpenAI chat/completions falhou com status ${response.status}${detail}`
+    );
     throw new Error("Explicação indisponível");
   }
 

@@ -23,6 +23,7 @@ export function LearningStatusTag({
   status,
   word,
   size = "compact",
+  active = false,
   style,
 }: {
   status?: LearningStatusId;
@@ -35,6 +36,8 @@ export function LearningStatusTag({
     confidence?: number;
   };
   size?: Size;
+  /** Destaca o status selecionado com cor mais clara. */
+  active?: boolean;
   style?: StyleProp<ViewStyle>;
 }) {
   const theme = useTheme();
@@ -44,10 +47,12 @@ export function LearningStatusTag({
   const padV = iconOnly ? 9 : size === "md" ? 6 : 4;
   const fontSize = size === "md" ? 12 : 10;
   const iconSize = iconOnly ? 16 : size === "md" ? 14 : 11;
+  const backgroundColor = active ? meta.activeColor : meta.color;
 
   return (
     <View
       accessibilityLabel={meta.label}
+      accessibilityState={{ selected: active }}
       style={[
         {
           flexDirection: "row",
@@ -55,12 +60,16 @@ export function LearningStatusTag({
           justifyContent: "center",
           gap: iconOnly ? 0 : 5,
           alignSelf: iconOnly ? "center" : "flex-start",
-          backgroundColor: meta.color,
+          backgroundColor,
           borderRadius: 999,
           paddingHorizontal: padH,
           paddingVertical: padV,
           minWidth: iconOnly ? 34 : undefined,
           minHeight: iconOnly ? 34 : undefined,
+          borderWidth: active ? 2 : 0,
+          borderColor: active ? "rgba(255,255,255,0.55)" : "transparent",
+          opacity: active ? 1 : 0.72,
+          transform: active ? [{ scale: 1.06 }] : undefined,
         },
         style,
       ]}
@@ -107,7 +116,7 @@ export function LearningStatusChooser({
               opacity: selected ? 1 : 0.7,
             }}
           >
-            <LearningStatusTag status={id} size="md" />
+            <LearningStatusTag status={id} size="md" active={selected} />
             <Text
               style={{
                 flex: 1,

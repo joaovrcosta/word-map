@@ -580,7 +580,7 @@ export function ReviewSwipeDeck() {
           <>
             <View style={styles.stack}>
               {step.type === "recall" && peek && peek.type === "recall" ? (
-                <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                <View style={[StyleSheet.absoluteFill, styles.peekLayer]} pointerEvents="none">
                   <ReviewSwipeRecall
                     word={peek.word}
                     pool={scopedWords}
@@ -592,6 +592,7 @@ export function ReviewSwipeDeck() {
                 </View>
               ) : null}
 
+              <View style={styles.frontLayer}>
               <ReviewBringForward
                 stepKey={`${step.type}-${stepIndex}-${step.type === "match"
                   ? step.pairs.map((pair) => pair.word.id).join("-")
@@ -649,6 +650,7 @@ export function ReviewSwipeDeck() {
                   />
                 ) : null}
               </ReviewBringForward>
+              </View>
             </View>
 
             {showSwipeHints ? (
@@ -696,6 +698,8 @@ export function ReviewSwipeDeck() {
 const styles = StyleSheet.create({
   root: { flex: 1, paddingHorizontal: 12, paddingTop: 6 },
   stack: { flex: 1, justifyContent: "center", alignItems: "stretch", minHeight: 0 },
+  peekLayer: { zIndex: 0 },
+  frontLayer: { flex: 1, zIndex: 2 },
   footerHints: {
     flexDirection: "row",
     alignItems: "center",

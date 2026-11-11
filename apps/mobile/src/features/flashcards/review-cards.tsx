@@ -65,7 +65,7 @@ export function ReviewBringForward({
     flex: 1,
     justifyContent: "center" as const,
     alignItems: "stretch" as const,
-    opacity: 0.72 + progress.value * 0.28,
+    // Não animar opacity: no Android o card fica “transparente” e a carta de trás vaza.
     transform: [
       { scale: 0.96 + progress.value * 0.04 },
       { translateY: 14 * (1 - progress.value) },
@@ -249,12 +249,16 @@ export function ReviewSwipeRecall({
   return (
     <Animated.View
       {...(interactive ? pan.panHandlers : {})}
+      needsOffscreenAlphaCompositing
       style={[
         styles.card,
         styles.gradientCard,
         {
+          // Fundo sólido evita vazamento da carta de trás pelo gradient.
+          backgroundColor: gradient[1],
           borderColor: "rgba(255,255,255,0.12)",
           zIndex: interactive ? 2 : 1,
+          opacity: interactive ? 1 : 0.92,
         },
         interactive
           ? {
