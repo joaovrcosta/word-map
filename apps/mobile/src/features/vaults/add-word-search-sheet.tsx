@@ -381,6 +381,11 @@ export function AddWordSearchSheet({
     await AsyncStorage.setItem(recentKey, JSON.stringify(next));
   };
 
+  const clearRecent = async () => {
+    setRecent([]);
+    await AsyncStorage.setItem(recentKey, JSON.stringify([]));
+  };
+
   useEffect(() => {
     if (!visible) return;
     if (!debounced) {
@@ -981,9 +986,28 @@ export function AddWordSearchSheet({
                 ))}
               </ScrollView>
 
-              <Text style={[styles.sectionTitle, { fontFamily: theme.fonts.bold, marginTop: 28 }]}>
-                Buscas recentes
-              </Text>
+              <View style={styles.recentHeader}>
+                <Text
+                  style={[
+                    styles.sectionTitle,
+                    { fontFamily: theme.fonts.bold, marginTop: 0, marginBottom: 0, paddingHorizontal: 0 },
+                  ]}
+                >
+                  Buscas recentes
+                </Text>
+                {recent.length > 0 ? (
+                  <Pressable
+                    accessibilityLabel="Limpar buscas recentes"
+                    hitSlop={8}
+                    onPress={() => void clearRecent()}
+                    style={styles.clearRecentBtn}
+                  >
+                    <Text style={[styles.clearRecentText, { fontFamily: theme.fonts.semibold }]}>
+                      Limpar
+                    </Text>
+                  </Pressable>
+                ) : null}
+              </View>
               {recent.length === 0 ? (
                 <Text style={[styles.emptyRecent, { fontFamily: theme.fonts.regular }]}>
                   {searchScope === "decks"
@@ -1763,6 +1787,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     paddingHorizontal: 18,
     lineHeight: 20,
+  },
+  recentHeader: {
+    marginTop: 28,
+    marginBottom: 4,
+    paddingHorizontal: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12,
+  },
+  clearRecentBtn: {
+    paddingVertical: 6,
+    paddingHorizontal: 2,
+  },
+  clearRecentText: {
+    color: "rgba(255,255,255,0.55)",
+    fontSize: 14,
   },
   recentRow: {
     flexDirection: "row",
