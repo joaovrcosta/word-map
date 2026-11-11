@@ -558,6 +558,7 @@ export function ReadingWordMenu({
   const [levels, setLevels] = useState<LevelPoint[]>([]);
   const [grammarSlug, setGrammarSlug] = useState<string | null>(null);
   const suggestingRef = useRef(false);
+  const explainingRef = useRef(false);
   const followBusyRef = useRef(false);
   const scrollRef = useRef<ScrollView>(null);
   const placeAboveLockRef = useRef<boolean | null>(null);
@@ -688,15 +689,24 @@ export function ReadingWordMenu({
   const resolvedVaultId =
     vaultId || (localSaved ? String(localSaved.vaultId) : vaults[0] ? String(vaults[0].id) : "");
 
-  const context = useMemo(() => {
-    const built = buildReadingContext({
-      paragraphs: splitParagraphs(chapterContent),
-      pages,
-      pageIndex,
-      span: clean,
-    });
-    return built.ok ? built : null;
-  }, [chapterContent, pages, pageIndex, clean]);
+  const contextBuilt = useMemo(
+    () =>
+      buildReadingContext({
+        paragraphs: splitParagraphs(chapterContent),
+        pages,
+        pageIndex,
+        span: clean,
+      }),
+    [chapterContent, pages, pageIndex, clean]
+  );
+  const context = contextBuilt.ok ? contextBuilt : null;
+  const contextUnavailableReason = !contextBuilt.ok
+    ? contextBuilt.reason === "too_long"
+      ? "Este trecho é longo demais para explicar."
+      : contextBuilt.reason === "empty"
+        ? "Selecione uma palavra para explicar o contexto."
+        : "Abra a palavra a partir da leitura para explicar o contexto."
+    : null;
 
   const relatedPhrases = useMemo(
     () => extractRelatedSentences(sourceText, clean).slice(0, 4),
@@ -1065,7 +1075,12 @@ export function ReadingWordMenu({
   };
 
   const handleContextualize = async () => {
-    if (!context || explaining) return;
+    if (explainingRef.current || explaining) return;
+    if (!context) {
+      setExplanationError(contextUnavailableReason ?? "Não foi possível explicar este trecho.");
+      return;
+    }
+    explainingRef.current = true;
     setExplaining(true);
     setExplanationError(null);
     resetFollowUps();
@@ -1087,6 +1102,7 @@ export function ReadingWordMenu({
       setExplanationError(userFacingError(error, "Não foi possível explicar este trecho."));
     } finally {
       setExplaining(false);
+      explainingRef.current = false;
     }
   };
 
@@ -1163,7 +1179,7 @@ export function ReadingWordMenu({
     <View>
       {explanation && !explaining ? (
         <View style={styles.contextBox}>
-          <Pressable disabled={!context} onPress={() => void handleContextualize()}>
+          <Pressable onPress={() => void handleContextualize()} hitSlop={6}>
             <Text style={[styles.contextAction, { fontFamily: theme.fonts.semibold }]}>Explicar contexto</Text>
           </Pressable>
           <Text style={[styles.contextBody, { fontFamily: theme.fonts.regular }]}>{explanation}</Text>
@@ -1288,11 +1304,15 @@ export function ReadingWordMenu({
         </View>
       ) : (
         <Pressable
-          disabled={!context || explaining}
+          disabled={explaining}
           onPress={() => void handleContextualize()}
-          style={styles.contextButton}
+          style={[styles.contextButton, !context && !explaining ? { opacity: 0.55 } : null]}
         >
-          <Ionicons name="sparkles" size={16} color={shell.onPastel} />
+          {explaining ? (
+            <ActivityIndicator color={shell.onPastel} />
+          ) : (
+            <Ionicons name="sparkles" size={16} color={shell.onPastel} />
+          )}
           <Text style={{ color: shell.onPastel, fontFamily: theme.fonts.bold, fontSize: 15 }}>
             {explaining ? "Explicando o trecho…" : "Explicar contexto"}
           </Text>
@@ -1301,9 +1321,14 @@ export function ReadingWordMenu({
       {explanationError ? (
         <Pressable onPress={() => void handleContextualize()} hitSlop={6}>
           <Text style={[styles.error, { fontFamily: theme.fonts.regular }]}>
-            {explanationError} · Tentar de novo
+            {explanationError}
+            {context ? " · Tentar de novo" : ""}
           </Text>
         </Pressable>
+      ) : contextUnavailableReason && !explanation ? (
+        <Text style={[styles.hint, { fontFamily: theme.fonts.regular, marginTop: 8 }]}>
+          {contextUnavailableReason}
+        </Text>
       ) : null}
     </View>
   );
@@ -1358,7 +1383,13 @@ export function ReadingWordMenu({
         behavior={Platform.OS === "ios" ? "padding" : "padding"}
         keyboardVerticalOffset={Platform.OS === "ios" ? insets.top : 0}
       >
-        {sheet ? null : <Pressable accessibilityLabel="Fechar" style={StyleSheet.absoluteFill} onPress={requestClose} />}
+        {sheet ? null : (
+          <Pressable
+            accessibilityLabel="Fechar"
+            style={StyleSheet.absoluteFill}
+            onPress={requestClose}
+          />
+        )}
         <View
           onLayout={(event) => {
             if (sheet) return;
@@ -1368,7 +1399,15 @@ export function ReadingWordMenu({
           style={
             sheet
               ? styles.sheet
-              : { position: "absolute", top, left, width: cardWidth, maxHeight: fittedCard + arrowH }
+              : {
+                  position: "absolute",
+                  top,
+                  left,
+                  width: cardWidth,
+                  maxHeight: fittedCard + arrowH,
+                  zIndex: 2,
+                  elevation: 14,
+                }
           }
         >
           {!sheet && !placeAbove ? <Arrow pointing="up" left={arrowLeft} /> : null}
@@ -1567,7 +1606,7 @@ export function ReadingWordMenu({
                   </Pressable>
                 ) : null}
 
-                {!sheet ? <View style={{ marginTop: 12 }}>{contextPanel}</View> : null}
+                <View style={{ marginTop: 12 }}>{contextPanel}</View>
 
                 {details ? (
                   <View style={{ marginTop: 4 }}>
