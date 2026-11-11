@@ -149,13 +149,18 @@ export function resolveLearningStatusFromWord(word: {
       stability: word.stability ?? 0,
     });
   }
+  // Confidence sozinho (ex.: badge no menu) já define o status — sem lastPractice
+  // não forçar "new", senão o topo fica NEW com o botão verde ativo embaixo.
+  if (word.confidence != null && word.confidence > 0) {
+    const conf = Math.min(4, Math.max(1, Math.round(word.confidence)));
+    if (conf <= 1) return "learning";
+    if (conf === 2) return "relearning";
+    if (conf === 3) return "reviewing";
+    return "confident";
+  }
   const seen = Boolean(word.lastPractice || word.lastReview);
   if (!seen) return "new";
-  const conf = Math.min(4, Math.max(1, Math.round(word.confidence ?? 1)));
-  if (conf <= 1) return "learning";
-  if (conf === 2) return "relearning";
-  if (conf === 3) return "reviewing";
-  return "confident";
+  return "learning";
 }
 
 export function patchFromCard(card: Card): FsrsWordPatch {

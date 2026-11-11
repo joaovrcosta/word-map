@@ -69,6 +69,16 @@ const CONFIDENCE_FROM_STATUS: Record<LearningStatusId, number> = {
   confident: 4,
 };
 const STATUS_OPTIONS: LearningStatusId[] = ["learning", "relearning", "reviewing", "confident"];
+
+/** Mapeia confidence do menu → status (sem depender de lastPractice/fsrs). */
+function statusFromConfidence(confidence: number): LearningStatusId | null {
+  if (!Number.isFinite(confidence) || confidence <= 0) return null;
+  const level = Math.min(4, Math.max(1, Math.round(confidence)));
+  if (level <= 1) return "learning";
+  if (level === 2) return "relearning";
+  if (level === 3) return "reviewing";
+  return "confident";
+}
 const GLOW_EDGE = "rgba(201, 242, 196, 0.42)";
 const GLOW_MID = "rgba(155, 232, 184, 0.18)";
 const GLOW_BAND = 32;
@@ -1315,7 +1325,7 @@ export function ReadingWordMenu({
       )}
       <View style={styles.levelsRow}>
         {STATUS_OPTIONS.map((status) => {
-          const active = statusIdFromWord({ confidence }) === status;
+          const active = statusFromConfidence(confidence) === status;
           return (
             <Pressable
               key={status}
@@ -1450,7 +1460,13 @@ export function ReadingWordMenu({
                       </Pressable>
                     );
                   })}
-                  {confidence > 0 ? <LearningStatusTag word={{ confidence }} /> : null}
+                  {confidence > 0 ? (
+                    <LearningStatusTag
+                      status={statusFromConfidence(confidence) ?? undefined}
+                      word={{ confidence }}
+                      size="compact"
+                    />
+                  ) : null}
                 </View>
 
                 {localSaved && details ? (

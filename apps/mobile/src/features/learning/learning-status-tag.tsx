@@ -66,10 +66,8 @@ export function LearningStatusTag({
           paddingVertical: padV,
           minWidth: iconOnly ? 34 : undefined,
           minHeight: iconOnly ? 34 : undefined,
-          borderWidth: active ? 2 : 0,
-          borderColor: active ? "rgba(255,255,255,0.55)" : "transparent",
-          opacity: active ? 1 : 0.72,
-          transform: active ? [{ scale: 1.06 }] : undefined,
+          // Só cor mais clara no ativo — sem borda/glow ao redor.
+          opacity: active ? 1 : 0.5,
         },
         style,
       ]}
