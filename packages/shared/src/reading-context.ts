@@ -3,7 +3,11 @@ import {
   type ReadingPage,
 } from "./reading-pages";
 
+/** Teto do parágrafo enviado ao tutor (alinha com a API). */
 export const CONTEXT_CHAR_LIMIT = 4000;
+const SPAN_LIMIT = 200;
+const SENTENCE_LIMIT = 2000;
+const PREVIOUS_LIMIT = 4000;
 
 export type ReadingContext = {
   ok: true;
@@ -25,7 +29,7 @@ export function buildReadingContext(input: {
   span: string;
   spanStartInPage?: number;
 }): ReadingContext | ReadingContextFailure {
-  const span = input.span.trim();
+  const span = input.span.trim().slice(0, SPAN_LIMIT);
   if (!span) return { ok: false, reason: "empty" };
 
   const page = input.pages[input.pageIndex];
@@ -38,10 +42,10 @@ export function buildReadingContext(input: {
   const located = locateInPage(page, spanStart);
   if (!located) return { ok: false, reason: "not_found" };
 
-  const paragraph = input.paragraphs[located.paragraphIndex];
-  if (!paragraph) return { ok: false, reason: "not_found" };
+  const fullParagraph = input.paragraphs[located.paragraphIndex];
+  if (!fullParagraph) return { ok: false, reason: "not_found" };
 
-  const ranges = sentenceRanges(paragraph);
+  const ranges = sentenceRanges(fullParagraph);
   const sentenceRange =
     ranges.find(
       (range) =>
@@ -50,8 +54,23 @@ export function buildReadingContext(input: {
     ) ?? ranges[0];
   if (!sentenceRange) return { ok: false, reason: "not_found" };
 
-  const sentence = paragraph.slice(sentenceRange.start, sentenceRange.end);
-  const isFirstSentence = ranges.length === 0 || sentenceRange.start === ranges[0].start;
+  // Em ebooks/PDF a “frase” pode ser um bloco enorme sem pontos —
+  // centraliza o recorte na palavra tocada, não no início do bloco.
+  const spanInParagraph = located.offsetInParagraph;
+  const spanEnd = Math.min(
+    fullParagraph.length,
+    spanInParagraph + Math.max(span.length, 1)
+  );
+  const rawSentence = fullParagraph.slice(sentenceRange.start, sentenceRange.end);
+  const spanInSentence = Math.max(0, spanInParagraph - sentenceRange.start);
+  const sentence = clipAround(
+    rawSentence,
+    spanInSentence,
+    spanInSentence + Math.max(span.length, 1),
+    SENTENCE_LIMIT
+  );
+  const isFirstSentence =
+    ranges.length === 0 || sentenceRange.start === ranges[0].start;
   const slice = page.slices.find(
     (item) => item.paragraphIndex === located.paragraphIndex
   );
@@ -60,16 +79,29 @@ export function buildReadingContext(input: {
     !slice?.continues &&
     located.paragraphIndex > 0;
 
-  const previousParagraph = includePrevious
-    ? input.paragraphs[located.paragraphIndex - 1] ?? null
-    : null;
+  const paragraph = clipAround(
+    fullParagraph,
+    spanInParagraph,
+    spanEnd,
+    CONTEXT_CHAR_LIMIT
+  );
 
-  const size =
-    span.length +
-    sentence.length +
-    paragraph.length +
-    (previousParagraph?.length ?? 0);
-  if (size > CONTEXT_CHAR_LIMIT) return { ok: false, reason: "too_long" };
+  let previousParagraph: string | null = null;
+  if (includePrevious) {
+    const rawPrevious = input.paragraphs[located.paragraphIndex - 1] ?? null;
+    if (rawPrevious) {
+      const room = Math.min(
+        PREVIOUS_LIMIT,
+        Math.max(0, CONTEXT_CHAR_LIMIT - paragraph.length)
+      );
+      previousParagraph =
+        room > 0
+          ? rawPrevious.length <= room
+            ? rawPrevious
+            : rawPrevious.slice(Math.max(0, rawPrevious.length - room))
+          : null;
+    }
+  }
 
   return {
     ok: true,
@@ -78,6 +110,29 @@ export function buildReadingContext(input: {
     paragraph,
     previousParagraph,
   };
+}
+
+/** Janela centrada no foco (frase/span), sem estourar o teto. */
+function clipAround(
+  text: string,
+  focusStart: number,
+  focusEnd: number,
+  max: number
+): string {
+  if (text.length <= max) return text;
+  const start = Math.max(0, Math.min(focusStart, text.length));
+  const end = Math.max(start, Math.min(focusEnd, text.length));
+  const focusLen = Math.max(1, end - start);
+  if (focusLen >= max) return text.slice(start, start + max);
+
+  const pad = Math.floor((max - focusLen) / 2);
+  let from = Math.max(0, start - pad);
+  let to = from + max;
+  if (to > text.length) {
+    to = text.length;
+    from = Math.max(0, to - max);
+  }
+  return text.slice(from, to);
 }
 
 function locateSpan(pageText: string, span: string): number {

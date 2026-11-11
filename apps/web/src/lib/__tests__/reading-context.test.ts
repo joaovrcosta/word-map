@@ -101,10 +101,25 @@ describe("buildReadingContext", () => {
     expect(result.sentence).toContain("looked up");
   });
 
-  it("recusa payload acima do teto", () => {
-    const content = `${"word ".repeat(4500)}.`;
-    const { result } = contextFor(content, "word", 0);
-    expect(result).toEqual({ ok: false, reason: "too_long" });
+  it("recorta parágrafo longo em volta da frase em vez de recusar", () => {
+    const marker = "FOCUSWORD";
+    const content = `${"aaaa ".repeat(2500)}${marker} sits here. ${"bbbb ".repeat(2500)}`;
+    const pages = paginateReading(content, 80);
+    const pageIndex = pages.findIndex((page) =>
+      page.text.toLowerCase().includes(marker.toLowerCase())
+    );
+    expect(pageIndex).toBeGreaterThanOrEqual(0);
+    const result = buildReadingContext({
+      paragraphs: splitParagraphs(content),
+      pages,
+      pageIndex,
+      span: marker.toLowerCase(),
+    });
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.paragraph.length).toBeLessThanOrEqual(4000);
+    expect(result.paragraph.toLowerCase()).toContain(marker.toLowerCase());
+    expect(result.sentence.toLowerCase()).toContain(marker.toLowerCase());
   });
 
   it("recusa span vazio", () => {

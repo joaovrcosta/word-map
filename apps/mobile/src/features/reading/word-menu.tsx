@@ -701,11 +701,9 @@ export function ReadingWordMenu({
   );
   const context = contextBuilt.ok ? contextBuilt : null;
   const contextUnavailableReason = !contextBuilt.ok
-    ? contextBuilt.reason === "too_long"
-      ? "Este trecho é longo demais para explicar."
-      : contextBuilt.reason === "empty"
-        ? "Selecione uma palavra para explicar o contexto."
-        : "Abra a palavra a partir da leitura para explicar o contexto."
+    ? contextBuilt.reason === "empty"
+      ? "Selecione uma palavra para explicar o contexto."
+      : "Abra a palavra a partir da leitura para explicar o contexto."
     : null;
 
   const relatedPhrases = useMemo(
